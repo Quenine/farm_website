@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Boxes,
+  CircleGauge,
   ClipboardList,
   MapPin,
   PackageCheck,
@@ -177,6 +178,7 @@ export const adminNav: AdminNavItem[] = [
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes },
   { href: "/admin/delivery-zones", label: "Delivery Zones", icon: MapPin },
+  { href: "/admin/diagnostics", label: "Diagnostics", icon: CircleGauge },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

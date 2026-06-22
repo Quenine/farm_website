@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { createOrder } from "@/src/lib/orders";
-import { initializeOrderPayment } from "@/src/lib/payments";
+import {
+  initializeOrderPayment,
+  PaymentInitializationError,
+} from "@/src/lib/payments";
 
 const checkoutSchema = z.object({
   customerName: z.string().trim().min(2, "Enter your full name.").max(120),
@@ -67,6 +70,10 @@ function checkoutErrorMessage(error: unknown) {
 }
 
 function paymentErrorMessage(error: unknown) {
+  if (error instanceof PaymentInitializationError) {
+    return error.userMessage;
+  }
+
   if (
     error instanceof Error &&
     (error.message === "This order has already been paid." ||

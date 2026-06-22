@@ -7,7 +7,7 @@ import {
   verifyPaystackTransaction,
   type PaystackTransaction,
 } from "@/src/lib/paystack";
-import { getSiteUrl } from "@/src/lib/site-url";
+import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 import { getAdminSupabaseConfig } from "@/src/lib/supabase/config";
 
@@ -17,6 +17,38 @@ type ProcessResult = {
   message: string;
   alreadyProcessed?: boolean;
 };
+
+const PAYMENT_CONFIGURATION_MESSAGE =
+  "Payment is temporarily unavailable because checkout is not configured correctly. Please try again later or contact Noble Farms.";
+
+export class PaymentInitializationError extends Error {
+  constructor(
+    message: string,
+    readonly userMessage: string,
+  ) {
+    super(message);
+    this.name = "PaymentInitializationError";
+  }
+}
+
+function failPaymentValidation(orderReference: string, reason: string): never {
+  console.error("[Paystack Init Validation Failed]", {
+    orderReference,
+    reason,
+  });
+  throw new PaymentInitializationError(
+    reason,
+    PAYMENT_CONFIGURATION_MESSAGE,
+  );
+}
+
+function isPaystackEmail(email: unknown): email is string {
+  return (
+    typeof email === "string" &&
+    email.length <= 254 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  );
+}
 
 function paymentReference(orderReference: string) {
   return `${orderReference}-${randomBytes(4).toString("hex").toUpperCase()}`;
@@ -120,16 +152,67 @@ export async function initializeOrderPayment(orderId: string) {
   }
   assertStockAvailable(order);
 
+  const siteUrlValidation = validateConfiguredSiteUrl();
+  if (!siteUrlValidation.valid) {
+    failPaymentValidation(order.order_reference, siteUrlValidation.reason);
+  }
+  if (!process.env.PAYSTACK_SECRET_KEY?.trim()) {
+    failPaymentValidation(
+      order.order_reference,
+      "PAYSTACK_SECRET_KEY is missing.",
+    );
+  }
+
+  const amountNaira = Number(order.total_amount);
+  const amountKobo = amountInKobo(amountNaira);
+  if (!Number.isInteger(amountKobo) || amountKobo <= 0) {
+    failPaymentValidation(
+      order.order_reference,
+      "Payment amount in kobo must be a positive integer.",
+    );
+  }
+
+  const email =
+    typeof order.customer_email === "string"
+      ? order.customer_email.trim()
+      : "";
+  if (!isPaystackEmail(email)) {
+    failPaymentValidation(
+      order.order_reference,
+      "Customer email is missing or invalid for Paystack.",
+    );
+  }
+
   const reference = paymentReference(order.order_reference);
+  const callbackUrl = `${siteUrlValidation.siteUrl}/payment/callback`;
+
+  console.log("[Paystack Init]", {
+    orderReference: order.order_reference,
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+    callbackUrl,
+    hasSecretKey: Boolean(process.env.PAYSTACK_SECRET_KEY),
+    hasPublicKey: Boolean(process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY),
+    amountNaira,
+    amountKobo,
+    emailPresent: Boolean(email),
+  });
+
   const response = await initializePaystackTransaction({
-    email: order.customer_email,
-    amountKobo: amountInKobo(Number(order.total_amount)),
+    email,
+    amountKobo,
     reference,
-    callbackUrl: `${getSiteUrl()}/payment/callback`,
+    callbackUrl,
+    orderReference: order.order_reference,
     metadata: {
       order_id: order.id,
       order_reference: order.order_reference,
     },
+  });
+
+  console.log("[Paystack Init Success]", {
+    orderReference: order.order_reference,
+    authorizationUrlPresent: Boolean(response?.data?.authorization_url),
+    reference: response?.data?.reference,
   });
 
   const supabase = createAdminSupabaseClient();

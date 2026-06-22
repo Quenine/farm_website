@@ -1,7 +1,10 @@
 "use server";
 
 import { z } from "zod";
-import { initializeOrderPayment } from "@/src/lib/payments";
+import {
+  initializeOrderPayment,
+  PaymentInitializationError,
+} from "@/src/lib/payments";
 import { trackOrder } from "@/src/lib/orders";
 
 export type PaymentInitializationResult =
@@ -9,6 +12,10 @@ export type PaymentInitializationResult =
   | { success: false; message: string };
 
 function paymentErrorMessage(error: unknown) {
+  if (error instanceof PaymentInitializationError) {
+    return error.userMessage;
+  }
+
   if (
     error instanceof Error &&
     (error.message === "This order has already been paid." ||

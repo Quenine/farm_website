@@ -27,10 +27,57 @@ type PaystackResponse<T> = {
   data: T;
 };
 
+const SENSITIVE_RESPONSE_KEY =
+  /authorization|access[_-]?code|secret|token|password|api[_-]?key/i;
+
+function sanitizeResponseText(value: string) {
+  return value
+    .replace(/\b(?:sk|pk)_(?:test|live)_[A-Za-z0-9_-]+\b/g, "[REDACTED_KEY]")
+    .replace(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_TOKEN]");
+}
+
 function getPaystackSecretKey() {
   const key = process.env.PAYSTACK_SECRET_KEY?.trim();
   if (!key) throw new Error("PAYSTACK_SECRET_KEY is not configured.");
   return key;
+}
+
+function sanitizeResponseBody(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeResponseBody);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        SENSITIVE_RESPONSE_KEY.test(key)
+          ? "[REDACTED]"
+          : sanitizeResponseBody(nestedValue),
+      ]),
+    );
+  }
+  if (typeof value === "string") {
+    return sanitizeResponseText(value);
+  }
+  return value;
+}
+
+async function readResponseBody(response: Response) {
+  const responseText = await response.text();
+  if (!responseText) {
+    return { payload: null, safeBody: null };
+  }
+
+  try {
+    const payload = JSON.parse(responseText) as unknown;
+    return { payload, safeBody: sanitizeResponseBody(payload) };
+  } catch {
+    return {
+      payload: null,
+      safeBody: sanitizeResponseText(responseText.slice(0, 4000)),
+    };
+  }
 }
 
 async function paystackRequest<T>(path: string, init?: RequestInit) {
@@ -57,13 +104,15 @@ export async function initializePaystackTransaction(input: {
   reference: string;
   callbackUrl: string;
   metadata: PaystackMetadata;
+  orderReference: string;
 }) {
-  return paystackRequest<{
-    authorization_url: string;
-    access_code: string;
-    reference: string;
-  }>("/transaction/initialize", {
+  const response = await fetch(`${PAYSTACK_API_URL}/transaction/initialize`, {
     method: "POST",
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${getPaystackSecretKey()}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       email: input.email,
       amount: String(input.amountKobo),
@@ -72,6 +121,34 @@ export async function initializePaystackTransaction(input: {
       metadata: JSON.stringify(input.metadata),
     }),
   });
+  const { payload: rawPayload, safeBody: responseBody } =
+    await readResponseBody(response);
+
+  if (!response.ok) {
+    console.error("[Paystack Init Failed]", {
+      orderReference: input.orderReference,
+      httpStatus: response.status,
+      responseBody,
+    });
+    throw new Error("Paystack request failed.");
+  }
+
+  const payload = rawPayload as PaystackResponse<{
+    authorization_url: string;
+    access_code: string;
+    reference: string;
+  }>;
+
+  if (!payload?.status) {
+    console.error("[Paystack Init Failed]", {
+      orderReference: input.orderReference,
+      httpStatus: response.status,
+      responseBody,
+    });
+    throw new Error(payload?.message || "Paystack request failed.");
+  }
+
+  return payload;
 }
 
 export async function verifyPaystackTransaction(reference: string) {
