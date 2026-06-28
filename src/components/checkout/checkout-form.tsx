@@ -98,8 +98,11 @@ export function CheckoutForm({
         window.location.assign(result.authorizationUrl);
         return;
       }
+      const paymentMessage = result.paymentError
+        ? `&paymentMessage=${encodeURIComponent(result.paymentError)}`
+        : "";
       router.push(
-        `/order-success?id=${encodeURIComponent(result.orderId)}&payment=initialization_failed`,
+        `/order-success?id=${encodeURIComponent(result.orderId)}&payment=initialization_failed${paymentMessage}`,
       );
     });
   };

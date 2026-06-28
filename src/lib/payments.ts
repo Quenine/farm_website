@@ -4,12 +4,12 @@ import { randomBytes } from "node:crypto";
 import {
   initializePaystackTransaction,
   parsePaystackMetadata,
+  PaystackRequestError,
   verifyPaystackTransaction,
   type PaystackTransaction,
 } from "@/src/lib/paystack";
 import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
-import { getAdminSupabaseConfig } from "@/src/lib/supabase/config";
 
 type ProcessResult = {
   orderId: string;
@@ -20,6 +20,9 @@ type ProcessResult = {
 
 const PAYMENT_CONFIGURATION_MESSAGE =
   "Payment is temporarily unavailable because checkout is not configured correctly. Please try again later or contact Noble Farms.";
+const PAYMENT_CONTACT_MESSAGE =
+  "Payment could not be started. Please contact Noble Farms with your order reference.";
+const PAYMENT_REJECTED_MESSAGE = "Payment provider rejected the request.";
 
 export class PaymentInitializationError extends Error {
   constructor(
@@ -31,14 +34,18 @@ export class PaymentInitializationError extends Error {
   }
 }
 
-function failPaymentValidation(orderReference: string, reason: string): never {
-  console.error("[Paystack Init Validation Failed]", {
+function failOrderPaymentValidation(
+  orderReference: string | null | undefined,
+  reason: string,
+  userMessage = PAYMENT_CONTACT_MESSAGE,
+): never {
+  console.error("[Order Paystack Validation Failed]", {
     orderReference,
     reason,
   });
   throw new PaymentInitializationError(
     reason,
-    PAYMENT_CONFIGURATION_MESSAGE,
+    userMessage,
   );
 }
 
@@ -58,43 +65,10 @@ function amountInKobo(amount: number) {
   return Math.round(amount * 100);
 }
 
-async function assertPaymentProcessorReady() {
-  const { url, serviceRoleKey } = getAdminSupabaseConfig();
-  const response = await fetch(`${url}/rest/v1/`, {
-    cache: "no-store",
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-      Accept: "application/openapi+json",
-    },
-  });
-  if (!response.ok) {
-    throw new Error("Unable to confirm payment processor readiness.");
-  }
-  const schema = (await response.json()) as {
-    paths?: Record<string, unknown>;
-    definitions?: {
-      inventory_movements?: {
-        properties?: Record<string, unknown>;
-      };
-    };
-  };
-  const movementProperties =
-    schema.definitions?.inventory_movements?.properties;
-  if (
-    !schema.paths?.["/rpc/process_paystack_payment"] ||
-    !movementProperties?.order_id ||
-    !movementProperties?.order_item_id
-  ) {
-    throw new Error(
-      "Inventory payment setup is incomplete. Rerun database/step5-paystack.sql in Supabase.",
-    );
-  }
-}
-
-async function findOrderForPayment(orderId: string) {
+async function findOrderForPayment(identifier: string) {
   const supabase = createAdminSupabaseClient();
-  const { data, error } = await supabase
+  const trimmedIdentifier = identifier.trim();
+  const query = supabase
     .from("orders")
     .select(
       `
@@ -111,11 +85,14 @@ async function findOrderForPayment(orderId: string) {
         )
       `,
     )
-    .eq("id", orderId)
+    .limit(1);
+
+  const { data, error } = await (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmedIdentifier)
+    ? query.eq("id", trimmedIdentifier)
+    : query.eq("order_reference", trimmedIdentifier.toUpperCase()))
     .maybeSingle();
 
   if (error) throw new Error(`Unable to load order for payment: ${error.message}`);
-  if (!data) throw new Error("Order not found.");
   return data;
 }
 
@@ -124,7 +101,7 @@ function relationRow<T>(value: T | T[] | null): T | null {
 }
 
 function assertStockAvailable(
-  order: Awaited<ReturnType<typeof findOrderForPayment>>,
+  order: NonNullable<Awaited<ReturnType<typeof findOrderForPayment>>>,
 ) {
   for (const item of order.order_items ?? []) {
     const product = relationRow(
@@ -144,31 +121,72 @@ function assertStockAvailable(
   }
 }
 
-export async function initializeOrderPayment(orderId: string) {
-  await assertPaymentProcessorReady();
-  const order = await findOrderForPayment(orderId);
+export async function initializeOrderPayment(orderIdentifier: string) {
+  const order = await findOrderForPayment(orderIdentifier);
+  const orderReference = order?.order_reference ?? orderIdentifier;
+  const siteUrlValidationForLog = validateConfiguredSiteUrl();
+  const loggedCallbackUrl = siteUrlValidationForLog.valid
+    ? `${siteUrlValidationForLog.siteUrl}/payment/callback`
+    : null;
+
+  console.log("[Order Paystack Init]", {
+    orderReference,
+    orderIdPresent: Boolean(order?.id),
+    orderFound: Boolean(order),
+    paymentStatus: order?.payment_status ?? null,
+    customerEmailPresent: Boolean(order?.customer_email),
+    totalAmount: order?.total_amount ?? null,
+    amountKobo: order ? amountInKobo(Number(order.total_amount)) : null,
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+    callbackUrl: loggedCallbackUrl,
+    hasSecretKey: Boolean(process.env.PAYSTACK_SECRET_KEY),
+  });
+
+  if (!order) {
+    failOrderPaymentValidation(
+      orderReference,
+      "Order was not found.",
+      "Order was not found.",
+    );
+  }
   if (order.payment_status === "paid") {
-    throw new Error("This order has already been paid.");
+    failOrderPaymentValidation(
+      order.order_reference,
+      "This order has already been paid.",
+      "This order has already been paid.",
+    );
+  }
+  if (order.payment_status !== "pending" && order.payment_status !== "failed") {
+    failOrderPaymentValidation(
+      order.order_reference,
+      `Order payment status ${order.payment_status} cannot be initialized.`,
+    );
   }
   assertStockAvailable(order);
 
   const siteUrlValidation = validateConfiguredSiteUrl();
   if (!siteUrlValidation.valid) {
-    failPaymentValidation(order.order_reference, siteUrlValidation.reason);
+    failOrderPaymentValidation(
+      order.order_reference,
+      siteUrlValidation.reason,
+      PAYMENT_CONFIGURATION_MESSAGE,
+    );
   }
   if (!process.env.PAYSTACK_SECRET_KEY?.trim()) {
-    failPaymentValidation(
+    failOrderPaymentValidation(
       order.order_reference,
       "PAYSTACK_SECRET_KEY is missing.",
+      PAYMENT_CONFIGURATION_MESSAGE,
     );
   }
 
-  const amountNaira = Number(order.total_amount);
-  const amountKobo = amountInKobo(amountNaira);
+  const totalAmount = Number(order.total_amount);
+  const amountKobo = amountInKobo(totalAmount);
   if (!Number.isInteger(amountKobo) || amountKobo <= 0) {
-    failPaymentValidation(
+    failOrderPaymentValidation(
       order.order_reference,
       "Payment amount in kobo must be a positive integer.",
+      "Order total is invalid.",
     );
   }
 
@@ -177,9 +195,10 @@ export async function initializeOrderPayment(orderId: string) {
       ? order.customer_email.trim()
       : "";
   if (!isPaystackEmail(email)) {
-    failPaymentValidation(
+    failOrderPaymentValidation(
       order.order_reference,
       "Customer email is missing or invalid for Paystack.",
+      "Customer email is missing for this order.",
     );
   }
 
@@ -192,24 +211,42 @@ export async function initializeOrderPayment(orderId: string) {
     callbackUrl,
     hasSecretKey: Boolean(process.env.PAYSTACK_SECRET_KEY),
     hasPublicKey: Boolean(process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY),
-    amountNaira,
+    amountNaira: totalAmount,
     amountKobo,
     emailPresent: Boolean(email),
   });
 
-  const response = await initializePaystackTransaction({
-    email,
-    amountKobo,
-    reference,
-    callbackUrl,
-    orderReference: order.order_reference,
-    metadata: {
-      order_id: order.id,
-      order_reference: order.order_reference,
-    },
-  });
+  let response: Awaited<ReturnType<typeof initializePaystackTransaction>>;
+  try {
+    response = await initializePaystackTransaction({
+      email,
+      amountKobo,
+      reference,
+      callbackUrl,
+      orderReference: order.order_reference,
+      metadata: {
+        business: "noble_farms",
+        app: "noble_farms_web",
+        order_id: order.id,
+        order_reference: order.order_reference,
+      },
+    });
+  } catch (error) {
+    if (error instanceof PaystackRequestError) {
+      console.error("[Order Paystack Init Failed]", {
+        orderReference: order.order_reference,
+        httpStatus: error.httpStatus,
+        responseBody: error.responseBody,
+      });
+      throw new PaymentInitializationError(
+        error.message,
+        PAYMENT_REJECTED_MESSAGE,
+      );
+    }
+    throw error;
+  }
 
-  console.log("[Paystack Init Success]", {
+  console.log("[Order Paystack Init Success]", {
     orderReference: order.order_reference,
     authorizationUrlPresent: Boolean(response?.data?.authorization_url),
     reference: response?.data?.reference,

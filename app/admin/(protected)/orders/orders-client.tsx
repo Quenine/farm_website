@@ -178,6 +178,30 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
               <Detail label="Address" value={selected.deliveryAddress} />
               <Detail label="Total" value={formatNaira(selected.totalAmount)} />
             </div>
+            {selected.paymentStatus === "pending" ||
+            selected.paymentStatus === "failed" ? (
+              <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                <h3 className="font-bold">Payment debug</h3>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Detail
+                    label="Customer email present"
+                    value={selected.customerEmail.trim() ? "Yes" : "No"}
+                  />
+                  <Detail
+                    label="Total amount"
+                    value={formatNaira(selected.totalAmount)}
+                  />
+                  <Detail
+                    label="Payment status"
+                    value={formatPaymentStatus(selected.paymentStatus)}
+                  />
+                  <Detail
+                    label="Latest Paystack reference"
+                    value={selected.paystackReference ?? "Not initialized"}
+                  />
+                </div>
+              </div>
+            ) : null}
             <div className="mt-6">
               <h3 className="font-bold text-green-950">Order items</h3>
               <div className="mt-3 divide-y divide-stone-100 rounded-lg border border-stone-200">

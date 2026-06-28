@@ -40,11 +40,11 @@ function logPaymentInitializationFailure(source: string, error: unknown) {
 }
 
 export async function initializePaymentAction(
-  orderId: string,
+  orderIdentifier: string,
 ): Promise<PaymentInitializationResult> {
   try {
     const payment = await initializeOrderPayment(
-      z.string().uuid().parse(orderId),
+      z.string().trim().min(1).max(80).parse(orderIdentifier),
     );
     return { success: true, authorizationUrl: payment.authorizationUrl };
   } catch (error) {

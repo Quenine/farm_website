@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
 export default async function OrderSuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; payment?: string }>;
+  searchParams: Promise<{ id?: string; payment?: string; paymentMessage?: string }>;
 }) {
-  const { id, payment } = await searchParams;
+  const { id, payment, paymentMessage } = await searchParams;
   const parsedId = z.string().uuid().safeParse(id);
   if (!parsedId.success) notFound();
 
@@ -42,8 +42,8 @@ export default async function OrderSuccessPage({
             </p>
             {payment === "initialization_failed" && !isPaid ? (
               <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-900">
-                The order was saved, but Paystack checkout could not open.
-                Please retry below.
+                {paymentMessage ||
+                  "The order was saved, but Paystack checkout could not open. Please retry below."}
               </p>
             ) : null}
           </div>
