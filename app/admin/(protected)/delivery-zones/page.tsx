@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AdminHeader, AdminTable } from "@/src/components/admin";
-import { deliveryAreas, deliverySettings, formatNaira } from "@/src/lib/mock-data";
+import { deliveryAreas, deliverySettings, formatNaira } from "@/src/lib/business-data";
 import { calculateDeliveryFee } from "@/src/lib/delivery";
 import type { DeliveryZone } from "@/src/types";
 

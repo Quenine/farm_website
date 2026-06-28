@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { logoutAdmin } from "@/app/admin/logout/actions";
-import { adminNav } from "@/src/lib/mock-data";
+import { adminNav } from "@/src/lib/business-data";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   return (

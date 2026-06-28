@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AdminHeader } from "@/src/components/admin";
-import { deliverySettings } from "@/src/lib/mock-data";
+import { deliverySettings } from "@/src/lib/business-data";
 import type { DeliverySettings } from "@/src/types";
 
 export default function AdminSettingsPage() {
@@ -25,12 +25,12 @@ export default function AdminSettingsPage() {
     <>
       <AdminHeader
         title="Settings"
-        body="Mock business, delivery, and payment configuration for the future Supabase-backed admin."
+        body="Local preview of business, delivery, and payment configuration values."
       />
       <div className="grid gap-6 rounded-lg bg-white p-6 shadow-sm">
         <div className="grid gap-5 md:grid-cols-2">
           <SettingInput label="Business name" value="Noble Farms" disabled />
-          <SettingInput label="Domain" value="noblefarm.xyz" disabled />
+          <SettingInput label="Domain" value="noblefarms.xyz" disabled />
           <SettingInput label="Delivery city" value="Ibadan" disabled />
           <SettingInput
             label="Fuel price per litre"
@@ -67,15 +67,15 @@ export default function AdminSettingsPage() {
               <option value="no">No</option>
             </select>
           </label>
-          <SettingInput label="Payment provider" value="Paystack (future step)" disabled />
-          <SettingInput label="Admin access" value="Owner only (future step)" disabled />
+          <SettingInput label="Payment provider" value="Paystack" disabled />
+          <SettingInput label="Admin access" value="Owner only" disabled />
         </div>
         {saved ? (
           <div
             role="status"
             className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800"
           >
-            Mock settings saved successfully.
+            Local preview settings saved successfully.
           </div>
         ) : null}
         <button
@@ -83,7 +83,7 @@ export default function AdminSettingsPage() {
           onClick={() => setSaved(true)}
           className="h-12 w-full rounded-full bg-green-800 px-6 text-sm font-bold text-white md:w-fit"
         >
-          Save mock settings
+          Save settings
         </button>
       </div>
     </>

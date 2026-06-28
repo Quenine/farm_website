@@ -101,7 +101,7 @@ export async function getAdminInventory() {
             ? "Coming soon"
             : "Inactive",
       description: "",
-      badge: "Farm produce",
+      badge: "Current records",
       status: row.status,
     };
   });

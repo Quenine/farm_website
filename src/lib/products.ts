@@ -1,7 +1,7 @@
 import "server-only";
 
 import { requireAdmin } from "@/src/lib/admin-auth";
-import { products as mockProducts } from "@/src/lib/mock-data";
+import { products as fallbackProducts } from "@/src/lib/business-data";
 import { hasAdminSupabaseConfig, hasPublicSupabaseConfig } from "@/src/lib/supabase/config";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
@@ -109,7 +109,7 @@ export function mapProductRow(row: ProductRow): Product {
         ? "Coming soon"
         : row.is_featured
           ? "Featured"
-          : "Farm produce",
+          : "Farm-direct",
     status: row.status,
     availableFrom: row.available_from,
     isFeatured: row.is_featured,
@@ -120,7 +120,7 @@ export function mapProductRow(row: ProductRow): Product {
 
 function developmentFallback() {
   if (process.env.NODE_ENV === "development") {
-    return mockProducts;
+    return fallbackProducts;
   }
   throw new Error("Supabase configuration is required outside development.");
 }

@@ -7,25 +7,25 @@ export default function AboutPage() {
       <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <SectionHeader
           eyebrow="About"
-          title="Farm-direct supply for Ibadan buyers"
-          body="Noble Farms is being built as a trustworthy online storefront for poultry, eggs, old layers, and farm supplies in Ibadan, Nigeria."
+          title="Farm-direct supply for homes, kitchens, and resellers."
+          body="Noble Farms is a poultry and farm produce business based in Ibadan, Nigeria. We supply live broilers, processed chicken, eggs, manure, and selected seasonal produce with a focus on clear pricing, reliable fulfilment, and honest communication."
         />
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {[
             {
-              title: "Local focus",
-              body: "Delivery is intentionally limited to Ibadan so stock, timing, and communication stay reliable.",
+              title: "What we supply",
+              body: "Our catalogue includes poultry products, eggs, manure, and seasonal crop produce such as tomatoes and peppers as supply becomes available.",
+              Icon: Sprout,
+            },
+            {
+              title: "How delivery works",
+              body: "Poultry and eggs are handled through scheduled delivery within Ibadan and nearby areas. Selected crop produce may be arranged for wider delivery depending on quantity, product condition, and logistics.",
               Icon: MapPin,
             },
             {
-              title: "Practical catalogue",
-              body: "Products show price, stock, units, and minimum order rules clearly before checkout.",
+              title: "Who we serve",
+              body: "We serve households, food vendors, restaurants, caterers, bakeries, small retailers, and bulk buyers who want dependable farm-direct supply.",
               Icon: CheckCircle2,
-            },
-            {
-              title: "Farm operations",
-              body: "The admin side is prepared for owner-managed products, inventory, orders, and delivery zones.",
-              Icon: Sprout,
             },
           ].map(({ title, body, Icon }) => (
             <div key={title} className="rounded-lg bg-white p-6 shadow-sm">

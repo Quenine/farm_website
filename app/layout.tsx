@@ -16,12 +16,12 @@ const geistMono = Geist_Mono({
 
 const siteName = process.env.NEXT_PUBLIC_SITE_NAME?.trim() || "Noble Farms";
 const description =
-  "Fresh poultry, eggs, processed chicken, and farm products delivered within Ibadan.";
+  "Order fresh poultry, eggs, manure, and seasonal farm produce from Noble Farms. Secure checkout, order tracking, and scheduled fulfilment from Ibadan.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: siteName,
+    default: "Noble Farms | Poultry, Eggs & Farm Produce",
     template: `%s | ${siteName}`,
   },
   description,
@@ -33,8 +33,9 @@ export const metadata: Metadata = {
     locale: "en_NG",
     url: "/",
     siteName,
-    title: siteName,
-    description,
+    title: "Noble Farms",
+    description:
+      "Fresh poultry, eggs, manure, and seasonal farm produce supplied directly from Noble Farms.",
   },
   twitter: {
     card: "summary",

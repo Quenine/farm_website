@@ -29,7 +29,7 @@ export const products: Product[] = [
     category: "Live Chickens",
     availability: "Available now",
     description:
-      "Healthy farm-raised broilers supplied live for homes, restaurants, and events across Ibadan.",
+      "Healthy farm-raised broilers supplied live by weight for homes, restaurants, caterers, and bulk buyers.",
     badge: "Best for bulk kitchens",
     status: "active",
     isLiveAnimal: true,
@@ -46,7 +46,7 @@ export const products: Product[] = [
     category: "Processed Birds",
     availability: "Available now",
     description:
-      "Cleaned whole chicken prepared for easy cooking, retail packs, or catering supply.",
+      "Cleaned whole chicken prepared for convenient cooking, retail packs, events, and catering supply.",
     badge: "Ready to cook",
     status: "active",
     isProcessed: true,
@@ -63,7 +63,7 @@ export const products: Product[] = [
     category: "Eggs",
     availability: "Weekly supply",
     description:
-      "Freshly packed eggs suitable for families, bakeries, food vendors, and resellers.",
+      "Fresh eggs packed in crates for families, bakeries, food vendors, and resellers.",
     badge: "Weekly harvest",
     status: "active",
   },
@@ -79,7 +79,7 @@ export const products: Product[] = [
     category: "Eggs",
     availability: "Weekly supply",
     description:
-      "A smaller egg pack for regular household use and compact retail orders.",
+      "A smaller egg pack for households, small kitchens, and regular buyers.",
     badge: "Compact pack",
     status: "active",
   },
@@ -95,7 +95,7 @@ export const products: Product[] = [
     category: "Live Chickens",
     availability: "Available from December 2026",
     description:
-      "Mature layers for customers who prefer firm, flavorful birds for soups and local dishes.",
+      "Mature layers for customers who prefer firm, flavorful birds for soups, stews, and local dishes. Available seasonally.",
     badge: "Coming December",
     status: "coming_soon",
     availableFrom: "2026-12-01",
@@ -113,7 +113,7 @@ export const products: Product[] = [
     category: "Farm Supplies",
     availability: "Available now",
     description:
-      "Organic poultry manure for gardens, farms, and soil improvement projects.",
+      "Organic poultry manure for gardens, farms, soil improvement, and crop production.",
     badge: "For growers",
     status: "active",
   },

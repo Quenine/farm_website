@@ -21,7 +21,7 @@ const emptyProduct: Product = {
   category: "Live Chickens",
   availability: "Available now",
   description: "",
-  badge: "Farm produce",
+  badge: "Noble Farms supply",
   status: "active",
   availableFrom: null,
   isFeatured: false,
@@ -84,7 +84,7 @@ export function AdminProductsClient({
     setEditing(null);
     setMessage(
       usingFallback
-        ? "Saved in local development fallback mode."
+        ? "Saved in local preview mode."
         : "Product saved successfully.",
     );
   };
@@ -135,7 +135,7 @@ export function AdminProductsClient({
             : item,
         ),
       );
-      setMessage("Product deactivated in local development fallback mode.");
+      setMessage("Product deactivated in local preview mode.");
       return;
     }
 
@@ -162,8 +162,8 @@ export function AdminProductsClient({
       />
       {usingFallback ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Supabase is not configured, so this page is using the development-only
-          mock fallback. Configure Supabase to persist product changes.
+          Supabase is not configured, so this page is using local preview
+          records. Configure Supabase to persist product changes.
         </div>
       ) : null}
       {message ? (
@@ -229,7 +229,8 @@ export function AdminProductsClient({
                 {editing.slug ? "Edit product" : "Create product"}
               </h2>
               <p className="mt-1 text-sm text-stone-600">
-                Image upload remains a placeholder for this step.
+                Manage product details, pricing, availability, and fulfilment
+                notes.
               </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">

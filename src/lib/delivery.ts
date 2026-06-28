@@ -1,4 +1,4 @@
-import { deliverySettings } from "@/src/lib/mock-data";
+import { deliverySettings } from "@/src/lib/business-data";
 import type { DeliverySettings, DeliveryZone } from "@/src/types";
 
 export function roundUpToNearest(amount: number, nearest: number) {

@@ -12,17 +12,17 @@ const trustFeatures: {
 }[] = [
   {
     title: "Farm-direct supply",
-    body: "Transparent stock, prices, and minimum orders.",
+    body: "Clear prices, current stock, minimum order rules, and direct order fulfilment.",
     Icon: CheckCircle2,
   },
   {
-    title: "Ibadan-only delivery",
-    body: "Distance-based fuel cost plus ₦2,000 driver fee.",
+    title: "Flexible delivery",
+    body: "Scheduled local delivery for poultry and eggs, with wider delivery arrangements for eligible crop produce.",
     Icon: Truck,
   },
   {
-    title: "Owner-managed admin",
-    body: "Operations are designed for one trusted owner account.",
+    title: "Secure checkout",
+    body: "Create an order, pay securely online, and track fulfilment with your order reference.",
     Icon: ShieldCheck,
   },
 ];
@@ -45,14 +45,16 @@ export default async function Home() {
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-20">
           <div className="flex flex-col justify-center">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-green-700">
-              Noble Farms, Ibadan
+              Noble Farms
             </p>
             <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight text-green-950 sm:text-6xl">
-              Fresh poultry and farm produce for homes, kitchens, and resellers.
+              Fresh poultry, eggs, and farm produce supplied with care.
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-stone-700">
-              Order live broilers, processed chicken, eggs, old layers, and
-              manure from a local farm built for reliable Ibadan delivery.
+              Order live broilers, processed chicken, eggs, manure, and
+              seasonal produce directly from Noble Farms. We serve homes, food
+              vendors, kitchens, caterers, and resellers with clear pricing,
+              scheduled fulfilment, and secure online payment.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -73,20 +75,28 @@ export default async function Home() {
             <div className="grid min-h-[360px] place-items-center rounded-lg bg-[linear-gradient(135deg,#fff7ed_0%,#dcfce7_45%,#fde68a_100%)] p-6 text-green-950">
               <div className="w-full max-w-sm">
                 <div className="rounded-lg bg-white/85 p-5 shadow-sm">
-                  <p className="text-sm font-bold text-amber-700">Today at farm gate</p>
-                  <p className="mt-3 text-4xl font-bold">300 kg</p>
+                  <p className="text-sm font-bold text-amber-700">
+                    Today at farm gate
+                  </p>
+                  <p className="mt-3 text-4xl font-bold">Live broilers</p>
                   <p className="mt-2 text-sm text-stone-700">
-                    Live broiler chicken available for bulk orders.
+                    Available by weight for bulk and scheduled orders.
                   </p>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="rounded-lg bg-white/80 p-4">
-                    <p className="text-2xl font-bold">35</p>
-                    <p className="text-xs font-semibold text-stone-600">Egg crates weekly</p>
+                    <p className="text-2xl font-bold">Egg supply</p>
+                    <p className="text-xs font-semibold text-stone-600">
+                      Crates and half-crates for homes, bakeries, vendors, and
+                      resellers.
+                    </p>
                   </div>
                   <div className="rounded-lg bg-white/80 p-4">
-                    <p className="text-2xl font-bold">Ibadan</p>
-                    <p className="text-xs font-semibold text-stone-600">Delivery coverage</p>
+                    <p className="text-2xl font-bold">Seasonal crops</p>
+                    <p className="text-xs font-semibold text-stone-600">
+                      Tomatoes, peppers, and selected produce available as
+                      supply opens.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -112,7 +122,7 @@ export default async function Home() {
           <SectionHeader
             eyebrow="Shop"
             title="Popular farm produce"
-            body="Browse the current Noble Farms catalogue. Payment checkout will be connected in a later step."
+            body="Browse available Noble Farms products and place an order securely online."
           />
           <Link href="/shop" className="font-bold text-green-800 hover:text-green-950">
             View all products
@@ -123,6 +133,10 @@ export default async function Home() {
             <ProductCard key={product.slug} product={product} />
           ))}
         </div>
+        <p className="mt-6 rounded-lg bg-green-50 p-4 text-sm font-semibold leading-6 text-green-900">
+          Crop produce such as tomatoes, peppers, and other seasonal items will
+          be added as supply becomes available.
+        </p>
       </section>
     </PageShell>
   );

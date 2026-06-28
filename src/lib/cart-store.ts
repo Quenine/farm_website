@@ -1,4 +1,4 @@
-import { products } from "@/src/lib/mock-data";
+import { products } from "@/src/lib/business-data";
 import type { CartLine, Product } from "@/src/types";
 
 export const CART_STORAGE_KEY = "noble-farms-cart";
@@ -58,6 +58,6 @@ export function persistCart(lines: CartLine[]) {
   try {
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(lines));
   } catch {
-    // The mock cart still works in memory when storage is unavailable.
+    // The cart still works in memory when storage is unavailable.
   }
 }

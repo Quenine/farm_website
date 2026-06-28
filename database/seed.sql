@@ -27,42 +27,42 @@ values
   (
     'Live Broiler Chicken',
     'live-broiler-chicken',
-    'Healthy farm-raised broilers supplied live for homes, restaurants, and events across Ibadan.',
+    'Healthy farm-raised broilers supplied live by weight for homes, restaurants, caterers, and bulk buyers.',
     (select id from public.categories where slug = 'live-chickens'),
     2650, 'kg', 300, 15, 'active', null, true, true, false
   ),
   (
     'Processed Whole Chicken',
     'processed-whole-chicken',
-    'Cleaned whole chicken prepared for easy cooking, retail packs, or catering supply.',
+    'Cleaned whole chicken prepared for convenient cooking, retail packs, events, and catering supply.',
     (select id from public.categories where slug = 'processed-birds'),
     3650, 'kg', 90, 20, 'active', null, false, false, true
   ),
   (
     'Crate of Eggs',
     'crate-of-eggs',
-    'Freshly packed eggs suitable for families, bakeries, food vendors, and resellers.',
+    'Fresh eggs packed in crates for families, bakeries, food vendors, and resellers.',
     (select id from public.categories where slug = 'eggs'),
     5000, 'crate', 35, 5, 'active', null, false, false, false
   ),
   (
     'Half Crate of Eggs',
     'half-crate-of-eggs',
-    'A smaller egg pack for regular household use and compact retail orders.',
+    'A smaller egg pack for households, small kitchens, and regular buyers.',
     (select id from public.categories where slug = 'eggs'),
     2500, 'half_crate', 35, 5, 'active', null, false, false, false
   ),
   (
     'Old Layers',
     'old-layers',
-    'Mature layers for customers who prefer firm, flavorful birds for soups and local dishes.',
+    'Mature layers for customers who prefer firm, flavorful birds for soups, stews, and local dishes. Available seasonally.',
     (select id from public.categories where slug = 'live-chickens'),
     8600, 'bird', 190, 10, 'coming_soon', '2026-12-01', false, true, false
   ),
   (
     'Manure',
     'manure',
-    'Organic poultry manure for gardens, farms, and soil improvement projects.',
+    'Organic poultry manure for gardens, farms, soil improvement, and crop production.',
     (select id from public.categories where slug = 'farm-supplies'),
     1200, 'bag', 10, 3, 'active', null, false, false, false
   )

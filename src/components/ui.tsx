@@ -18,7 +18,7 @@ export function PublicHeader() {
               Noble Farms
             </span>
             <span className="text-xs font-medium text-stone-600">
-              Ibadan delivery only
+              Fresh poultry & farm produce
             </span>
           </span>
         </Link>
@@ -52,19 +52,21 @@ export function Footer() {
         <div>
           <p className="text-lg font-bold">Noble Farms</p>
           <p className="mt-2 text-sm leading-6 text-green-100">
-            Fresh poultry, eggs, and farm inputs delivered across Ibadan.
+            Fresh poultry, eggs, manure, and seasonal farm produce supplied from
+            Noble Farms.
           </p>
         </div>
         <div>
           <p className="font-semibold">Delivery</p>
           <p className="mt-2 text-sm leading-6 text-green-100">
-            Fuel cost by round-trip distance plus a flat driver fee.
+            Scheduled delivery for poultry and eggs. Wider delivery available
+            for selected crop produce.
           </p>
         </div>
         <div>
           <p className="font-semibold">Domain</p>
           <p className="mt-2 text-sm leading-6 text-green-100">
-            noblefarm.xyz
+            noblefarms.xyz
           </p>
         </div>
       </div>
@@ -113,7 +115,7 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="text-center">
           <Sprout className="mx-auto text-green-800" size={34} />
           <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-amber-800">
-            Farm produce
+            Noble Farms supply
           </p>
         </div>
       </div>
@@ -165,15 +167,18 @@ export function Field({
   label,
   placeholder,
   type = "text",
+  name,
 }: {
   label: string;
   placeholder: string;
   type?: string;
+  name?: string;
 }) {
   return (
     <label className="grid gap-2 text-sm font-semibold text-stone-800">
       {label}
       <input
+        name={name ?? label.toLowerCase().replaceAll(" ", "-")}
         type={type}
         placeholder={placeholder}
         className="h-12 rounded-lg border border-stone-200 bg-white px-4 text-sm font-normal text-stone-900 shadow-sm"
@@ -185,14 +190,17 @@ export function Field({
 export function TextArea({
   label,
   placeholder,
+  name,
 }: {
   label: string;
   placeholder: string;
+  name?: string;
 }) {
   return (
     <label className="grid gap-2 text-sm font-semibold text-stone-800">
       {label}
       <textarea
+        name={name ?? label.toLowerCase().replaceAll(" ", "-")}
         placeholder={placeholder}
         rows={4}
         className="rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm font-normal text-stone-900 shadow-sm"
