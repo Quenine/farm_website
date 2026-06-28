@@ -27,6 +27,33 @@ type PaystackResponse<T> = {
   data: T;
 };
 
+export type PaystackKeyMode = "test" | "live" | "unknown";
+
+export type PaystackKeyDiagnostics = {
+  configured: boolean;
+  formatValid: boolean;
+  mode: PaystackKeyMode;
+  hasQuotes: boolean;
+  hasSurroundingWhitespace: boolean;
+};
+
+export type PaystackEnvironmentDiagnostics = {
+  secretKey: PaystackKeyDiagnostics;
+  publicKey: PaystackKeyDiagnostics;
+  keyModesMatch: boolean;
+};
+
+export class PaystackRequestError extends Error {
+  constructor(
+    message: string,
+    readonly httpStatus: number,
+    readonly responseBody: unknown,
+  ) {
+    super(message);
+    this.name = "PaystackRequestError";
+  }
+}
+
 const SENSITIVE_RESPONSE_KEY =
   /authorization|access[_-]?code|secret|token|password|api[_-]?key/i;
 
@@ -35,6 +62,52 @@ function sanitizeResponseText(value: string) {
     .replace(/\b(?:sk|pk)_(?:test|live)_[A-Za-z0-9_-]+\b/g, "[REDACTED_KEY]")
     .replace(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_TOKEN]");
+}
+
+function inspectPaystackKey(
+  value: string | undefined,
+  prefixes: { test: string; live: string },
+): PaystackKeyDiagnostics {
+  const rawValue = value ?? "";
+  const trimmedValue = rawValue.trim();
+  const mode = trimmedValue.startsWith(prefixes.test)
+    ? "test"
+    : trimmedValue.startsWith(prefixes.live)
+      ? "live"
+      : "unknown";
+
+  return {
+    configured: Boolean(trimmedValue),
+    formatValid: mode !== "unknown",
+    mode,
+    hasQuotes:
+      rawValue.includes(String.fromCharCode(34)) ||
+      rawValue.includes(String.fromCharCode(39)),
+    hasSurroundingWhitespace: rawValue !== trimmedValue,
+  };
+}
+
+export function getPaystackEnvironmentDiagnostics(): PaystackEnvironmentDiagnostics {
+  const secretKey = inspectPaystackKey(process.env.PAYSTACK_SECRET_KEY, {
+    test: "sk_test_",
+    live: "sk_live_",
+  });
+  const publicKey = inspectPaystackKey(
+    process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+    {
+      test: "pk_test_",
+      live: "pk_live_",
+    },
+  );
+
+  return {
+    secretKey,
+    publicKey,
+    keyModesMatch:
+      secretKey.mode !== "unknown" &&
+      publicKey.mode !== "unknown" &&
+      secretKey.mode === publicKey.mode,
+  };
 }
 
 function getPaystackSecretKey() {
@@ -130,7 +203,11 @@ export async function initializePaystackTransaction(input: {
       httpStatus: response.status,
       responseBody,
     });
-    throw new Error("Paystack request failed.");
+    throw new PaystackRequestError(
+      "Paystack request failed.",
+      response.status,
+      responseBody,
+    );
   }
 
   const payload = rawPayload as PaystackResponse<{
@@ -145,10 +222,57 @@ export async function initializePaystackTransaction(input: {
       httpStatus: response.status,
       responseBody,
     });
-    throw new Error(payload?.message || "Paystack request failed.");
+    throw new PaystackRequestError(
+      payload?.message || "Paystack request failed.",
+      response.status,
+      responseBody,
+    );
   }
 
   return payload;
+}
+
+export async function initializePaystackDiagnosticTransaction(input: {
+  email: string;
+  amountKobo: number;
+  reference: string;
+  callbackUrl: string;
+  metadata: PaystackMetadata;
+}) {
+  const response = await fetch(`${PAYSTACK_API_URL}/transaction/initialize`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${getPaystackSecretKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: input.email,
+      amount: String(input.amountKobo),
+      reference: input.reference,
+      callback_url: input.callbackUrl,
+      metadata: JSON.stringify(input.metadata),
+    }),
+  });
+  const { payload: rawPayload, safeBody: responseBody } =
+    await readResponseBody(response);
+  const payload = rawPayload as
+    | PaystackResponse<{
+        authorization_url?: string;
+        access_code?: string;
+        reference?: string;
+      }>
+    | null;
+  const ok = response.ok && Boolean(payload?.status);
+
+  return {
+    ok,
+    httpStatus: response.status,
+    responseBody,
+    authorizationUrlPresent: Boolean(payload?.data?.authorization_url),
+    referencePresent: Boolean(payload?.data?.reference),
+    reference: payload?.data?.reference,
+  };
 }
 
 export async function verifyPaystackTransaction(reference: string) {

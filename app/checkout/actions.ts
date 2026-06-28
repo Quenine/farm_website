@@ -6,6 +6,7 @@ import {
   initializeOrderPayment,
   PaymentInitializationError,
 } from "@/src/lib/payments";
+import { PaystackRequestError } from "@/src/lib/paystack";
 
 const checkoutSchema = z.object({
   customerName: z.string().trim().min(2, "Enter your full name.").max(120),
@@ -86,6 +87,15 @@ function paymentErrorMessage(error: unknown) {
   return "Your order was saved, but payment could not be started. You can retry from the order tracking page.";
 }
 
+function logPaymentInitializationFailure(error: unknown) {
+  if (error instanceof PaystackRequestError) {
+    console.error("[Paystack Checkout Init Failed]", {
+      httpStatus: error.httpStatus,
+      responseBody: error.responseBody,
+    });
+  }
+}
+
 export async function createOrderAction(
   input: z.input<typeof checkoutSchema>,
 ): Promise<CheckoutActionState> {
@@ -108,6 +118,7 @@ export async function createOrderAction(
         authorizationUrl: payment.authorizationUrl,
       };
     } catch (paymentError) {
+      logPaymentInitializationFailure(paymentError);
       return {
         success: true,
         ...order,

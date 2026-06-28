@@ -5,6 +5,7 @@ import {
   initializeOrderPayment,
   PaymentInitializationError,
 } from "@/src/lib/payments";
+import { PaystackRequestError } from "@/src/lib/paystack";
 import { trackOrder } from "@/src/lib/orders";
 
 export type PaymentInitializationResult =
@@ -28,6 +29,16 @@ function paymentErrorMessage(error: unknown) {
   return "Unable to start payment right now. Please try again shortly.";
 }
 
+function logPaymentInitializationFailure(source: string, error: unknown) {
+  if (error instanceof PaystackRequestError) {
+    console.error("[Paystack Pay Now Failed]", {
+      source,
+      httpStatus: error.httpStatus,
+      responseBody: error.responseBody,
+    });
+  }
+}
+
 export async function initializePaymentAction(
   orderId: string,
 ): Promise<PaymentInitializationResult> {
@@ -37,6 +48,7 @@ export async function initializePaymentAction(
     );
     return { success: true, authorizationUrl: payment.authorizationUrl };
   } catch (error) {
+    logPaymentInitializationFailure("initializePaymentAction", error);
     return {
       success: false,
       message: paymentErrorMessage(error),
@@ -62,6 +74,7 @@ export async function retryTrackedOrderPaymentAction(input: {
     const payment = await initializeOrderPayment(order.id);
     return { success: true, authorizationUrl: payment.authorizationUrl };
   } catch (error) {
+    logPaymentInitializationFailure("retryTrackedOrderPaymentAction", error);
     return {
       success: false,
       message: paymentErrorMessage(error),

@@ -1,9 +1,15 @@
 import { connection } from "next/server";
 import { AdminHeader } from "@/src/components/admin";
+import { getPaystackEnvironmentDiagnostics } from "@/src/lib/paystack";
 import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
+import { PaystackTestButton } from "./paystack-test-button";
 
 function configurationStatus(value: string | undefined) {
   return value?.trim() ? "Configured" : "Missing";
+}
+
+function yesNo(value: boolean) {
+  return value ? "Yes" : "No";
 }
 
 export default async function AdminDiagnosticsPage() {
@@ -11,6 +17,7 @@ export default async function AdminDiagnosticsPage() {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const siteUrlValidation = validateConfiguredSiteUrl();
+  const paystackDiagnostics = getPaystackEnvironmentDiagnostics();
   const callbackUrl = siteUrlValidation.valid
     ? `${siteUrlValidation.siteUrl}/payment/callback`
     : `Unavailable: ${siteUrlValidation.reason}`;
@@ -27,15 +34,58 @@ export default async function AdminDiagnosticsPage() {
       isSecret: false,
     },
     {
-      label: "PAYSTACK_SECRET_KEY",
-      value: configurationStatus(process.env.PAYSTACK_SECRET_KEY),
+      label: "PAYSTACK_SECRET_KEY configured",
+      value: yesNo(paystackDiagnostics.secretKey.configured),
       isSecret: true,
     },
     {
-      label: "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY",
-      value: configurationStatus(
-        process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-      ),
+      label: "PAYSTACK_SECRET_KEY format valid",
+      value: yesNo(paystackDiagnostics.secretKey.formatValid),
+      isSecret: true,
+    },
+    {
+      label: "PAYSTACK_SECRET_KEY mode",
+      value: paystackDiagnostics.secretKey.mode,
+      isSecret: true,
+    },
+    {
+      label: "PAYSTACK_SECRET_KEY has quotes",
+      value: yesNo(paystackDiagnostics.secretKey.hasQuotes),
+      isSecret: true,
+    },
+    {
+      label: "PAYSTACK_SECRET_KEY has surrounding whitespace",
+      value: yesNo(paystackDiagnostics.secretKey.hasSurroundingWhitespace),
+      isSecret: true,
+    },
+    {
+      label: "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY configured",
+      value: yesNo(paystackDiagnostics.publicKey.configured),
+      isSecret: true,
+    },
+    {
+      label: "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY format valid",
+      value: yesNo(paystackDiagnostics.publicKey.formatValid),
+      isSecret: true,
+    },
+    {
+      label: "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY mode",
+      value: paystackDiagnostics.publicKey.mode,
+      isSecret: true,
+    },
+    {
+      label: "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY has quotes",
+      value: yesNo(paystackDiagnostics.publicKey.hasQuotes),
+      isSecret: true,
+    },
+    {
+      label: "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY has surrounding whitespace",
+      value: yesNo(paystackDiagnostics.publicKey.hasSurroundingWhitespace),
+      isSecret: true,
+    },
+    {
+      label: "Paystack test/live modes match",
+      value: yesNo(paystackDiagnostics.keyModesMatch),
       isSecret: true,
     },
     {
@@ -91,6 +141,7 @@ export default async function AdminDiagnosticsPage() {
           ))}
         </dl>
       </div>
+      <PaystackTestButton />
     </>
   );
 }
