@@ -18,7 +18,7 @@ export function PublicHeader() {
               Noble Farms
             </span>
             <span className="text-xs font-medium text-stone-600">
-              Fresh poultry & farm produce
+              Poultry, eggs & fresh produce
             </span>
           </span>
         </Link>
@@ -52,15 +52,14 @@ export function Footer() {
         <div>
           <p className="text-lg font-bold">Noble Farms</p>
           <p className="mt-2 text-sm leading-6 text-green-100">
-            Fresh poultry, eggs, manure, and seasonal farm produce supplied from
-            Noble Farms.
+            Noble Farms supplies poultry, eggs, fresh crop produce, and selected
+            farm inputs with clear pricing and reliable fulfilment.
           </p>
         </div>
         <div>
           <p className="font-semibold">Delivery</p>
           <p className="mt-2 text-sm leading-6 text-green-100">
-            Scheduled delivery for poultry and eggs. Wider delivery available
-            for selected crop produce.
+            Local delivery and wider produce supply available by arrangement.
           </p>
         </div>
         <div>

@@ -12,16 +12,16 @@ const trustFeatures: {
 }[] = [
   {
     title: "Farm-direct supply",
-    body: "Clear prices, current stock, minimum order rules, and direct order fulfilment.",
+    body: "Order poultry, eggs, and fresh produce directly from Noble Farms with clear product information and reliable fulfilment.",
     Icon: CheckCircle2,
   },
   {
-    title: "Flexible delivery",
-    body: "Scheduled local delivery for poultry and eggs, with wider delivery arrangements for eligible crop produce.",
+    title: "Produce for homes and businesses",
+    body: "We serve households, food vendors, restaurants, caterers, resellers, and bulk buyers.",
     Icon: Truck,
   },
   {
-    title: "Secure checkout",
+    title: "Secure ordering",
     body: "Create an order, pay securely online, and track fulfilment with your order reference.",
     Icon: ShieldCheck,
   },
@@ -48,13 +48,14 @@ export default async function Home() {
               Noble Farms
             </p>
             <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight text-green-950 sm:text-6xl">
-              Fresh poultry, eggs, and farm produce supplied with care.
+              Fresh poultry, eggs, and crop produce supplied with care.
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-stone-700">
-              Order live broilers, processed chicken, eggs, manure, and
-              seasonal produce directly from Noble Farms. We serve homes, food
-              vendors, kitchens, caterers, and resellers with clear pricing,
-              scheduled fulfilment, and secure online payment.
+              Order eggs, broilers, fresh vegetables, tubers, tomatoes,
+              peppers, and selected farm inputs directly from Noble Farms. We
+              serve households, food vendors, restaurants, caterers, resellers,
+              and bulk buyers with clear pricing, secure checkout, and reliable
+              fulfilment.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -78,24 +79,25 @@ export default async function Home() {
                   <p className="text-sm font-bold text-amber-700">
                     Today at farm gate
                   </p>
-                  <p className="mt-3 text-4xl font-bold">Live broilers</p>
+                  <p className="mt-3 text-4xl font-bold">Egg supply</p>
                   <p className="mt-2 text-sm text-stone-700">
-                    Available by weight for bulk and scheduled orders.
+                    Crates and half-crates for homes, vendors, bakeries, and
+                    resellers.
                   </p>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="rounded-lg bg-white/80 p-4">
-                    <p className="text-2xl font-bold">Egg supply</p>
+                    <p className="text-2xl font-bold">Broilers</p>
                     <p className="text-xs font-semibold text-stone-600">
-                      Crates and half-crates for homes, bakeries, vendors, and
-                      resellers.
+                      4-week and table-size broilers available for scheduled
+                      orders.
                     </p>
                   </div>
                   <div className="rounded-lg bg-white/80 p-4">
-                    <p className="text-2xl font-bold">Seasonal crops</p>
+                    <p className="text-2xl font-bold">Fresh crops</p>
                     <p className="text-xs font-semibold text-stone-600">
-                      Tomatoes, peppers, and selected produce available as
-                      supply opens.
+                      Tomatoes, peppers, potatoes, onions, carrots, cabbage,
+                      and other produce supplied as available.
                     </p>
                   </div>
                 </div>
@@ -133,10 +135,16 @@ export default async function Home() {
             <ProductCard key={product.slug} product={product} />
           ))}
         </div>
-        <p className="mt-6 rounded-lg bg-green-50 p-4 text-sm font-semibold leading-6 text-green-900">
-          Crop produce such as tomatoes, peppers, and other seasonal items will
-          be added as supply becomes available.
-        </p>
+        <div className="mt-8 rounded-lg bg-green-50 p-5 text-green-950">
+          <h2 className="text-lg font-bold">Fresh crop produce supply</h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-green-900">
+            Noble Farms also supplies fresh produce including Irish potatoes,
+            bell peppers, onions, sweet potatoes, ata rodo, carrots, cabbage,
+            broccoli, avocado, cucumber, shombo pepper, cauliflower, and baskets
+            of tomatoes. Availability may vary by season, quantity, and
+            logistics.
+          </p>
+        </div>
       </section>
     </PageShell>
   );

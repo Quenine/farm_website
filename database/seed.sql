@@ -1,9 +1,10 @@
 insert into public.categories (name, slug, description)
 values
-  ('Live Chickens', 'live-chickens', 'Live poultry supplied for homes, restaurants, and events.'),
+  ('Broilers', 'live-chickens', '4-week and table-size broilers supplied for scheduled orders.'),
   ('Processed Birds', 'processed-birds', 'Cleaned and processed poultry ready for cooking.'),
   ('Eggs', 'eggs', 'Fresh egg packs for homes, bakeries, vendors, and resellers.'),
-  ('Farm Supplies', 'farm-supplies', 'Useful farm inputs and organic growing supplies.')
+  ('Crop Produce', 'crop-produce', 'Fresh vegetables, tubers, tomatoes, peppers, and other produce supplied by availability.'),
+  ('Farm Inputs', 'farm-supplies', 'Selected farm inputs and organic growing supplies.')
 on conflict (slug) do update
 set name = excluded.name,
     description = excluded.description;
@@ -27,35 +28,35 @@ values
   (
     'Live Broiler Chicken',
     'live-broiler-chicken',
-    'Healthy farm-raised broilers supplied live by weight for homes, restaurants, caterers, and bulk buyers.',
+    'Healthy farm-raised broilers available for scheduled orders. Suitable for households, food vendors, restaurants, caterers, and bulk buyers.',
     (select id from public.categories where slug = 'live-chickens'),
     2650, 'kg', 300, 15, 'active', null, true, true, false
   ),
   (
     'Processed Whole Chicken',
     'processed-whole-chicken',
-    'Cleaned whole chicken prepared for convenient cooking, retail packs, events, and catering supply.',
+    'Cleaned whole chicken prepared for convenient cooking, retail supply, events, and catering.',
     (select id from public.categories where slug = 'processed-birds'),
     3650, 'kg', 90, 20, 'active', null, false, false, true
   ),
   (
     'Crate of Eggs',
     'crate-of-eggs',
-    'Fresh eggs packed in crates for families, bakeries, food vendors, and resellers.',
+    'Fresh eggs packed in crates for homes, bakeries, food vendors, restaurants, and resellers.',
     (select id from public.categories where slug = 'eggs'),
     5000, 'crate', 35, 5, 'active', null, false, false, false
   ),
   (
     'Half Crate of Eggs',
     'half-crate-of-eggs',
-    'A smaller egg pack for households, small kitchens, and regular buyers.',
+    'A practical egg pack for households, small kitchens, and regular buyers.',
     (select id from public.categories where slug = 'eggs'),
     2500, 'half_crate', 35, 5, 'active', null, false, false, false
   ),
   (
     'Old Layers',
     'old-layers',
-    'Mature layers for customers who prefer firm, flavorful birds for soups, stews, and local dishes. Available seasonally.',
+    'Mature birds for customers who prefer firm, flavorful chicken for soups, stews, and local dishes. Availability may be seasonal.',
     (select id from public.categories where slug = 'live-chickens'),
     8600, 'bird', 190, 10, 'coming_soon', '2026-12-01', false, true, false
   ),

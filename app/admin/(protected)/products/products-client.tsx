@@ -18,7 +18,7 @@ const emptyProduct: Product = {
   stockCount: 0,
   minimumOrder: 1,
   minimumUnit: "kg",
-  category: "Live Chickens",
+  category: "Broilers",
   availability: "Available now",
   description: "",
   badge: "Noble Farms supply",

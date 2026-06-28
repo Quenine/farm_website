@@ -58,7 +58,7 @@ export default async function ProductDetailPage({
               <p className="font-bold text-amber-900">Minimum order requirement</p>
               <p className="mt-2 text-sm leading-6 text-amber-900">
                 This product can only be added from {product.minimumOrder}{" "}
-                {product.minimumUnit} and above. The local cart enforces this
+                {product.minimumUnit} and above. Your cart enforces this
                 minimum and the currently available stock.
               </p>
             </div>

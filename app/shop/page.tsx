@@ -12,12 +12,18 @@ export default async function ShopPage() {
         <SectionHeader
           eyebrow="Catalogue"
           title="Shop Noble Farms produce"
-          body="Browse poultry, eggs, manure, and seasonal farm produce from Noble Farms. Delivery options depend on product type, quantity, and location."
+          body="Browse eggs, broilers, fresh crop produce, and selected farm inputs from Noble Farms. Product availability, quantity, and delivery options may vary by item and location."
         />
-        <p className="mt-6 rounded-lg bg-green-50 p-4 text-sm font-semibold leading-6 text-green-900">
-          Crop produce such as tomatoes, peppers, and other seasonal items will
-          be added as supply becomes available.
-        </p>
+        <div className="mt-6 rounded-lg bg-green-50 p-5 text-green-950">
+          <h2 className="text-lg font-bold">Fresh crop produce supply</h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-green-900">
+            Noble Farms also supplies fresh produce including Irish potatoes,
+            bell peppers, onions, sweet potatoes, ata rodo, carrots, cabbage,
+            broccoli, avocado, cucumber, shombo pepper, cauliflower, and baskets
+            of tomatoes. Crop produce is supplied based on harvest, sourcing,
+            and confirmed availability.
+          </p>
+        </div>
         <div className="mt-9 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {products.map((product) => (
             <ProductCard key={product.slug} product={product} />

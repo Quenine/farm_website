@@ -26,10 +26,10 @@ export const products: Product[] = [
     stockCount: 300,
     minimumOrder: 15,
     minimumUnit: "kg",
-    category: "Live Chickens",
+    category: "Broilers",
     availability: "Available now",
     description:
-      "Healthy farm-raised broilers supplied live by weight for homes, restaurants, caterers, and bulk buyers.",
+      "Healthy farm-raised broilers available for scheduled orders. Suitable for households, food vendors, restaurants, caterers, and bulk buyers.",
     badge: "Best for bulk kitchens",
     status: "active",
     isLiveAnimal: true,
@@ -46,7 +46,7 @@ export const products: Product[] = [
     category: "Processed Birds",
     availability: "Available now",
     description:
-      "Cleaned whole chicken prepared for convenient cooking, retail packs, events, and catering supply.",
+      "Cleaned whole chicken prepared for convenient cooking, retail supply, events, and catering.",
     badge: "Ready to cook",
     status: "active",
     isProcessed: true,
@@ -63,7 +63,7 @@ export const products: Product[] = [
     category: "Eggs",
     availability: "Weekly supply",
     description:
-      "Fresh eggs packed in crates for families, bakeries, food vendors, and resellers.",
+      "Fresh eggs packed in crates for homes, bakeries, food vendors, restaurants, and resellers.",
     badge: "Weekly harvest",
     status: "active",
   },
@@ -79,7 +79,7 @@ export const products: Product[] = [
     category: "Eggs",
     availability: "Weekly supply",
     description:
-      "A smaller egg pack for households, small kitchens, and regular buyers.",
+      "A practical egg pack for households, small kitchens, and regular buyers.",
     badge: "Compact pack",
     status: "active",
   },
@@ -92,10 +92,10 @@ export const products: Product[] = [
     stockCount: 190,
     minimumOrder: 10,
     minimumUnit: "birds",
-    category: "Live Chickens",
+    category: "Broilers",
     availability: "Available from December 2026",
     description:
-      "Mature layers for customers who prefer firm, flavorful birds for soups, stews, and local dishes. Available seasonally.",
+      "Mature birds for customers who prefer firm, flavorful chicken for soups, stews, and local dishes. Availability may be seasonal.",
     badge: "Coming December",
     status: "coming_soon",
     availableFrom: "2026-12-01",
@@ -110,7 +110,7 @@ export const products: Product[] = [
     stockCount: 10,
     minimumOrder: 3,
     minimumUnit: "bags",
-    category: "Farm Supplies",
+    category: "Farm Inputs",
     availability: "Available now",
     description:
       "Organic poultry manure for gardens, farms, soil improvement, and crop production.",

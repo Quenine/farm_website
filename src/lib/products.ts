@@ -59,10 +59,33 @@ const productColumns = `
 `;
 
 function categoryName(row: ProductRow) {
-  if (Array.isArray(row.categories)) {
-    return row.categories[0]?.name ?? "Uncategorized";
-  }
-  return row.categories?.name ?? "Uncategorized";
+  const rawName = Array.isArray(row.categories)
+    ? row.categories[0]?.name
+    : row.categories?.name;
+  const categoryAliases: Record<string, string> = {
+    "Live Chickens": "Broilers",
+    "Farm Supplies": "Farm Inputs",
+  };
+  return rawName ? categoryAliases[rawName] ?? rawName : "Uncategorized";
+}
+
+function categoryRank(category: string) {
+  const ranks: Record<string, number> = {
+    Eggs: 1,
+    Broilers: 2,
+    "Processed Birds": 3,
+    "Crop Produce": 4,
+    "Farm Inputs": 9,
+  };
+  return ranks[category] ?? 5;
+}
+
+function productBadge(row: ProductRow, category: string) {
+  if (row.status === "coming_soon") return "Availability varies";
+  if (row.is_featured) return "Available now";
+  if (category === "Crop Produce") return "Fresh produce";
+  if (category === "Farm Inputs") return "Farm input";
+  return "Farm-direct";
 }
 
 function pluralizeUnit(unit: string, quantity: number) {
@@ -80,6 +103,7 @@ export function mapProductRow(row: ProductRow): Product {
   const stockCount = Number(row.stock_quantity);
   const minimumOrder = Number(row.minimum_order_quantity);
   const unitLabel = pluralizeUnit(row.unit, stockCount);
+  const category = categoryName(row);
   const statusLabels = {
     active: "Available now",
     inactive: "Inactive",
@@ -101,15 +125,10 @@ export function mapProductRow(row: ProductRow): Product {
     stockCount,
     minimumOrder,
     minimumUnit: pluralizeUnit(row.unit, minimumOrder),
-    category: categoryName(row),
+    category,
     availability: statusLabels[row.status],
     description: row.description ?? "",
-    badge:
-      row.status === "coming_soon"
-        ? "Coming soon"
-        : row.is_featured
-          ? "Featured"
-          : "Farm-direct",
+    badge: productBadge(row, category),
     status: row.status,
     availableFrom: row.available_from,
     isFeatured: row.is_featured,
@@ -138,7 +157,13 @@ export async function getPublicProducts(): Promise<Product[]> {
     .order("name");
 
   if (error) throw new Error(`Unable to load products: ${error.message}`);
-  return ((data ?? []) as unknown as ProductRow[]).map(mapProductRow);
+  return ((data ?? []) as unknown as ProductRow[])
+    .map(mapProductRow)
+    .sort(
+      (a, b) =>
+        categoryRank(a.category) - categoryRank(b.category) ||
+        a.name.localeCompare(b.name),
+    );
 }
 
 export async function getPublicProductBySlug(slug: string) {
@@ -179,10 +204,16 @@ export async function getAdminProducts() {
 
 async function getCategoryId(categoryName: string) {
   const supabase = createAdminSupabaseClient();
+  const aliases: Record<string, string[]> = {
+    Broilers: ["Broilers", "Live Chickens"],
+    "Farm Inputs": ["Farm Inputs", "Farm Supplies"],
+  };
+  const candidateNames = aliases[categoryName] ?? [categoryName];
   const { data, error } = await supabase
     .from("categories")
     .select("id")
-    .eq("name", categoryName)
+    .in("name", candidateNames)
+    .limit(1)
     .maybeSingle();
 
   if (error) throw new Error(`Unable to load category: ${error.message}`);

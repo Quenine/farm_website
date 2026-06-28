@@ -12,7 +12,7 @@ export default function ContactPage() {
           <SectionHeader
             eyebrow="Contact"
             title="Talk to Noble Farms"
-            body="Need help with an order, bulk supply, delivery arrangement, or product availability? Contact Noble Farms and we'll respond as soon as possible."
+            body="Need help with an order, bulk supply, produce availability, or delivery arrangement? Contact Noble Farms and we'll respond as soon as possible."
           />
           <div className="mt-8 grid gap-4">
             {[
@@ -57,8 +57,8 @@ export default function ContactPage() {
           className="grid gap-5 rounded-lg bg-white p-6 shadow-sm"
         >
           <p className="rounded-lg bg-amber-50 p-3 text-sm font-semibold leading-6 text-amber-900">
-            Thanks. Please call or WhatsApp Noble Farms directly for urgent
-            orders while online messages are being finalized.
+            For urgent orders, call or WhatsApp Noble Farms directly. You can
+            also use this form to open an email message.
           </p>
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="Full name" placeholder="Adebayo Noble" />
