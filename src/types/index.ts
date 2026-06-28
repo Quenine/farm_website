@@ -19,6 +19,9 @@ export type Product = {
   isFeatured?: boolean;
   isLiveAnimal?: boolean;
   isProcessed?: boolean;
+  pricingMode?: "fixed" | "quote_required";
+  isOrderableOnline?: boolean;
+  displayPriceLabel?: string | null;
 };
 
 export type DeliveryZone = {

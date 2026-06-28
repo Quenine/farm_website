@@ -16,6 +16,9 @@ type ProductRow = {
   unit: string;
   stock_quantity: number | string;
   minimum_order_quantity: number | string;
+  pricing_mode: "fixed" | "quote_required" | null;
+  is_orderable_online: boolean | null;
+  display_price_label: string | null;
   status: "active" | "inactive" | "coming_soon";
   available_from: string | null;
   is_featured: boolean;
@@ -39,6 +42,9 @@ export type AdminProductInput = {
   isFeatured: boolean;
   isLiveAnimal: boolean;
   isProcessed: boolean;
+  pricingMode: "fixed" | "quote_required";
+  isOrderableOnline: boolean;
+  displayPriceLabel?: string | null;
 };
 
 const productColumns = `
@@ -50,6 +56,9 @@ const productColumns = `
   unit,
   stock_quantity,
   minimum_order_quantity,
+  pricing_mode,
+  is_orderable_online,
+  display_price_label,
   status,
   available_from,
   is_featured,
@@ -81,6 +90,7 @@ function categoryRank(category: string) {
 }
 
 function productBadge(row: ProductRow, category: string) {
+  if (row.pricing_mode === "quote_required") return "Check Availability";
   if (row.status === "coming_soon") return "Availability varies";
   if (row.is_featured) return "Available now";
   if (category === "Crop Produce") return "Fresh produce";
@@ -104,6 +114,8 @@ export function mapProductRow(row: ProductRow): Product {
   const minimumOrder = Number(row.minimum_order_quantity);
   const unitLabel = pluralizeUnit(row.unit, stockCount);
   const category = categoryName(row);
+  const pricingMode = row.pricing_mode ?? "fixed";
+  const isOrderableOnline = row.is_orderable_online ?? true;
   const statusLabels = {
     active: "Available now",
     inactive: "Inactive",
@@ -121,7 +133,10 @@ export function mapProductRow(row: ProductRow): Product {
     name: row.name,
     price: Number(row.price),
     unit: row.unit.replaceAll("_", "-"),
-    stock: `${stockCount} ${unitLabel} available`,
+    stock:
+      pricingMode === "quote_required"
+        ? "Confirm availability"
+        : `${stockCount} ${unitLabel} available`,
     stockCount,
     minimumOrder,
     minimumUnit: pluralizeUnit(row.unit, minimumOrder),
@@ -134,6 +149,9 @@ export function mapProductRow(row: ProductRow): Product {
     isFeatured: row.is_featured,
     isLiveAnimal: row.is_live_animal,
     isProcessed: row.is_processed,
+    pricingMode,
+    isOrderableOnline,
+    displayPriceLabel: row.display_price_label,
   };
 }
 
@@ -244,6 +262,10 @@ export async function saveAdminProduct(input: AdminProductInput) {
     is_featured: input.isFeatured,
     is_live_animal: input.isLiveAnimal,
     is_processed: input.isProcessed,
+    pricing_mode: input.pricingMode,
+    is_orderable_online:
+      input.pricingMode === "quote_required" ? false : input.isOrderableOnline,
+    display_price_label: input.displayPriceLabel || null,
   };
 
   const query = input.id

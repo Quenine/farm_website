@@ -13,6 +13,7 @@ import {
   normalizeCart,
   persistCart,
 } from "@/src/lib/cart-store";
+import { isProductOrderable } from "@/src/lib/product-pricing";
 import type { CartLine, Product } from "@/src/types";
 
 type CartContextValue = {
@@ -60,6 +61,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItem = useCallback(
     (product: Product, quantity = product.minimumOrder) => {
+      if (!isProductOrderable(product)) return;
       commit((current) => {
         const existing = current.find((line) => line.slug === product.slug);
         if (!existing) {

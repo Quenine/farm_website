@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/src/components/cart/cart-provider";
+import { isProductOrderable } from "@/src/lib/product-pricing";
 import type { Product } from "@/src/types";
 
 export function AddToCartButton({
@@ -16,10 +17,7 @@ export function AddToCartButton({
 }) {
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
-  const unavailable =
-    product.status === "coming_soon" ||
-    product.status === "inactive" ||
-    product.stockCount < product.minimumOrder;
+  const unavailable = !isProductOrderable(product);
 
   return (
     <button

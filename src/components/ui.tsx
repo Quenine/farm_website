@@ -3,6 +3,11 @@ import { ArrowRight, Leaf, Sprout } from "lucide-react";
 import { CartLink } from "@/src/components/cart/cart-link";
 import { AddToCartButton } from "@/src/components/product/add-to-cart-button";
 import { formatNaira } from "@/src/lib/format";
+import {
+  isProductOrderable,
+  productPriceLabel,
+  productRequestUrl,
+} from "@/src/lib/product-pricing";
 import type { Product } from "@/src/types";
 
 export function PublicHeader() {
@@ -108,6 +113,9 @@ export function SectionHeader({
 }
 
 export function ProductCard({ product }: { product: Product }) {
+  const priceLabel = productPriceLabel(product);
+  const isOrderable = isProductOrderable(product);
+
   return (
     <article className="flex h-full flex-col rounded-lg border border-green-900/10 bg-white p-5 shadow-sm">
       <div className="mb-5 grid aspect-[4/3] place-items-center rounded-lg bg-[linear-gradient(135deg,#ecfccb,#fef3c7)] text-green-950">
@@ -131,12 +139,19 @@ export function ProductCard({ product }: { product: Product }) {
       </div>
       <p className="mt-4 text-sm leading-6 text-stone-600">{product.description}</p>
       <div className="mt-5 grid gap-3 text-sm text-stone-700">
-        <InfoRow label="Price" value={`${formatNaira(product.price)} / ${product.unit}`} />
-        <InfoRow label="Stock" value={product.stock} />
         <InfoRow
-          label="Minimum"
-          value={`${product.minimumOrder} ${product.minimumUnit}`}
+          label="Price"
+          value={priceLabel ?? `${formatNaira(product.price)} / ${product.unit}`}
         />
+        {product.pricingMode === "quote_required" ? null : (
+          <>
+            <InfoRow label="Stock" value={product.stock} />
+            <InfoRow
+              label="Minimum"
+              value={`${product.minimumOrder} ${product.minimumUnit}`}
+            />
+          </>
+        )}
         <InfoRow label="Status" value={product.availability} />
       </div>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -147,7 +162,17 @@ export function ProductCard({ product }: { product: Product }) {
           View
           <ArrowRight size={16} />
         </Link>
-        <AddToCartButton product={product} />
+        {isOrderable ? (
+          <AddToCartButton product={product} />
+        ) : (
+          <Link
+            href={productRequestUrl(product)}
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-green-800 px-4 text-sm font-bold text-white transition hover:bg-green-900"
+            target="_blank"
+          >
+            Request Availability
+          </Link>
+        )}
       </div>
     </article>
   );

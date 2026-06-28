@@ -49,7 +49,7 @@ export function CartPageClient() {
     return (
       <EmptyState
         title="Your cart is empty"
-        body="Add poultry, eggs, or farm supplies from the shop and they will stay here in localStorage for now."
+        body="Add poultry, eggs, or farm produce from the shop and return here when you are ready to checkout."
         actionHref="/shop"
         actionLabel="Go to shop"
       />

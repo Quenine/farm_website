@@ -49,6 +49,9 @@ create table public.products (
   unit text not null check (char_length(trim(unit)) > 0),
   stock_quantity numeric(12, 2) not null default 0 check (stock_quantity >= 0),
   minimum_order_quantity numeric(12, 2) not null default 1 check (minimum_order_quantity > 0),
+  pricing_mode text not null default 'fixed' check (pricing_mode in ('fixed', 'quote_required')),
+  is_orderable_online boolean not null default true,
+  display_price_label text,
   status public.product_status not null default 'active',
   available_from date,
   is_featured boolean not null default false,
@@ -58,6 +61,9 @@ create table public.products (
   updated_at timestamptz not null default now(),
   constraint products_coming_soon_date_check check (
     status <> 'coming_soon' or available_from is not null
+  ),
+  constraint products_quote_orderable_check check (
+    pricing_mode = 'fixed' or is_orderable_online = false
   )
 );
 

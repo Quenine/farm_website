@@ -199,7 +199,7 @@ export async function createOrder(input: CreateOrderInput) {
     supabase
       .from("products")
       .select(
-        "id, name, price, unit, stock_quantity, minimum_order_quantity, status",
+        "id, name, price, unit, stock_quantity, minimum_order_quantity, status, pricing_mode, is_orderable_online",
       )
       .in("id", uniqueProductIds),
   ]);
@@ -223,6 +223,15 @@ export async function createOrder(input: CreateOrderInput) {
     }
     if (product.status !== "active") {
       throw new Error(`${product.name} is not currently available to order.`);
+    }
+    if (
+      product.pricing_mode === "quote_required" ||
+      product.is_orderable_online === false ||
+      Number(product.price) <= 0
+    ) {
+      throw new Error(
+        `${product.name} requires availability confirmation before checkout.`,
+      );
     }
 
     const quantity = Math.round(item.quantity);

@@ -4,9 +4,14 @@ import { useState } from "react";
 import type { Product } from "@/src/types";
 import { AddToCartButton } from "@/src/components/product/add-to-cart-button";
 import { QuantitySelector } from "@/src/components/product/quantity-selector";
+import { isProductOrderable } from "@/src/lib/product-pricing";
 
 export function ProductDetailActions({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(product.minimumOrder);
+
+  if (!isProductOrderable(product)) {
+    return null;
+  }
 
   return (
     <div className="mt-8 grid gap-4">
