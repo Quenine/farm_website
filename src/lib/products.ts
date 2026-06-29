@@ -36,6 +36,7 @@ type ProductRow = {
   available_from: string | null;
   is_featured: boolean;
   featured_sort_order: number | string | null;
+  supports_wider_delivery: boolean | null;
   is_live_animal: boolean;
   is_processed: boolean;
   created_at: string;
@@ -57,6 +58,7 @@ export type AdminProductInput = {
   availableFrom?: string | null;
   isFeatured: boolean;
   featuredSortOrder?: number;
+  supportsWiderDelivery?: boolean;
   isLiveAnimal: boolean;
   isProcessed: boolean;
   pricingMode: "fixed" | "quote_required";
@@ -80,6 +82,7 @@ const productColumns = `
   available_from,
   is_featured,
   featured_sort_order,
+  supports_wider_delivery,
   is_live_animal,
   is_processed,
   created_at,
@@ -216,6 +219,7 @@ export function mapProductRow(row: ProductRow): Product {
     availableFrom: row.available_from,
     isFeatured: row.is_featured,
     featuredSortOrder: Number(row.featured_sort_order ?? 100),
+    supportsWiderDelivery: row.supports_wider_delivery ?? category === "Crop Produce",
     isLiveAnimal: row.is_live_animal,
     isProcessed: row.is_processed,
     pricingMode,
@@ -335,6 +339,7 @@ export async function saveAdminProduct(input: AdminProductInput) {
       input.status === "coming_soon" ? input.availableFrom : null,
     is_featured: input.isFeatured,
     featured_sort_order: input.featuredSortOrder ?? 100,
+    supports_wider_delivery: input.supportsWiderDelivery ?? false,
     is_live_animal: input.isLiveAnimal,
     is_processed: input.isProcessed,
     pricing_mode: input.pricingMode,

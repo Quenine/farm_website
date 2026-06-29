@@ -3,9 +3,11 @@ import { formatNaira } from "@/src/lib/format";
 export function CartSummary({
   subtotal,
   deliveryFee,
+  deliveryFeeLabel,
 }: {
   subtotal: number;
   deliveryFee?: number;
+  deliveryFeeLabel?: string;
 }) {
   const total = subtotal + (deliveryFee ?? 0);
 
@@ -20,7 +22,7 @@ export function CartSummary({
         <div className="flex justify-between">
           <span className="text-green-100">Estimated delivery</span>
           <span className="font-bold">
-            {deliveryFee === undefined ? "Select at checkout" : formatNaira(deliveryFee)}
+            {deliveryFeeLabel ?? (deliveryFee === undefined ? "Select at checkout" : formatNaira(deliveryFee))}
           </span>
         </div>
         <div className="flex justify-between border-t border-white/20 pt-4 text-base">

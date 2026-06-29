@@ -33,6 +33,7 @@ const emptyProduct: Product = {
   availableFrom: null,
   isFeatured: false,
   featuredSortOrder: 100,
+  supportsWiderDelivery: false,
   isLiveAnimal: false,
   isProcessed: false,
   pricingMode: "fixed",
@@ -69,6 +70,7 @@ export function AdminProductsClient({
       isOrderableOnline: product.isOrderableOnline ?? true,
       displayPriceLabel: product.displayPriceLabel ?? null,
       featuredSortOrder: product.featuredSortOrder ?? 100,
+      supportsWiderDelivery: product.supportsWiderDelivery ?? product.category === "Crop Produce",
       media: product.media ?? [],
       primaryMedia: product.primaryMedia ?? null,
     });
@@ -163,6 +165,7 @@ export function AdminProductsClient({
         availableFrom: saved.availableFrom,
         isFeatured: saved.isFeatured ?? false,
         featuredSortOrder: saved.featuredSortOrder ?? 100,
+        supportsWiderDelivery: saved.supportsWiderDelivery ?? false,
         isLiveAnimal: saved.isLiveAnimal ?? false,
         isProcessed: saved.isProcessed ?? false,
         pricingMode: saved.pricingMode ?? "fixed",
@@ -377,8 +380,9 @@ export function AdminProductsClient({
                 }
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-4">
               <ProductCheckbox label="Featured" checked={form.isFeatured ?? false} onChange={(isFeatured) => setForm({ ...form, isFeatured })} />
+              <ProductCheckbox label="Wider delivery" checked={form.supportsWiderDelivery ?? false} onChange={(supportsWiderDelivery) => setForm({ ...form, supportsWiderDelivery })} />
               <ProductCheckbox label="Live animal" checked={form.isLiveAnimal ?? false} onChange={(isLiveAnimal) => setForm({ ...form, isLiveAnimal })} />
               <ProductCheckbox label="Processed" checked={form.isProcessed ?? false} onChange={(isProcessed) => setForm({ ...form, isProcessed })} />
             </div>
@@ -455,7 +459,7 @@ function ProductMediaManager({
         <div>
           <h3 className="text-lg font-bold text-green-950">Media</h3>
           <p className="mt-1 text-sm text-green-900">
-            Upload product images and optional videos. Public cards use the primary image.
+            Upload product images and optional videos up to 5MB each. Public cards use the primary image.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -8,28 +8,71 @@ import {
 } from "@/src/lib/payments";
 import { PaystackRequestError } from "@/src/lib/paystack";
 
-const checkoutSchema = z.object({
-  customerName: z.string().trim().min(2, "Enter your full name.").max(120),
-  customerEmail: z.string().trim().email("Enter a valid email address."),
-  customerPhone: z.string().trim().min(7, "Enter a valid phone number.").max(30),
-  deliveryAddress: z
-    .string()
-    .trim()
-    .min(8, "Enter a complete delivery address.")
-    .max(500),
-  deliveryZoneId: z.string().uuid("Select a delivery zone."),
-  deliveryDate: z.iso.date("Select a valid delivery date."),
-  deliveryNote: z.string().trim().max(1000).optional(),
-  items: z
-    .array(
-      z.object({
-        productId: z.string().uuid(),
-        quantity: z.number().int().positive(),
-      }),
-    )
-    .min(1, "Your cart is empty.")
-    .max(50),
-});
+const checkoutSchema = z
+  .object({
+    customerName: z.string().trim().min(2, "Enter your full name.").max(120),
+    customerEmail: z.string().trim().email("Enter a valid email address."),
+    customerPhone: z.string().trim().min(7, "Enter a valid phone number.").max(30),
+    deliveryMethod: z.enum(["local_delivery", "pickup", "wider_delivery"]),
+    deliveryAddress: z.string().trim().max(500).optional(),
+    deliveryZoneId: z.string().uuid("Select a delivery zone.").optional().or(z.literal("")),
+    deliveryState: z.string().trim().max(80).optional(),
+    deliveryCity: z.string().trim().max(120).optional(),
+    deliveryDate: z.iso.date("Select a valid delivery date."),
+    deliveryNote: z.string().trim().max(1000).optional(),
+    items: z
+      .array(
+        z.object({
+          productId: z.string().uuid(),
+          quantity: z.number().int().positive(),
+        }),
+      )
+      .min(1, "Your cart is empty.")
+      .max(50),
+  })
+  .superRefine((value, context) => {
+    if (value.deliveryMethod === "local_delivery") {
+      if (!value.deliveryZoneId) {
+        context.addIssue({
+          code: "custom",
+          path: ["deliveryZoneId"],
+          message: "Select a delivery zone.",
+        });
+      }
+      if (!value.deliveryAddress || value.deliveryAddress.length < 8) {
+        context.addIssue({
+          code: "custom",
+          path: ["deliveryAddress"],
+          message: "Enter a complete delivery address.",
+        });
+      }
+    }
+
+    if (value.deliveryMethod === "pickup") {
+      if (!value.deliveryNote || value.deliveryNote.length < 3) {
+        context.addIssue({
+          code: "custom",
+          path: ["deliveryNote"],
+          message: "Add a pickup or fulfilment note.",
+        });
+      }
+    }
+
+    if (value.deliveryMethod === "wider_delivery") {
+      if (!value.deliveryState) {
+        context.addIssue({ code: "custom", path: ["deliveryState"], message: "Enter the delivery state." });
+      }
+      if (!value.deliveryCity) {
+        context.addIssue({ code: "custom", path: ["deliveryCity"], message: "Enter the delivery city or town." });
+      }
+      if (!value.deliveryAddress || value.deliveryAddress.length < 8) {
+        context.addIssue({ code: "custom", path: ["deliveryAddress"], message: "Enter a complete delivery address." });
+      }
+      if (!value.deliveryNote || value.deliveryNote.length < 5) {
+        context.addIssue({ code: "custom", path: ["deliveryNote"], message: "Add delivery notes for wider produce delivery." });
+      }
+    }
+  });
 
 export type CheckoutActionState =
   | {
@@ -38,6 +81,8 @@ export type CheckoutActionState =
       reference: string;
       authorizationUrl?: string;
       paymentError?: string;
+      paymentDeferred?: boolean;
+      confirmationMessage?: string;
     }
   | {
       success: false;
@@ -56,13 +101,15 @@ function checkoutErrorMessage(error: unknown) {
     "Duplicate cart items are not allowed.",
     "Select an active delivery zone.",
     "A product in your cart is no longer available.",
+    "Wider produce delivery is only available for eligible produce orders.",
   ];
 
   if (
     safeMessages.includes(error.message) ||
     error.message.includes(" is not currently available to order.") ||
     error.message.includes(" requires a minimum order of ") ||
-    error.message.includes(" only has ")
+    error.message.includes(" only has ") ||
+    error.message.includes("requires availability confirmation")
   ) {
     return error.message;
   }
@@ -110,6 +157,16 @@ export async function createOrderAction(
 
   try {
     const order = await createOrder(parsed.data);
+    if (order.paymentDeferred) {
+      return {
+        success: true,
+        ...order,
+        paymentDeferred: true,
+        confirmationMessage:
+          "Your order request has been received. Noble Farms will confirm delivery cost and availability before payment.",
+      };
+    }
+
     try {
       const payment = await initializeOrderPayment(order.orderId);
       return {

@@ -25,6 +25,7 @@ export default async function OrderSuccessPage({
   const order = await getOrderSuccess(parsedId.data);
   if (!order) notFound();
   const isPaid = order.paymentStatus === "paid";
+  const paymentAvailable = !order.deliveryQuoteRequired && order.deliveryFeeConfirmed;
 
   return (
     <PageShell>
@@ -33,13 +34,20 @@ export default async function OrderSuccessPage({
           <div className="text-center">
             <CheckCircle2 className="mx-auto text-green-700" size={56} />
             <h1 className="mt-5 text-4xl font-bold text-green-950">
-              {isPaid ? "Payment confirmed" : "Order created"}
+              {isPaid ? "Payment confirmed" : order.deliveryQuoteRequired ? "Order request created" : "Order created"}
             </h1>
             <p className="mt-4 text-stone-700">
               {isPaid
                 ? "Your payment is confirmed and Noble Farms is processing your order."
-                : "Your order is pending payment. Complete payment to move it into processing."}
+                : order.deliveryQuoteRequired
+                  ? "Your order request has been created. Noble Farms will confirm product availability and delivery cost before payment."
+                  : "Your order is pending payment. Complete payment to move it into processing."}
             </p>
+            {payment === "delivery_quote_pending" && !isPaid ? (
+              <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm font-semibold text-green-900">
+                Your order request has been received. Noble Farms will confirm delivery cost and availability before payment.
+              </p>
+            ) : null}
             {payment === "initialization_failed" && !isPaid ? (
               <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-900">
                 {paymentMessage ||
@@ -67,10 +75,13 @@ export default async function OrderSuccessPage({
               label="Order status"
               value={formatOrderStatus(order.orderStatus)}
             />
+            <Summary label="Delivery method" value={formatDeliveryMethod(order.deliveryMethod)} />
+            {order.deliveryState ? <Summary label="State" value={order.deliveryState} /> : null}
+            {order.deliveryCity ? <Summary label="City/Town" value={order.deliveryCity} /> : null}
             <Summary label="Delivery date" value={order.deliveryDate} />
           </div>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            {!isPaid ? <PayNowButton orderId={order.id} /> : null}
+            {!isPaid && paymentAvailable ? <PayNowButton orderId={order.id} /> : null}
             <Link
               href="/track-order"
               className="inline-flex h-12 items-center justify-center rounded-full bg-green-800 px-6 text-sm font-bold text-white"
@@ -88,6 +99,15 @@ export default async function OrderSuccessPage({
       </section>
     </PageShell>
   );
+}
+
+function formatDeliveryMethod(method: "local_delivery" | "pickup" | "wider_delivery") {
+  const labels = {
+    local_delivery: "Local Scheduled Delivery",
+    pickup: "Farm Pickup / Direct Arrangement",
+    wider_delivery: "Wider Produce Delivery",
+  };
+  return labels[method];
 }
 
 function Summary({ label, value }: { label: string; value: string }) {

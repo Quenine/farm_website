@@ -2,7 +2,8 @@ alter table public.products
   add column if not exists pricing_mode text not null default 'fixed',
   add column if not exists is_orderable_online boolean not null default true,
   add column if not exists display_price_label text,
-  add column if not exists featured_sort_order integer not null default 100;
+  add column if not exists featured_sort_order integer not null default 100,
+  add column if not exists supports_wider_delivery boolean not null default false;
 
 do $$
 begin
@@ -230,3 +231,12 @@ values
     1200, 'bag', 10, 3, 'fixed', true, null, 'active', null, false, false, false
   )
 on conflict (slug) do nothing;
+
+
+update public.products
+set supports_wider_delivery = true
+where slug in (
+  'irish-potatoes', 'bell-peppers', 'onions', 'sweet-potatoes',
+  'pepper-ata-rodo', 'carrots', 'cabbage', 'broccoli', 'avocado',
+  'cucumber', 'shombo-pepper', 'cauliflower', 'basket-of-tomatoes'
+);

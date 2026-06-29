@@ -11,16 +11,23 @@ import type {
   OrderItem,
 } from "@/src/types";
 
+type DeliveryMethod = "local_delivery" | "pickup" | "wider_delivery";
+
 type OrderRow = {
   id: string;
   order_reference: string;
   customer_name: string;
   customer_email: string;
   customer_phone: string;
-  delivery_address: string;
-  delivery_zone_id: string;
+  delivery_address: string | null;
+  delivery_zone_id: string | null;
   delivery_date: string;
   delivery_note: string | null;
+  delivery_method: DeliveryMethod | null;
+  delivery_state: string | null;
+  delivery_city: string | null;
+  delivery_quote_required: boolean | null;
+  delivery_fee_confirmed: boolean | null;
   subtotal: number | string;
   delivery_fee: number | string;
   total_amount: number | string;
@@ -55,10 +62,13 @@ export type CreateOrderInput = {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
-  deliveryAddress: string;
-  deliveryZoneId: string;
+  deliveryAddress?: string;
+  deliveryZoneId?: string | null;
   deliveryDate: string;
   deliveryNote?: string;
+  deliveryMethod: DeliveryMethod;
+  deliveryState?: string;
+  deliveryCity?: string;
   items: Array<{ productId: string; quantity: number }>;
 };
 
@@ -72,6 +82,11 @@ const orderColumns = `
   delivery_zone_id,
   delivery_date,
   delivery_note,
+  delivery_method,
+  delivery_state,
+  delivery_city,
+  delivery_quote_required,
+  delivery_fee_confirmed,
   subtotal,
   delivery_fee,
   total_amount,
@@ -103,8 +118,8 @@ function relatedName(
   relation: { name: string } | { name: string }[] | null,
 ) {
   return Array.isArray(relation)
-    ? relation[0]?.name ?? "Unknown area"
-    : relation?.name ?? "Unknown area";
+    ? relation[0]?.name ?? "Not applicable"
+    : relation?.name ?? "Not applicable";
 }
 
 function currentStock(
@@ -138,11 +153,22 @@ export function mapOrderRow(row: OrderRow): Order {
     customerName: row.customer_name,
     customerEmail: row.customer_email,
     customerPhone: row.customer_phone,
-    deliveryAddress: row.delivery_address,
+    deliveryAddress: row.delivery_address ?? "",
     deliveryZoneId: row.delivery_zone_id,
-    deliveryArea: relatedName(row.delivery_zones),
+    deliveryArea:
+      row.delivery_method === "pickup"
+        ? "Farm Pickup / Direct Arrangement"
+        : row.delivery_method === "wider_delivery"
+          ? [row.delivery_city, row.delivery_state].filter(Boolean).join(", ") ||
+            "Wider Produce Delivery"
+          : relatedName(row.delivery_zones),
     deliveryDate: row.delivery_date,
     deliveryNote: row.delivery_note,
+    deliveryMethod: row.delivery_method ?? "local_delivery",
+    deliveryState: row.delivery_state,
+    deliveryCity: row.delivery_city,
+    deliveryQuoteRequired: row.delivery_quote_required ?? false,
+    deliveryFeeConfirmed: row.delivery_fee_confirmed ?? true,
     subtotal: Number(row.subtotal),
     deliveryFee: Number(row.delivery_fee),
     totalAmount: Number(row.total_amount),
@@ -199,7 +225,7 @@ export async function createOrder(input: CreateOrderInput) {
     supabase
       .from("products")
       .select(
-        "id, name, price, unit, stock_quantity, minimum_order_quantity, status, pricing_mode, is_orderable_online",
+        "id, name, price, unit, stock_quantity, minimum_order_quantity, status, pricing_mode, is_orderable_online, supports_wider_delivery, categories ( name )",
       )
       .in("id", uniqueProductIds),
   ]);
@@ -208,16 +234,34 @@ export async function createOrder(input: CreateOrderInput) {
     throw new Error(`Unable to validate cart products: ${productsResult.error.message}`);
   }
 
-  const zone = zones.find((item) => item.id === input.deliveryZoneId);
-  if (!zone?.id || zone.isActive === false) {
+  const deliveryMethod = input.deliveryMethod;
+  const zone = deliveryMethod === "local_delivery"
+    ? zones.find((item) => item.id === input.deliveryZoneId)
+    : null;
+  if (deliveryMethod === "local_delivery" && (!zone?.id || zone.isActive === false)) {
     throw new Error("Select an active delivery zone.");
   }
 
   const productsById = new Map(
     (productsResult.data ?? []).map((product) => [product.id, product]),
   );
+  let containsWiderEligibleProduct = false;
   const orderItems = input.items.map((item) => {
-    const product = productsById.get(item.productId);
+    const product = productsById.get(item.productId) as
+      | {
+          id: string;
+          name: string;
+          price: number | string;
+          unit: string;
+          stock_quantity: number | string;
+          minimum_order_quantity: number | string;
+          status: string;
+          pricing_mode: string | null;
+          is_orderable_online: boolean | null;
+          supports_wider_delivery: boolean | null;
+          categories: { name: string } | { name: string }[] | null;
+        }
+      | undefined;
     if (!product) {
       throw new Error("A product in your cart is no longer available.");
     }
@@ -232,6 +276,13 @@ export async function createOrder(input: CreateOrderInput) {
       throw new Error(
         `${product.name} requires availability confirmation before checkout.`,
       );
+    }
+
+    const categoryName = Array.isArray(product.categories)
+      ? product.categories[0]?.name
+      : product.categories?.name;
+    if (product.supports_wider_delivery || categoryName === "Crop Produce") {
+      containsWiderEligibleProduct = true;
     }
 
     const quantity = Math.round(item.quantity);
@@ -255,10 +306,25 @@ export async function createOrder(input: CreateOrderInput) {
     };
   });
 
+  if (deliveryMethod === "wider_delivery" && !containsWiderEligibleProduct) {
+    throw new Error("Wider produce delivery is only available for eligible produce orders.");
+  }
+
   const subtotal = orderItems.reduce((sum, item) => sum + item.total_price, 0);
-  const deliveryFee = calculateDeliveryFee(zone, settings);
+  const deliveryFee = deliveryMethod === "local_delivery" && zone
+    ? calculateDeliveryFee(zone, settings)
+    : 0;
+  const deliveryQuoteRequired = deliveryMethod === "wider_delivery";
+  const deliveryFeeConfirmed = !deliveryQuoteRequired;
   const totalAmount = subtotal + deliveryFee;
   const phone = normalizePhone(input.customerPhone);
+  const orderStatus: DatabaseOrderStatus = deliveryQuoteRequired
+    ? "pending_delivery_quote"
+    : "pending_payment";
+  const deliveryAddress =
+    deliveryMethod === "pickup"
+      ? input.deliveryAddress?.trim() || "Farm Pickup / Direct Arrangement"
+      : input.deliveryAddress?.trim() || "";
 
   let insertedOrder: { id: string; order_reference: string } | null = null;
   let lastError: Error | null = null;
@@ -271,15 +337,20 @@ export async function createOrder(input: CreateOrderInput) {
         customer_name: input.customerName,
         customer_email: input.customerEmail,
         customer_phone: phone,
-        delivery_address: input.deliveryAddress,
-        delivery_zone_id: zone.id,
+        delivery_address: deliveryAddress,
+        delivery_zone_id: zone?.id ?? null,
         delivery_date: input.deliveryDate,
         delivery_note: input.deliveryNote || null,
+        delivery_method: deliveryMethod,
+        delivery_state: input.deliveryState || null,
+        delivery_city: input.deliveryCity || null,
+        delivery_quote_required: deliveryQuoteRequired,
+        delivery_fee_confirmed: deliveryFeeConfirmed,
         subtotal,
         delivery_fee: deliveryFee,
         total_amount: totalAmount,
         payment_status: "pending",
-        order_status: "pending_payment",
+        order_status: orderStatus,
       })
       .select("id, order_reference")
       .single();
@@ -311,6 +382,7 @@ export async function createOrder(input: CreateOrderInput) {
   return {
     orderId: insertedOrder.id,
     reference: insertedOrder.order_reference,
+    paymentDeferred: deliveryQuoteRequired,
   };
 }
 
@@ -357,10 +429,7 @@ export async function getAdminOrders() {
     )
     .eq("movement_type", "stock_out");
 
-  if (movementError) {
-    // The Step 5 inventory-link migration may not be installed yet.
-    return orders;
-  }
+  if (movementError) return orders;
 
   const movementCounts = new Map<string, number>();
   for (const movement of movements ?? []) {
@@ -395,5 +464,37 @@ export async function updateAdminOrderStatus(
     .select(orderColumns)
     .single();
   if (error) throw new Error(`Unable to update order: ${error.message}`);
+  return mapOrderRow(data as unknown as OrderRow);
+}
+
+export async function confirmAdminOrderDeliveryFee(orderId: string, deliveryFee: number) {
+  await requireAdmin();
+  if (!Number.isFinite(deliveryFee) || deliveryFee < 0) {
+    throw new Error("Enter a valid delivery fee.");
+  }
+  const supabase = createAdminSupabaseClient();
+  const { data: order, error: loadError } = await supabase
+    .from("orders")
+    .select("subtotal")
+    .eq("id", orderId)
+    .single();
+  if (loadError) throw new Error(`Unable to load order: ${loadError.message}`);
+
+  const subtotal = Number((order as { subtotal: number | string }).subtotal);
+  const { data, error } = await supabase
+    .from("orders")
+    .update({
+      delivery_fee: deliveryFee,
+      total_amount: subtotal + deliveryFee,
+      delivery_quote_required: false,
+      delivery_fee_confirmed: true,
+      order_status: "pending_payment",
+      payment_status: "pending",
+    })
+    .eq("id", orderId)
+    .neq("payment_status", "paid")
+    .select(orderColumns)
+    .single();
+  if (error) throw new Error(`Unable to confirm delivery fee: ${error.message}`);
   return mapOrderRow(data as unknown as OrderRow);
 }

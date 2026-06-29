@@ -36,6 +36,7 @@ const productSchema = z
     featuredSortOrder: z.number().int().min(0).default(100),
     isLiveAnimal: z.boolean(),
     isProcessed: z.boolean(),
+    supportsWiderDelivery: z.boolean().default(false),
     pricingMode: z.preprocess(
       (value) => (value === "quote_required" ? "quote_required" : "fixed"),
       z.enum(["fixed", "quote_required"]),
@@ -141,7 +142,7 @@ function validUpload(file: File, mediaType: "image" | "video") {
   const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
   const allowedVideoTypes = ["video/mp4", "video/webm"];
   const allowedTypes = mediaType === "image" ? allowedImageTypes : allowedVideoTypes;
-  const maxBytes = mediaType === "image" ? 5 * 1024 * 1024 : 50 * 1024 * 1024;
+  const maxBytes = 5 * 1024 * 1024;
   if (!allowedTypes.includes(file.type)) {
     throw new Error(
       mediaType === "image"
@@ -152,8 +153,8 @@ function validUpload(file: File, mediaType: "image" | "video") {
   if (file.size > maxBytes) {
     throw new Error(
       mediaType === "image"
-        ? "Images must be 5MB or smaller."
-        : "Videos must be 50MB or smaller.",
+        ? "Image uploads must be 5MB or smaller."
+        : "Video uploads must be 5MB or smaller.",
     );
   }
 }

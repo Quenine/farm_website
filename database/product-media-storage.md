@@ -10,7 +10,7 @@ Create a bucket:
 - Public read: enabled
 - File size guidance:
   - Images: up to 5MB
-  - Videos: up to 50MB
+  - Videos: up to 5MB
 
 Allowed content types in the admin upload actions:
 

@@ -84,7 +84,10 @@ function TrackedOrder({ order }: { order: Order }) {
           value={formatPaymentStatus(order.paymentStatus)}
         />
         <Detail label="Delivery date" value={formatOrderDate(order.deliveryDate)} />
+        <Detail label="Delivery method" value={formatDeliveryMethod(order.deliveryMethod)} />
         <Detail label="Delivery area" value={order.deliveryArea} />
+        {order.deliveryState ? <Detail label="State" value={order.deliveryState} /> : null}
+        {order.deliveryCity ? <Detail label="City/Town" value={order.deliveryCity} /> : null}
         <Detail label="Delivery address" value={order.deliveryAddress} />
         <Detail label="Subtotal" value={formatNaira(order.subtotal)} />
         <Detail label="Delivery fee" value={formatNaira(order.deliveryFee)} />
@@ -132,6 +135,15 @@ function TrackedOrder({ order }: { order: Order }) {
       </div>
     </div>
   );
+}
+
+function formatDeliveryMethod(method: Order["deliveryMethod"]) {
+  const labels = {
+    local_delivery: "Local Scheduled Delivery",
+    pickup: "Farm Pickup / Direct Arrangement",
+    wider_delivery: "Wider Produce Delivery",
+  };
+  return labels[method];
 }
 
 function TrackingInput({

@@ -33,6 +33,7 @@ export type Product = {
   featuredSortOrder?: number;
   isLiveAnimal?: boolean;
   isProcessed?: boolean;
+  supportsWiderDelivery?: boolean;
   pricingMode?: "fixed" | "quote_required";
   isOrderableOnline?: boolean;
   displayPriceLabel?: string | null;
@@ -56,6 +57,7 @@ export type DeliverySettings = {
 };
 
 export type DatabaseOrderStatus =
+  | "pending_delivery_quote"
   | "pending_payment"
   | "paid"
   | "processing"
@@ -90,8 +92,13 @@ export type Order = {
   customerEmail: string;
   customerPhone: string;
   deliveryAddress: string;
-  deliveryZoneId: string;
+  deliveryZoneId: string | null;
   deliveryArea: string;
+  deliveryMethod: "local_delivery" | "pickup" | "wider_delivery";
+  deliveryState: string | null;
+  deliveryCity: string | null;
+  deliveryQuoteRequired: boolean;
+  deliveryFeeConfirmed: boolean;
   deliveryDate: string;
   deliveryNote: string | null;
   subtotal: number;

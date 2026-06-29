@@ -4,6 +4,7 @@ import type {
 } from "@/src/types";
 
 const orderLabels: Record<DatabaseOrderStatus, string> = {
+  pending_delivery_quote: "Delivery Quote Required",
   pending_payment: "Pending Payment",
   paid: "Paid",
   processing: "Processing",

@@ -28,6 +28,7 @@ begin
   ) then
     create type public.order_status as enum (
       'pending_payment',
+      'pending_delivery_quote',
       'paid',
       'processing',
       'packed',
@@ -54,6 +55,8 @@ begin
     );
   end if;
 end $$;
+
+alter type public.order_status add value if not exists 'pending_delivery_quote' after 'pending_payment';
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -90,6 +93,7 @@ create table if not exists public.products (
   available_from date,
   is_featured boolean not null default false,
   featured_sort_order integer not null default 100,
+  supports_wider_delivery boolean not null default false,
   is_live_animal boolean not null default false,
   is_processed boolean not null default false,
   created_at timestamptz not null default now(),
@@ -106,7 +110,8 @@ alter table public.products
   add column if not exists pricing_mode text not null default 'fixed',
   add column if not exists is_orderable_online boolean not null default true,
   add column if not exists display_price_label text,
-  add column if not exists featured_sort_order integer not null default 100;
+  add column if not exists featured_sort_order integer not null default 100,
+  add column if not exists supports_wider_delivery boolean not null default false;
 
 do $$
 begin
@@ -171,9 +176,14 @@ create table if not exists public.orders (
   customer_email text not null,
   customer_phone text not null,
   delivery_address text not null,
-  delivery_zone_id uuid not null references public.delivery_zones(id) on delete restrict,
+  delivery_zone_id uuid references public.delivery_zones(id) on delete restrict,
   delivery_date date not null,
   delivery_note text,
+  delivery_method text not null default 'local_delivery' check (delivery_method in ('local_delivery', 'pickup', 'wider_delivery')),
+  delivery_state text,
+  delivery_city text,
+  delivery_quote_required boolean not null default false,
+  delivery_fee_confirmed boolean not null default true,
   subtotal numeric(12, 2) not null check (subtotal >= 0),
   delivery_fee numeric(12, 2) not null default 0 check (delivery_fee >= 0),
   total_amount numeric(12, 2) not null check (total_amount >= 0),
@@ -262,11 +272,31 @@ alter table public.inventory_movements
   add column if not exists created_at timestamptz not null default now();
 
 alter table public.orders
+  alter column delivery_zone_id drop not null,
   add column if not exists payment_status public.payment_status not null default 'pending',
   add column if not exists order_status public.order_status not null default 'pending_payment',
   add column if not exists paystack_reference text,
+  add column if not exists delivery_method text not null default 'local_delivery',
+  add column if not exists delivery_state text,
+  add column if not exists delivery_city text,
+  add column if not exists delivery_quote_required boolean not null default false,
+  add column if not exists delivery_fee_confirmed boolean not null default true,
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'orders_delivery_method_check'
+      and conrelid = 'public.orders'::regclass
+  ) then
+    alter table public.orders
+      add constraint orders_delivery_method_check
+      check (delivery_method in ('local_delivery', 'pickup', 'wider_delivery'));
+  end if;
+end $$;
+
 create index if not exists products_category_id_idx on public.products(category_id);
 create index if not exists products_status_idx on public.products(status);
 create index if not exists products_featured_idx on public.products(is_featured, featured_sort_order) where is_featured = true;

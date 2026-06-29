@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { updateOrderStatusAction } from "@/app/admin/(protected)/orders/actions";
+import { confirmDeliveryFeeAction, updateOrderStatusAction } from "@/app/admin/(protected)/orders/actions";
 import { AdminHeader, AdminTable, StatusBadge } from "@/src/components/admin";
 import { formatNaira } from "@/src/lib/format";
 import {
@@ -12,6 +12,7 @@ import {
 import type { Order } from "@/src/types";
 
 const statuses = [
+  "pending_delivery_quote",
   "pending_payment",
   "processing",
   "packed",
@@ -27,6 +28,7 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
   const [selected, setSelected] = useState<Order | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [message, setMessage] = useState<string | null>(null);
+  const [deliveryFeeInput, setDeliveryFeeInput] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const filtered = useMemo(
@@ -55,6 +57,28 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
       );
       setSelected(result.order);
       setMessage("Order status updated.");
+    });
+  };
+
+  const confirmDeliveryFee = (order: Order) => {
+    setMessage(null);
+    startTransition(async () => {
+      const result = await confirmDeliveryFeeAction({
+        orderId: order.id,
+        deliveryFee: Number(deliveryFeeInput),
+      });
+      if (!result.success) {
+        setMessage(result.message);
+        return;
+      }
+      setItems((current) =>
+        current.map((item) =>
+          item.id === result.order.id ? result.order : item,
+        ),
+      );
+      setSelected(result.order);
+      setDeliveryFeeInput("");
+      setMessage("Delivery fee confirmed. Customer can now pay from Track Order.");
     });
   };
 
@@ -119,6 +143,7 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
             onClick={() => {
               setMessage(null);
               setSelected(order);
+              setDeliveryFeeInput(order.deliveryFee ? String(order.deliveryFee) : "");
             }}
             className="h-9 rounded-full bg-green-50 px-3 text-xs font-bold text-green-800"
           >
@@ -136,7 +161,12 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
               <Detail label="Customer" value={selected.customerName} />
               <Detail label="Phone" value={selected.customerPhone} />
               <Detail label="Email" value={selected.customerEmail} />
+              <Detail label="Delivery method" value={formatDeliveryMethod(selected.deliveryMethod)} />
               <Detail label="Area" value={selected.deliveryArea} />
+              <Detail label="State" value={selected.deliveryState ?? "Not applicable"} />
+              <Detail label="City/Town" value={selected.deliveryCity ?? "Not applicable"} />
+              <Detail label="Delivery quote required" value={selected.deliveryQuoteRequired ? "Yes" : "No"} />
+              <Detail label="Delivery fee confirmed" value={selected.deliveryFeeConfirmed ? "Yes" : "No"} />
               <Detail
                 label="Delivery date"
                 value={formatOrderDate(selected.deliveryDate)}
@@ -176,8 +206,34 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
                 value={String(selected.inventoryMovementCount)}
               />
               <Detail label="Address" value={selected.deliveryAddress} />
+              <Detail label="Delivery fee" value={formatNaira(selected.deliveryFee)} />
               <Detail label="Total" value={formatNaira(selected.totalAmount)} />
             </div>
+            {selected.deliveryMethod === "wider_delivery" && !selected.deliveryFeeConfirmed ? (
+              <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-950">
+                <h3 className="font-bold">Confirm wider delivery fee</h3>
+                <p className="mt-2 text-green-900">Set the confirmed delivery fee. Once saved, this order becomes payable from Track Order.</p>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={deliveryFeeInput}
+                    onChange={(event) => setDeliveryFeeInput(event.target.value)}
+                    className="h-11 flex-1 rounded-lg border border-green-200 px-3"
+                    placeholder="Delivery fee"
+                  />
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => confirmDeliveryFee(selected)}
+                    className="h-11 rounded-full bg-green-800 px-5 text-sm font-bold text-white disabled:opacity-60"
+                  >
+                    Confirm fee
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {selected.paymentStatus === "pending" ||
             selected.paymentStatus === "failed" ? (
               <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
@@ -278,6 +334,15 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
       ) : null}
     </>
   );
+}
+
+function formatDeliveryMethod(method: Order["deliveryMethod"]) {
+  const labels = {
+    local_delivery: "Local Scheduled Delivery",
+    pickup: "Farm Pickup / Direct Arrangement",
+    wider_delivery: "Wider Produce Delivery",
+  };
+  return labels[method];
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

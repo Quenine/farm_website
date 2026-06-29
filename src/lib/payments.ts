@@ -78,6 +78,8 @@ async function findOrderForPayment(identifier: string) {
         total_amount,
         payment_status,
         paystack_reference,
+        delivery_quote_required,
+        delivery_fee_confirmed,
         order_items (
           quantity,
           product_id,
@@ -154,6 +156,13 @@ export async function initializeOrderPayment(orderIdentifier: string) {
       order.order_reference,
       "This order has already been paid.",
       "This order has already been paid.",
+    );
+  }
+  if (order.delivery_quote_required || order.delivery_fee_confirmed === false) {
+    failOrderPaymentValidation(
+      order.order_reference,
+      "Delivery fee is not confirmed for this order.",
+      "Payment will be available once delivery cost has been confirmed.",
     );
   }
   if (order.payment_status !== "pending" && order.payment_status !== "failed") {
