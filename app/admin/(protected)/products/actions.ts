@@ -31,13 +31,49 @@ const productSchema = z
     isFeatured: z.boolean(),
     isLiveAnimal: z.boolean(),
     isProcessed: z.boolean(),
+    pricingMode: z.preprocess(
+      (value) => (value === "quote_required" ? "quote_required" : "fixed"),
+      z.enum(["fixed", "quote_required"]),
+    ),
+    isOrderableOnline: z.preprocess((value) => {
+      if (typeof value === "boolean") return value;
+      if (typeof value === "string") {
+        return ["true", "1", "yes", "on"].includes(value.toLowerCase());
+      }
+      return true;
+    }, z.boolean()),
+    displayPriceLabel: z
+      .string()
+      .trim()
+      .max(80)
+      .transform((value) => value || null)
+      .nullable()
+      .optional(),
   })
+  .transform((product) => ({
+    ...product,
+    isOrderableOnline:
+      product.pricingMode === "quote_required"
+        ? false
+        : product.isOrderableOnline,
+    displayPriceLabel:
+      product.pricingMode === "quote_required"
+        ? product.displayPriceLabel || "Check Availability"
+        : product.displayPriceLabel,
+  }))
   .refine(
     (product) =>
       product.status !== "coming_soon" || Boolean(product.availableFrom),
     {
       message: "Coming soon products require an available-from date.",
       path: ["availableFrom"],
+    },
+  )
+  .refine(
+    (product) => product.pricingMode !== "fixed" || product.price > 0,
+    {
+      message: "Fixed-price products require a price greater than zero.",
+      path: ["price"],
     },
   );
 

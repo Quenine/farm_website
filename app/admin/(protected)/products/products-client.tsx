@@ -7,6 +7,7 @@ import {
 } from "@/app/admin/(protected)/products/actions";
 import { AdminHeader, AdminTable } from "@/src/components/admin";
 import { formatNaira } from "@/src/lib/format";
+import { productPriceLabel } from "@/src/lib/product-pricing";
 import type { Product } from "@/src/types";
 
 const emptyProduct: Product = {
@@ -27,6 +28,9 @@ const emptyProduct: Product = {
   isFeatured: false,
   isLiveAnimal: false,
   isProcessed: false,
+  pricingMode: "fixed",
+  isOrderableOnline: true,
+  displayPriceLabel: null,
 };
 
 export function AdminProductsClient({
@@ -44,13 +48,18 @@ export function AdminProductsClient({
 
   const openCreate = () => {
     setMessage(null);
-    setForm(emptyProduct);
+    setForm({ ...emptyProduct });
     setEditing(emptyProduct);
   };
 
   const openEdit = (product: Product) => {
     setMessage(null);
-    setForm(product);
+    setForm({
+      ...product,
+      pricingMode: product.pricingMode ?? "fixed",
+      isOrderableOnline: product.isOrderableOnline ?? true,
+      displayPriceLabel: product.displayPriceLabel ?? null,
+    });
     setEditing(product);
   };
 
@@ -62,16 +71,29 @@ export function AdminProductsClient({
         .trim()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
+    const pricingMode = form.pricingMode ?? "fixed";
+    const isQuoteRequired = pricingMode === "quote_required";
     return {
       ...form,
       slug,
-      stock: `${form.stockCount} ${form.unit} available`,
+      pricingMode,
+      isOrderableOnline: isQuoteRequired
+        ? false
+        : form.isOrderableOnline ?? true,
+      displayPriceLabel: isQuoteRequired
+        ? form.displayPriceLabel?.trim() || "Check Availability"
+        : form.displayPriceLabel?.trim() || null,
+      stock: isQuoteRequired
+        ? "Confirm availability"
+        : `${form.stockCount} ${form.unit} available`,
       availability:
         form.status === "inactive"
           ? "Inactive"
           : form.status === "coming_soon"
             ? "Coming soon"
-            : "Available now",
+            : isQuoteRequired
+              ? "Confirm before ordering"
+              : "Available now",
     };
   };
 
@@ -115,6 +137,9 @@ export function AdminProductsClient({
         isFeatured: saved.isFeatured ?? false,
         isLiveAnimal: saved.isLiveAnimal ?? false,
         isProcessed: saved.isProcessed ?? false,
+        pricingMode: saved.pricingMode ?? "fixed",
+        isOrderableOnline: saved.isOrderableOnline ?? true,
+        displayPriceLabel: saved.displayPriceLabel ?? null,
       });
 
       if (!result.success) {
@@ -195,7 +220,7 @@ export function AdminProductsClient({
             {product.name}
           </span>,
           product.category,
-          `${formatNaira(product.price)} / ${product.unit}`,
+          productPriceLabel(product) ?? `${formatNaira(product.price)} / ${product.unit}`,
           product.stock,
           `${product.minimumOrder} ${product.minimumUnit}`,
           product.availability,
@@ -240,6 +265,55 @@ export function AdminProductsClient({
               <ProductInput label="Unit" value={form.unit} onChange={(unit) => setForm({ ...form, unit })} />
               <ProductInput label="Stock count" type="number" min={0} value={form.stockCount} onChange={(stockCount) => setForm({ ...form, stockCount: Number(stockCount) })} />
               <ProductInput label="Minimum order" type="number" min={0.01} value={form.minimumOrder} onChange={(minimumOrder) => setForm({ ...form, minimumOrder: Number(minimumOrder) })} />
+              <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                Pricing mode
+                <select
+                  value={form.pricingMode ?? "fixed"}
+                  onChange={(event) => {
+                    const pricingMode = event.target.value as Product["pricingMode"];
+                    const isQuoteRequired = pricingMode === "quote_required";
+                    setForm({
+                      ...form,
+                      pricingMode,
+                      isOrderableOnline: isQuoteRequired
+                        ? false
+                        : form.isOrderableOnline ?? true,
+                      displayPriceLabel: isQuoteRequired
+                        ? form.displayPriceLabel || "Check Availability"
+                        : form.displayPriceLabel,
+                    });
+                  }}
+                  className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal"
+                >
+                  <option value="fixed">Fixed price</option>
+                  <option value="quote_required">Quote required</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                Orderable online
+                <select
+                  value={form.pricingMode === "quote_required" ? "false" : String(form.isOrderableOnline ?? true)}
+                  disabled={form.pricingMode === "quote_required"}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      isOrderableOnline: event.target.value === "true",
+                    })
+                  }
+                  className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal disabled:bg-stone-100"
+                >
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </label>
+              <ProductInput
+                label="Display price label"
+                required={false}
+                value={form.displayPriceLabel ?? ""}
+                onChange={(displayPriceLabel) =>
+                  setForm({ ...form, displayPriceLabel })
+                }
+              />
               <label className="grid gap-2 text-sm font-semibold text-stone-800">
                 Status
                 <select
@@ -289,7 +363,7 @@ export function AdminProductsClient({
                 Cancel
               </button>
               <button type="submit" disabled={isPending} className="h-11 rounded-full bg-green-800 px-5 text-sm font-bold text-white disabled:opacity-60">
-                {isPending ? "Saving…" : "Save product"}
+                {isPending ? "Saving..." : "Save product"}
               </button>
             </div>
           </form>
