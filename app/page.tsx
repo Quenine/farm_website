@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, ShieldCheck, Truck, type LucideIcon } from "lucide-react";
 import { PageShell, ProductCard, SectionHeader } from "@/src/components/ui";
-import { getPublicProducts } from "@/src/lib/products";
+import { categoryRank, getPublicProducts } from "@/src/lib/products";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +36,18 @@ export default async function Home() {
     (product) => product.isFeatured,
   );
   const homepageProducts = (
-    featuredProducts.length > 0 ? featuredProducts : activeProducts
-  ).slice(0, 3);
+    featuredProducts.length > 0
+      ? featuredProducts.sort(
+          (a, b) =>
+            (a.featuredSortOrder ?? 100) - (b.featuredSortOrder ?? 100) ||
+            a.name.localeCompare(b.name),
+        )
+      : activeProducts.sort(
+          (a, b) =>
+            categoryRank(a.category) - categoryRank(b.category) ||
+            a.name.localeCompare(b.name),
+        )
+  ).slice(0, 6);
 
   return (
     <PageShell>
@@ -97,7 +107,7 @@ export default async function Home() {
                     <p className="text-2xl font-bold">Fresh crops</p>
                     <p className="text-xs font-semibold text-stone-600">
                       Tomatoes, peppers, potatoes, onions, carrots, cabbage,
-                      and other produce supplied as available.
+                      and other produce supplied by confirmed availability.
                     </p>
                   </div>
                 </div>
@@ -123,8 +133,8 @@ export default async function Home() {
         <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <SectionHeader
             eyebrow="Shop"
-            title="Popular farm produce"
-            body="Browse available Noble Farms products and place an order securely online."
+            title="Popular Farm Produce"
+            body="Noble Farms supplies eggs, broilers, tomatoes, peppers, potatoes, onions, carrots, cabbage, and other fresh produce based on confirmed availability, quantity, and logistics."
           />
           <Link href="/shop" className="font-bold text-green-800 hover:text-green-950">
             View all products
@@ -138,11 +148,9 @@ export default async function Home() {
         <div className="mt-8 rounded-lg bg-green-50 p-5 text-green-950">
           <h2 className="text-lg font-bold">Fresh crop produce supply</h2>
           <p className="mt-2 text-sm font-semibold leading-6 text-green-900">
-            Noble Farms also supplies fresh produce including Irish potatoes,
-            bell peppers, onions, sweet potatoes, ata rodo, carrots, cabbage,
-            broccoli, avocado, cucumber, shombo pepper, cauliflower, and baskets
-            of tomatoes. Availability may vary by season, quantity, and
-            logistics.
+            Noble Farms supplies eggs, broilers, tomatoes, peppers, potatoes,
+            onions, carrots, cabbage, and other fresh produce based on confirmed
+            availability, quantity, and logistics.
           </p>
         </div>
       </section>

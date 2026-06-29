@@ -1,7 +1,8 @@
 alter table public.products
   add column if not exists pricing_mode text not null default 'fixed',
   add column if not exists is_orderable_online boolean not null default true,
-  add column if not exists display_price_label text;
+  add column if not exists display_price_label text,
+  add column if not exists featured_sort_order integer not null default 100;
 
 do $$
 begin
@@ -25,6 +26,43 @@ begin
     alter table public.products
       add constraint products_quote_orderable_check
       check (pricing_mode = 'fixed' or is_orderable_online = false);
+  end if;
+end $$;
+create table if not exists public.product_media (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id) on delete cascade,
+  media_type text not null check (media_type in ('image', 'video')),
+  url text not null,
+  storage_path text,
+  alt_text text,
+  caption text,
+  sort_order integer not null default 0 check (sort_order >= 0),
+  is_primary boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists product_media_product_id_sort_idx
+  on public.product_media(product_id, sort_order);
+
+create unique index if not exists product_media_one_primary_image_uidx
+  on public.product_media(product_id)
+  where is_primary = true and media_type = 'image';
+
+do $$
+begin
+  if to_regclass('public.product_images') is not null then
+    insert into public.product_media (
+      product_id, media_type, url, alt_text, sort_order, is_primary, created_at
+    )
+    select product_id, 'image', image_url, alt_text, sort_order, sort_order = 0, created_at
+    from public.product_images image_source
+    where not exists (
+      select 1
+      from public.product_media existing
+      where existing.product_id = image_source.product_id
+        and existing.url = image_source.image_url
+    );
   end if;
 end $$;
 

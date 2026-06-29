@@ -19,7 +19,7 @@ export function productPriceLabel(product: Product) {
 
 export function productAvailabilityMessage(product: Product) {
   if (product.pricingMode === "quote_required") {
-    return "Confirm before ordering";
+    return "Available by confirmed supply";
   }
   return product.availability;
 }

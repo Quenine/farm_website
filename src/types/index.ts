@@ -1,5 +1,18 @@
 import type { LucideIcon } from "lucide-react";
 
+export type ProductMedia = {
+  id: string;
+  productId: string;
+  mediaType: "image" | "video";
+  url: string;
+  storagePath?: string | null;
+  altText?: string | null;
+  caption?: string | null;
+  sortOrder: number;
+  isPrimary: boolean;
+  createdAt?: string;
+};
+
 export type Product = {
   id?: string;
   slug: string;
@@ -17,11 +30,14 @@ export type Product = {
   status?: "active" | "inactive" | "coming_soon";
   availableFrom?: string | null;
   isFeatured?: boolean;
+  featuredSortOrder?: number;
   isLiveAnimal?: boolean;
   isProcessed?: boolean;
   pricingMode?: "fixed" | "quote_required";
   isOrderableOnline?: boolean;
   displayPriceLabel?: string | null;
+  media?: ProductMedia[];
+  primaryMedia?: ProductMedia | null;
 };
 
 export type DeliveryZone = {
@@ -114,7 +130,7 @@ export type InventoryMovement = {
 
 export type OrderStatus = "Pending" | "Paid" | "Preparing" | "Out for delivery";
 
-export type MockOrder = {
+export type PreviewOrder = {
   id: string;
   customer: string;
   phone: string;

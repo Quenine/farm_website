@@ -27,20 +27,22 @@ export const metadata: Metadata = {
   description,
   icons: {
     icon: "/favicon.ico",
+    apple: "/images/noble-farms-logo.png",
   },
   openGraph: {
     type: "website",
     locale: "en_NG",
     url: "/",
     siteName,
-    title: "Noble Farms",
-    description:
-      "Fresh poultry, eggs, crop produce, and selected farm inputs supplied directly from Noble Farms.",
+    title: "Noble Farms | Poultry, Eggs & Fresh Farm Produce",
+    description,
+    images: ["/images/noble-farms-logo.png"],
   },
   twitter: {
     card: "summary",
     title: siteName,
     description,
+    images: ["/images/noble-farms-logo.png"],
   },
 };
 

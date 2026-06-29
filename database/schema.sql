@@ -1,27 +1,61 @@
 create extension if not exists pgcrypto;
 
-create type public.product_status as enum ('active', 'inactive', 'coming_soon');
-create type public.payment_status as enum ('pending', 'paid', 'failed', 'refunded');
-create type public.order_status as enum (
-  'pending_payment',
-  'paid',
-  'processing',
-  'packed',
-  'out_for_delivery',
-  'delivered',
-  'cancelled',
-  'payment_review',
-  'refunded'
-);
-create type public.inventory_movement_type as enum (
-  'stock_in',
-  'stock_out',
-  'order_reserved',
-  'order_cancelled',
-  'manual_adjustment'
-);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_type
+    where typname = 'product_status'
+      and typnamespace = 'public'::regnamespace
+  ) then
+    create type public.product_status as enum ('active', 'inactive', 'coming_soon');
+  end if;
 
-create table public.profiles (
+  if not exists (
+    select 1
+    from pg_type
+    where typname = 'payment_status'
+      and typnamespace = 'public'::regnamespace
+  ) then
+    create type public.payment_status as enum ('pending', 'paid', 'failed', 'refunded');
+  end if;
+
+  if not exists (
+    select 1
+    from pg_type
+    where typname = 'order_status'
+      and typnamespace = 'public'::regnamespace
+  ) then
+    create type public.order_status as enum (
+      'pending_payment',
+      'paid',
+      'processing',
+      'packed',
+      'out_for_delivery',
+      'delivered',
+      'cancelled',
+      'payment_review',
+      'refunded'
+    );
+  end if;
+
+  if not exists (
+    select 1
+    from pg_type
+    where typname = 'inventory_movement_type'
+      and typnamespace = 'public'::regnamespace
+  ) then
+    create type public.inventory_movement_type as enum (
+      'stock_in',
+      'stock_out',
+      'order_reserved',
+      'order_cancelled',
+      'manual_adjustment'
+    );
+  end if;
+end $$;
+
+create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
   phone text,
@@ -30,7 +64,7 @@ create table public.profiles (
   updated_at timestamptz not null default now()
 );
 
-create table public.categories (
+create table if not exists public.categories (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   slug text not null unique,
@@ -39,7 +73,7 @@ create table public.categories (
   updated_at timestamptz not null default now()
 );
 
-create table public.products (
+create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   slug text not null unique,
@@ -55,6 +89,7 @@ create table public.products (
   status public.product_status not null default 'active',
   available_from date,
   is_featured boolean not null default false,
+  featured_sort_order integer not null default 100,
   is_live_animal boolean not null default false,
   is_processed boolean not null default false,
   created_at timestamptz not null default now(),
@@ -67,7 +102,37 @@ create table public.products (
   )
 );
 
-create table public.product_images (
+alter table public.products
+  add column if not exists pricing_mode text not null default 'fixed',
+  add column if not exists is_orderable_online boolean not null default true,
+  add column if not exists display_price_label text,
+  add column if not exists featured_sort_order integer not null default 100;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'products_pricing_mode_check'
+      and conrelid = 'public.products'::regclass
+  ) then
+    alter table public.products
+      add constraint products_pricing_mode_check
+      check (pricing_mode in ('fixed', 'quote_required'));
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'products_quote_orderable_check'
+      and conrelid = 'public.products'::regclass
+  ) then
+    alter table public.products
+      add constraint products_quote_orderable_check
+      check (pricing_mode = 'fixed' or is_orderable_online = false);
+  end if;
+end $$;
+create table if not exists public.product_images (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
   image_url text not null,
@@ -76,7 +141,21 @@ create table public.product_images (
   created_at timestamptz not null default now()
 );
 
-create table public.delivery_zones (
+create table if not exists public.product_media (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id) on delete cascade,
+  media_type text not null check (media_type in ('image', 'video')),
+  url text not null,
+  storage_path text,
+  alt_text text,
+  caption text,
+  sort_order integer not null default 0 check (sort_order >= 0),
+  is_primary boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.delivery_zones (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   distance_km numeric(8, 2) not null check (distance_km >= 0),
@@ -85,7 +164,7 @@ create table public.delivery_zones (
   updated_at timestamptz not null default now()
 );
 
-create table public.orders (
+create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   order_reference text not null unique,
   customer_name text not null,
@@ -106,7 +185,7 @@ create table public.orders (
   constraint orders_total_check check (total_amount = subtotal + delivery_fee)
 );
 
-create table public.order_items (
+create table if not exists public.order_items (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
   product_id uuid references public.products(id) on delete set null,
@@ -119,7 +198,7 @@ create table public.order_items (
   constraint order_items_total_check check (total_price = quantity * unit_price)
 );
 
-create table public.payments (
+create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
   provider text not null,
@@ -131,7 +210,7 @@ create table public.payments (
   created_at timestamptz not null default now()
 );
 
-create table public.inventory_movements (
+create table if not exists public.inventory_movements (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
   order_id uuid references public.orders(id) on delete set null,
@@ -144,30 +223,71 @@ create table public.inventory_movements (
   created_at timestamptz not null default now()
 );
 
-create table public.app_settings (
+create table if not exists public.app_settings (
   id uuid primary key default gen_random_uuid(),
   key text not null unique,
   value jsonb not null,
   updated_at timestamptz not null default now()
 );
 
-create index products_category_id_idx on public.products(category_id);
-create index products_status_idx on public.products(status);
-create index products_featured_idx on public.products(is_featured) where is_featured = true;
-create index product_images_product_id_sort_idx on public.product_images(product_id, sort_order);
-create index delivery_zones_active_idx on public.delivery_zones(is_active);
-create index orders_created_at_idx on public.orders(created_at desc);
-create index orders_payment_status_idx on public.orders(payment_status);
-create index orders_order_status_idx on public.orders(order_status);
-create index orders_delivery_zone_id_idx on public.orders(delivery_zone_id);
-create index order_items_order_id_idx on public.order_items(order_id);
-create index order_items_product_id_idx on public.order_items(product_id);
-create index payments_order_id_idx on public.payments(order_id);
-create index inventory_movements_product_created_idx
+alter table public.order_items
+  add column if not exists order_id uuid references public.orders(id) on delete cascade,
+  add column if not exists product_id uuid references public.products(id) on delete set null,
+  add column if not exists product_name text,
+  add column if not exists quantity numeric(12, 2) not null default 1,
+  add column if not exists unit text not null default 'unit',
+  add column if not exists unit_price numeric(12, 2) not null default 0,
+  add column if not exists total_price numeric(12, 2) not null default 0,
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.payments
+  add column if not exists order_id uuid references public.orders(id) on delete cascade,
+  add column if not exists provider text not null default 'paystack',
+  add column if not exists reference text,
+  add column if not exists amount numeric(12, 2) not null default 0,
+  add column if not exists status public.payment_status not null default 'pending',
+  add column if not exists paid_at timestamptz,
+  add column if not exists raw_response jsonb,
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.inventory_movements
+  add column if not exists product_id uuid references public.products(id) on delete cascade,
+  add column if not exists order_id uuid references public.orders(id) on delete set null,
+  add column if not exists order_item_id uuid references public.order_items(id) on delete set null,
+  add column if not exists movement_type public.inventory_movement_type not null default 'manual_adjustment',
+  add column if not exists quantity numeric(12, 2) not null default 1,
+  add column if not exists previous_quantity numeric(12, 2) not null default 0,
+  add column if not exists new_quantity numeric(12, 2) not null default 0,
+  add column if not exists reason text,
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.orders
+  add column if not exists payment_status public.payment_status not null default 'pending',
+  add column if not exists order_status public.order_status not null default 'pending_payment',
+  add column if not exists paystack_reference text,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+create index if not exists products_category_id_idx on public.products(category_id);
+create index if not exists products_status_idx on public.products(status);
+create index if not exists products_featured_idx on public.products(is_featured, featured_sort_order) where is_featured = true;
+create index if not exists product_images_product_id_sort_idx on public.product_images(product_id, sort_order);
+create index if not exists product_media_product_id_sort_idx on public.product_media(product_id, sort_order);
+create unique index if not exists product_media_one_primary_image_uidx
+  on public.product_media(product_id)
+  where is_primary = true and media_type = 'image';
+create index if not exists delivery_zones_active_idx on public.delivery_zones(is_active);
+create index if not exists orders_created_at_idx on public.orders(created_at desc);
+create index if not exists orders_payment_status_idx on public.orders(payment_status);
+create index if not exists orders_order_status_idx on public.orders(order_status);
+create index if not exists orders_delivery_zone_id_idx on public.orders(delivery_zone_id);
+create index if not exists order_items_order_id_idx on public.order_items(order_id);
+create index if not exists order_items_product_id_idx on public.order_items(product_id);
+create index if not exists payments_order_id_idx on public.payments(order_id);
+create index if not exists inventory_movements_product_created_idx
   on public.inventory_movements(product_id, created_at desc);
-create index inventory_movements_order_created_idx
+create index if not exists inventory_movements_order_created_idx
   on public.inventory_movements(order_id, created_at desc);
-create unique index inventory_movements_paid_order_item_uidx
+create unique index if not exists inventory_movements_paid_order_item_uidx
   on public.inventory_movements(order_item_id)
   where order_item_id is not null
     and movement_type = 'stock_out';
@@ -184,25 +304,43 @@ begin
 end;
 $$;
 
+drop trigger if exists profiles_set_updated_at on public.profiles;
+
 create trigger profiles_set_updated_at
 before update on public.profiles
 for each row execute function public.set_updated_at();
+
+drop trigger if exists categories_set_updated_at on public.categories;
 
 create trigger categories_set_updated_at
 before update on public.categories
 for each row execute function public.set_updated_at();
 
+drop trigger if exists products_set_updated_at on public.products;
+
 create trigger products_set_updated_at
 before update on public.products
 for each row execute function public.set_updated_at();
+
+drop trigger if exists product_media_set_updated_at on public.product_media;
+
+create trigger product_media_set_updated_at
+before update on public.product_media
+for each row execute function public.set_updated_at();
+
+drop trigger if exists delivery_zones_set_updated_at on public.delivery_zones;
 
 create trigger delivery_zones_set_updated_at
 before update on public.delivery_zones
 for each row execute function public.set_updated_at();
 
+drop trigger if exists orders_set_updated_at on public.orders;
+
 create trigger orders_set_updated_at
 before update on public.orders
 for each row execute function public.set_updated_at();
+
+drop trigger if exists app_settings_set_updated_at on public.app_settings;
 
 create trigger app_settings_set_updated_at
 before update on public.app_settings
@@ -212,6 +350,7 @@ alter table public.profiles enable row level security;
 alter table public.categories enable row level security;
 alter table public.products enable row level security;
 alter table public.product_images enable row level security;
+alter table public.product_media enable row level security;
 alter table public.delivery_zones enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
@@ -219,15 +358,21 @@ alter table public.payments enable row level security;
 alter table public.inventory_movements enable row level security;
 alter table public.app_settings enable row level security;
 
+drop policy if exists "Public can read categories" on public.categories;
+
 create policy "Public can read categories"
 on public.categories for select
 to anon, authenticated
 using (true);
 
+drop policy if exists "Public can read available products" on public.products;
+
 create policy "Public can read available products"
 on public.products for select
 to anon, authenticated
 using (status in ('active', 'coming_soon'));
+
+drop policy if exists "Public can read images for available products" on public.product_images;
 
 create policy "Public can read images for available products"
 on public.product_images for select
@@ -240,6 +385,22 @@ using (
       and products.status in ('active', 'coming_soon')
   )
 );
+
+drop policy if exists "Public can read media for available products" on public.product_media;
+
+create policy "Public can read media for available products"
+on public.product_media for select
+to anon, authenticated
+using (
+  exists (
+    select 1
+    from public.products
+    where products.id = product_media.product_id
+      and products.status in ('active', 'coming_soon')
+  )
+);
+
+drop policy if exists "Public can read active delivery zones" on public.delivery_zones;
 
 create policy "Public can read active delivery zones"
 on public.delivery_zones for select

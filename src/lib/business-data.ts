@@ -12,7 +12,7 @@ import type {
   AdminNavItem,
   DeliverySettings,
   DeliveryZone,
-  MockOrder,
+  PreviewOrder,
   Product,
 } from "@/src/types";
 
@@ -278,7 +278,7 @@ export const deliveryAreas: DeliveryZone[] = [
   { area: "Apata", distanceKm: 16 },
 ];
 
-export const orders: MockOrder[] = [
+export const orders: PreviewOrder[] = [
   {
     id: "NF-1024",
     customer: "Tinu Adeyemi",

@@ -2,13 +2,17 @@
 
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/src/lib/admin-auth";
 import {
   deactivateAdminProduct,
+  mapProductMedia,
   saveAdminProduct,
 } from "@/src/lib/products";
+import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import type { ProductMedia } from "@/src/types";
 
 const productSchema = z
   .object({
@@ -29,6 +33,7 @@ const productSchema = z
     status: z.enum(["active", "inactive", "coming_soon"]),
     availableFrom: z.string().nullable().optional(),
     isFeatured: z.boolean(),
+    featuredSortOrder: z.number().int().min(0).default(100),
     isLiveAnimal: z.boolean(),
     isProcessed: z.boolean(),
     pricingMode: z.preprocess(
@@ -77,9 +82,27 @@ const productSchema = z
     },
   );
 
+const mediaMetaSchema = z.object({
+  mediaId: z.string().uuid(),
+  altText: z.string().trim().max(160).nullable().optional(),
+  caption: z.string().trim().max(240).nullable().optional(),
+});
+
 export type ProductActionState =
   | { success: true; product: Awaited<ReturnType<typeof saveAdminProduct>> }
   | { success: false; message: string };
+
+export type ProductMediaActionState =
+  | { success: true; media: ProductMedia[] }
+  | { success: false; message: string };
+
+function revalidateProductPaths(slug?: string) {
+  revalidatePath("/");
+  revalidatePath("/admin/products");
+  revalidatePath("/shop");
+  if (slug) revalidatePath(`/shop/${slug}`);
+  revalidatePath("/shop/[slug]", "page");
+}
 
 export async function saveProductAction(
   input: z.input<typeof productSchema>,
@@ -87,11 +110,7 @@ export async function saveProductAction(
   await requireAdmin();
   try {
     const product = await saveAdminProduct(productSchema.parse(input));
-    revalidatePath("/");
-    revalidatePath("/admin/products");
-    revalidatePath("/shop");
-    revalidatePath(`/shop/${product.slug}`);
-    revalidatePath("/shop/[slug]", "page");
+    revalidateProductPaths(product.slug);
     return { success: true, product };
   } catch (error) {
     return {
@@ -107,17 +126,260 @@ export async function deactivateProductAction(
   await requireAdmin();
   try {
     const product = await deactivateAdminProduct(z.string().uuid().parse(id));
-    revalidatePath("/");
-    revalidatePath("/admin/products");
-    revalidatePath("/shop");
-    revalidatePath(`/shop/${product.slug}`);
-    revalidatePath("/shop/[slug]", "page");
+    revalidateProductPaths(product.slug);
     return { success: true, product };
   } catch (error) {
     return {
       success: false,
       message:
         error instanceof Error ? error.message : "Unable to deactivate product.",
+    };
+  }
+}
+
+function validUpload(file: File, mediaType: "image" | "video") {
+  const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
+  const allowedVideoTypes = ["video/mp4", "video/webm"];
+  const allowedTypes = mediaType === "image" ? allowedImageTypes : allowedVideoTypes;
+  const maxBytes = mediaType === "image" ? 5 * 1024 * 1024 : 50 * 1024 * 1024;
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error(
+      mediaType === "image"
+        ? "Images must be JPEG, PNG, or WebP."
+        : "Videos must be MP4 or WebM.",
+    );
+  }
+  if (file.size > maxBytes) {
+    throw new Error(
+      mediaType === "image"
+        ? "Images must be 5MB or smaller."
+        : "Videos must be 50MB or smaller.",
+    );
+  }
+}
+
+function safeFileName(name: string) {
+  const extension = name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+  return `${randomUUID()}.${extension}`;
+}
+
+async function loadProductMedia(productId: string) {
+  const supabase = createAdminSupabaseClient();
+  const { data, error } = await supabase
+    .from("product_media")
+    .select("id, product_id, media_type, url, storage_path, alt_text, caption, sort_order, is_primary, created_at")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(`Unable to load product media: ${error.message}`);
+  return ((data ?? []) as unknown[]).map((row) => mapProductMedia(row as never));
+}
+
+export async function uploadProductMediaAction(
+  productId: string,
+  mediaType: "image" | "video",
+  formData: FormData,
+): Promise<ProductMediaActionState> {
+  await requireAdmin();
+  try {
+    const parsedProductId = z.string().uuid().parse(productId);
+    const parsedMediaType = z.enum(["image", "video"]).parse(mediaType);
+    const files = formData
+      .getAll("files")
+      .filter((value): value is File => value instanceof File && value.size > 0);
+
+    if (files.length === 0) throw new Error("Choose at least one file to upload.");
+
+    const supabase = createAdminSupabaseClient();
+    const existing = await loadProductMedia(parsedProductId);
+    let nextSortOrder = existing.length;
+
+    for (const file of files) {
+      validUpload(file, parsedMediaType);
+      const storagePath = `${parsedProductId}/${parsedMediaType}s/${safeFileName(file.name)}`;
+      const { error: uploadError } = await supabase.storage
+        .from("product-media")
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      const { data: publicUrlData } = supabase.storage
+        .from("product-media")
+        .getPublicUrl(storagePath);
+      const shouldBePrimary =
+        parsedMediaType === "image" &&
+        !existing.some((item) => item.mediaType === "image" && item.isPrimary) &&
+        nextSortOrder === existing.length;
+
+      const { error: insertError } = await supabase.from("product_media").insert({
+        product_id: parsedProductId,
+        media_type: parsedMediaType,
+        url: publicUrlData.publicUrl,
+        storage_path: storagePath,
+        alt_text: parsedMediaType === "image" ? "Noble Farms product photo" : null,
+        caption: null,
+        sort_order: nextSortOrder,
+        is_primary: shouldBePrimary,
+      });
+      if (insertError) throw new Error(`Unable to save media: ${insertError.message}`);
+      nextSortOrder += 1;
+    }
+
+    revalidateProductPaths();
+    return { success: true, media: await loadProductMedia(parsedProductId) };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unable to upload media.",
+    };
+  }
+}
+
+export async function updateProductMediaMetaAction(
+  input: z.input<typeof mediaMetaSchema>,
+): Promise<ProductMediaActionState> {
+  await requireAdmin();
+  try {
+    const parsed = mediaMetaSchema.parse(input);
+    const supabase = createAdminSupabaseClient();
+    const { data: mediaRow, error: loadError } = await supabase
+      .from("product_media")
+      .select("product_id")
+      .eq("id", parsed.mediaId)
+      .single();
+    if (loadError) throw new Error(`Unable to load media: ${loadError.message}`);
+
+    const { error } = await supabase
+      .from("product_media")
+      .update({
+        alt_text: parsed.altText || null,
+        caption: parsed.caption || null,
+      })
+      .eq("id", parsed.mediaId);
+    if (error) throw new Error(`Unable to update media: ${error.message}`);
+
+    const productId = (mediaRow as { product_id: string }).product_id;
+    revalidateProductPaths();
+    return { success: true, media: await loadProductMedia(productId) };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unable to update media.",
+    };
+  }
+}
+
+export async function setPrimaryProductMediaAction(
+  mediaId: string,
+): Promise<ProductMediaActionState> {
+  await requireAdmin();
+  try {
+    const parsedMediaId = z.string().uuid().parse(mediaId);
+    const supabase = createAdminSupabaseClient();
+    const { data: mediaRow, error: loadError } = await supabase
+      .from("product_media")
+      .select("product_id, media_type")
+      .eq("id", parsedMediaId)
+      .single();
+    if (loadError) throw new Error(`Unable to load media: ${loadError.message}`);
+    const row = mediaRow as { product_id: string; media_type: string };
+    if (row.media_type !== "image") throw new Error("Only images can be primary thumbnails.");
+
+    await supabase
+      .from("product_media")
+      .update({ is_primary: false })
+      .eq("product_id", row.product_id)
+      .eq("media_type", "image");
+    const { error } = await supabase
+      .from("product_media")
+      .update({ is_primary: true })
+      .eq("id", parsedMediaId);
+    if (error) throw new Error(`Unable to set primary media: ${error.message}`);
+
+    revalidateProductPaths();
+    return { success: true, media: await loadProductMedia(row.product_id) };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unable to set primary media.",
+    };
+  }
+}
+
+export async function moveProductMediaAction(
+  mediaId: string,
+  direction: "up" | "down",
+): Promise<ProductMediaActionState> {
+  await requireAdmin();
+  try {
+    const parsedMediaId = z.string().uuid().parse(mediaId);
+    const parsedDirection = z.enum(["up", "down"]).parse(direction);
+    const supabase = createAdminSupabaseClient();
+    const { data: currentRow, error: loadError } = await supabase
+      .from("product_media")
+      .select("product_id")
+      .eq("id", parsedMediaId)
+      .single();
+    if (loadError) throw new Error(`Unable to load media: ${loadError.message}`);
+    const productId = (currentRow as { product_id: string }).product_id;
+    const media = await loadProductMedia(productId);
+    const index = media.findIndex((item) => item.id === parsedMediaId);
+    const swapIndex = parsedDirection === "up" ? index - 1 : index + 1;
+    if (index < 0 || swapIndex < 0 || swapIndex >= media.length) {
+      return { success: true, media };
+    }
+    const a = media[index];
+    const b = media[swapIndex];
+    const { error: firstError } = await supabase
+      .from("product_media")
+      .update({ sort_order: b.sortOrder })
+      .eq("id", a.id);
+    if (firstError) throw new Error(`Unable to reorder media: ${firstError.message}`);
+    const { error: secondError } = await supabase
+      .from("product_media")
+      .update({ sort_order: a.sortOrder })
+      .eq("id", b.id);
+    if (secondError) throw new Error(`Unable to reorder media: ${secondError.message}`);
+
+    revalidateProductPaths();
+    return { success: true, media: await loadProductMedia(productId) };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unable to reorder media.",
+    };
+  }
+}
+
+export async function deleteProductMediaAction(
+  mediaId: string,
+): Promise<ProductMediaActionState> {
+  await requireAdmin();
+  try {
+    const parsedMediaId = z.string().uuid().parse(mediaId);
+    const supabase = createAdminSupabaseClient();
+    const { data: mediaRow, error: loadError } = await supabase
+      .from("product_media")
+      .select("product_id, storage_path")
+      .eq("id", parsedMediaId)
+      .single();
+    if (loadError) throw new Error(`Unable to load media: ${loadError.message}`);
+    const row = mediaRow as { product_id: string; storage_path: string | null };
+    if (row.storage_path) {
+      await supabase.storage.from("product-media").remove([row.storage_path]);
+    }
+    const { error } = await supabase.from("product_media").delete().eq("id", parsedMediaId);
+    if (error) throw new Error(`Unable to delete media: ${error.message}`);
+
+    revalidateProductPaths();
+    return { success: true, media: await loadProductMedia(row.product_id) };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unable to delete media.",
     };
   }
 }

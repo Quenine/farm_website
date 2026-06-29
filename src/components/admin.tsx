@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { logoutAdmin } from "@/app/admin/logout/actions";
@@ -8,9 +9,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-stone-100">
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[260px_1fr]">
         <aside className="rounded-lg bg-green-950 p-4 text-white shadow-sm lg:min-h-[calc(100vh-48px)]">
-          <Link href="/" className="block rounded-lg bg-white/10 p-4">
-            <span className="text-lg font-bold">Noble Farms</span>
-            <span className="mt-1 block text-xs text-green-100">Owner admin</span>
+          <Link href="/" className="flex items-center gap-3 rounded-lg bg-white/10 p-4">
+            <span className="grid size-11 place-items-center overflow-hidden rounded-full bg-white">
+              <img
+                src="/images/noble-farms-logo.png"
+                alt="Noble Farms logo"
+                className="h-9 w-9 object-contain"
+              />
+            </span>
+            <span>
+              <span className="text-lg font-bold">Noble Farms</span>
+              <span className="mt-1 block text-xs text-green-100">Owner admin</span>
+            </span>
           </Link>
           <nav className="mt-5 grid gap-1">
             {adminNav.map((item) => (
@@ -98,7 +108,7 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function MockActionButtons() {
+export function AdminActionButtons() {
   return (
     <div className="flex flex-wrap gap-2">
       {["Edit", "Delete"].map((label) => (

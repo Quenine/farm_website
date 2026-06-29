@@ -18,7 +18,7 @@ export default async function ShopPage() {
           <h2 className="text-lg font-bold">Fresh crop produce supply</h2>
           <p className="mt-2 text-sm font-semibold leading-6 text-green-900">
             Noble Farms also supplies fresh produce including Irish potatoes,
-            bell peppers, onions, sweet potatoes, ata rodo, carrots, cabbage,
+            bell peppers, onions, sweet potatoes, Pepper (Ata Rodo), carrots, cabbage,
             broccoli, avocado, cucumber, shombo pepper, cauliflower, and baskets
             of tomatoes. Crop produce is supplied based on harvest, sourcing,
             and confirmed availability.

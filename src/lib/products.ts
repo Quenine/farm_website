@@ -5,7 +5,20 @@ import { products as fallbackProducts } from "@/src/lib/business-data";
 import { hasAdminSupabaseConfig, hasPublicSupabaseConfig } from "@/src/lib/supabase/config";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
-import type { Product } from "@/src/types";
+import type { Product, ProductMedia } from "@/src/types";
+
+type ProductMediaRow = {
+  id: string;
+  product_id: string;
+  media_type: "image" | "video";
+  url: string;
+  storage_path: string | null;
+  alt_text: string | null;
+  caption: string | null;
+  sort_order: number | string;
+  is_primary: boolean;
+  created_at: string;
+};
 
 type ProductRow = {
   id: string;
@@ -22,9 +35,12 @@ type ProductRow = {
   status: "active" | "inactive" | "coming_soon";
   available_from: string | null;
   is_featured: boolean;
+  featured_sort_order: number | string | null;
   is_live_animal: boolean;
   is_processed: boolean;
+  created_at: string;
   categories: { name: string } | { name: string }[] | null;
+  product_media?: ProductMediaRow[] | null;
 };
 
 export type AdminProductInput = {
@@ -40,6 +56,7 @@ export type AdminProductInput = {
   status: "active" | "inactive" | "coming_soon";
   availableFrom?: string | null;
   isFeatured: boolean;
+  featuredSortOrder?: number;
   isLiveAnimal: boolean;
   isProcessed: boolean;
   pricingMode: "fixed" | "quote_required";
@@ -62,9 +79,23 @@ const productColumns = `
   status,
   available_from,
   is_featured,
+  featured_sort_order,
   is_live_animal,
   is_processed,
-  categories ( name )
+  created_at,
+  categories ( name ),
+  product_media (
+    id,
+    product_id,
+    media_type,
+    url,
+    storage_path,
+    alt_text,
+    caption,
+    sort_order,
+    is_primary,
+    created_at
+  )
 `;
 
 function categoryName(row: ProductRow) {
@@ -78,7 +109,7 @@ function categoryName(row: ProductRow) {
   return rawName ? categoryAliases[rawName] ?? rawName : "Uncategorized";
 }
 
-function categoryRank(category: string) {
+export function categoryRank(category: string) {
   const ranks: Record<string, number> = {
     Eggs: 1,
     Broilers: 2,
@@ -105,8 +136,41 @@ function pluralizeUnit(unit: string, quantity: number) {
     half_crate: quantity === 1 ? "half-crate" : "half-crates",
     bird: quantity === 1 ? "bird" : "birds",
     bag: quantity === 1 ? "bag" : "bags",
+    basket: quantity === 1 ? "basket" : "baskets",
+    unit: quantity === 1 ? "unit" : "units",
   };
   return labels[unit] ?? unit.replaceAll("_", " ");
+}
+
+export function mapProductMedia(row: ProductMediaRow): ProductMedia {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    mediaType: row.media_type,
+    url: row.url,
+    storagePath: row.storage_path,
+    altText: row.alt_text,
+    caption: row.caption,
+    sortOrder: Number(row.sort_order),
+    isPrimary: row.is_primary,
+    createdAt: row.created_at,
+  };
+}
+
+function sortMedia(media: ProductMedia[]) {
+  return [...media].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.createdAt?.localeCompare(b.createdAt ?? "") || 0,
+  );
+}
+
+function primaryMedia(media: ProductMedia[]) {
+  const ordered = sortMedia(media);
+  return (
+    ordered.find((item) => item.mediaType === "image" && item.isPrimary) ??
+    ordered.find((item) => item.mediaType === "image") ??
+    ordered[0] ??
+    null
+  );
 }
 
 export function mapProductRow(row: ProductRow): Product {
@@ -116,8 +180,12 @@ export function mapProductRow(row: ProductRow): Product {
   const category = categoryName(row);
   const pricingMode = row.pricing_mode ?? "fixed";
   const isOrderableOnline = row.is_orderable_online ?? true;
+  const media = sortMedia((row.product_media ?? []).map(mapProductMedia));
   const statusLabels = {
-    active: "Available now",
+    active:
+      pricingMode === "quote_required"
+        ? "Available by confirmed supply"
+        : "Available now",
     inactive: "Inactive",
     coming_soon: row.available_from
       ? `Available from ${new Date(`${row.available_from}T00:00:00`).toLocaleDateString("en-NG", {
@@ -135,7 +203,7 @@ export function mapProductRow(row: ProductRow): Product {
     unit: row.unit.replaceAll("_", "-"),
     stock:
       pricingMode === "quote_required"
-        ? "Confirm availability"
+        ? "Availability depends on quantity, season, and logistics"
         : `${stockCount} ${unitLabel} available`,
     stockCount,
     minimumOrder,
@@ -147,11 +215,14 @@ export function mapProductRow(row: ProductRow): Product {
     status: row.status,
     availableFrom: row.available_from,
     isFeatured: row.is_featured,
+    featuredSortOrder: Number(row.featured_sort_order ?? 100),
     isLiveAnimal: row.is_live_animal,
     isProcessed: row.is_processed,
     pricingMode,
     isOrderableOnline,
     displayPriceLabel: row.display_price_label,
+    media,
+    primaryMedia: primaryMedia(media),
   };
 }
 
@@ -162,8 +233,16 @@ function developmentFallback() {
   throw new Error("Supabase configuration is required outside development.");
 }
 
+function sortPublicProducts(products: Product[]) {
+  return products.sort(
+    (a, b) =>
+      categoryRank(a.category) - categoryRank(b.category) ||
+      a.name.localeCompare(b.name),
+  );
+}
+
 export async function getPublicProducts(): Promise<Product[]> {
-  if (!hasPublicSupabaseConfig()) return developmentFallback();
+  if (!hasPublicSupabaseConfig()) return sortPublicProducts(developmentFallback());
 
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
@@ -172,16 +251,11 @@ export async function getPublicProducts(): Promise<Product[]> {
     .in("status", ["active", "coming_soon"])
     .order("status", { ascending: true })
     .order("is_featured", { ascending: false })
+    .order("featured_sort_order", { ascending: true })
     .order("name");
 
   if (error) throw new Error(`Unable to load products: ${error.message}`);
-  return ((data ?? []) as unknown as ProductRow[])
-    .map(mapProductRow)
-    .sort(
-      (a, b) =>
-        categoryRank(a.category) - categoryRank(b.category) ||
-        a.name.localeCompare(b.name),
-    );
+  return sortPublicProducts(((data ?? []) as unknown as ProductRow[]).map(mapProductRow));
 }
 
 export async function getPublicProductBySlug(slug: string) {
@@ -260,6 +334,7 @@ export async function saveAdminProduct(input: AdminProductInput) {
     available_from:
       input.status === "coming_soon" ? input.availableFrom : null,
     is_featured: input.isFeatured,
+    featured_sort_order: input.featuredSortOrder ?? 100,
     is_live_animal: input.isLiveAnimal,
     is_processed: input.isProcessed,
     pricing_mode: input.pricingMode,

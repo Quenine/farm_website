@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ProductDetailActions } from "@/src/components/product/product-detail-actions";
+import { ProductMediaGallery } from "@/src/components/product/product-media";
 import { InfoRow, PageShell } from "@/src/components/ui";
 import { formatNaira } from "@/src/lib/format";
 import { getPublicProductBySlug } from "@/src/lib/products";
@@ -39,19 +40,7 @@ export default async function ProductDetailPage({
           Back to shop
         </Link>
         <div className="mt-6 grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-lg bg-[linear-gradient(135deg,#fef3c7,#dcfce7)] p-8 shadow-sm">
-            <div className="grid aspect-square place-items-center rounded-lg bg-white/70 p-8 text-center">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.16em] text-amber-700">
-                  {product.category}
-                </p>
-                <h1 className="mt-3 text-4xl font-bold text-green-950">
-                  {product.name}
-                </h1>
-                <p className="mt-4 text-stone-700">{product.badge}</p>
-              </div>
-            </div>
-          </div>
+          <ProductMediaGallery product={product} />
           <div className="rounded-lg bg-white p-6 shadow-sm">
             <p className="text-sm font-bold uppercase tracking-[0.16em] text-green-700">
               {productAvailabilityMessage(product)}

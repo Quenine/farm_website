@@ -1,7 +1,9 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { ArrowRight, Leaf, Sprout } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { CartLink } from "@/src/components/cart/cart-link";
 import { AddToCartButton } from "@/src/components/product/add-to-cart-button";
+import { ProductMediaThumbnail } from "@/src/components/product/product-media";
 import { formatNaira } from "@/src/lib/format";
 import {
   isProductOrderable,
@@ -15,8 +17,12 @@ export function PublicHeader() {
     <header className="sticky top-0 z-20 border-b border-green-900/10 bg-[#fbf7ed]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-full bg-green-800 text-white">
-            <Leaf size={20} />
+          <span className="grid size-11 place-items-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-green-900/10">
+            <img
+              src="/images/noble-farms-logo.png"
+              alt="Noble Farms logo"
+              className="h-9 w-9 object-contain"
+            />
           </span>
           <span>
             <span className="block text-lg font-bold leading-5 text-green-950">
@@ -55,8 +61,17 @@ export function Footer() {
     <footer className="border-t border-green-900/10 bg-green-950 text-green-50">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-3 lg:px-8">
         <div>
-          <p className="text-lg font-bold">Noble Farms</p>
-          <p className="mt-2 text-sm leading-6 text-green-100">
+          <div className="flex items-center gap-3">
+            <span className="grid size-12 place-items-center overflow-hidden rounded-full bg-white">
+              <img
+                src="/images/noble-farms-logo.png"
+                alt="Noble Farms logo"
+                className="h-10 w-10 object-contain"
+              />
+            </span>
+            <p className="text-lg font-bold">Noble Farms</p>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-green-100">
             Noble Farms supplies poultry, eggs, fresh crop produce, and selected
             farm inputs with clear pricing and reliable fulfilment.
           </p>
@@ -118,13 +133,8 @@ export function ProductCard({ product }: { product: Product }) {
 
   return (
     <article className="flex h-full flex-col rounded-lg border border-green-900/10 bg-white p-5 shadow-sm">
-      <div className="mb-5 grid aspect-[4/3] place-items-center rounded-lg bg-[linear-gradient(135deg,#ecfccb,#fef3c7)] text-green-950">
-        <div className="text-center">
-          <Sprout className="mx-auto text-green-800" size={34} />
-          <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-amber-800">
-            Noble Farms supply
-          </p>
-        </div>
+      <div className="mb-5 aspect-[4/3] overflow-hidden rounded-lg bg-[linear-gradient(135deg,#ecfccb,#fef3c7)] text-green-950">
+        <ProductMediaThumbnail product={product} />
       </div>
       <div className="flex items-start justify-between gap-3">
         <div>
