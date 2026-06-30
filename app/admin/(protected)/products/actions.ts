@@ -100,7 +100,7 @@ const productSchema = z
     (product) =>
       product.status !== "coming_soon" || Boolean(product.availableFrom),
     {
-      message: "Coming soon products require an available-from date.",
+      message: "Scheduled availability products require an available-from date.",
       path: ["availableFrom"],
     },
   )

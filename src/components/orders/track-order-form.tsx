@@ -57,7 +57,7 @@ export function TrackOrderForm() {
           className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-green-800 px-6 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60"
         >
           <Search size={17} />
-          {isPending ? "Checkingâ€¦" : "Track"}
+          {isPending ? "Checking..." : "Track"}
         </button>
       </form>
       {message ? (
@@ -128,7 +128,7 @@ function TrackedOrder({ order }: { order: Order }) {
               <div>
                 <p className="font-bold text-stone-950">{item.productName}</p>
                 <p className="text-stone-500">
-                  {item.quantity} {item.unit} Ã— {formatNaira(item.unitPrice)}
+                  {item.quantity} {item.unit} × {formatNaira(item.unitPrice)}
                 </p>
               </div>
               <p className="font-bold text-green-950">

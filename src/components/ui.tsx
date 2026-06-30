@@ -83,10 +83,13 @@ export function Footer() {
           </p>
         </div>
         <div>
-          <p className="font-semibold">Domain</p>
-          <p className="mt-2 text-sm leading-6 text-green-100">
-            noblefarms.xyz
-          </p>
+          <p className="font-semibold">Contact</p>
+          <div className="mt-2 grid gap-1 text-sm leading-6 text-green-100">
+            <p>Noble Farms, Alapata, Ibadan, Nigeria</p>
+            <a href="tel:+2349035712314" className="hover:text-white">+2349035712314</a>
+            <a href="mailto:info@noblefarms.xyz" className="hover:text-white">info@noblefarms.xyz</a>
+            <a href="https://noblefarms.xyz" className="hover:text-white">noblefarms.xyz</a>
+          </div>
         </div>
       </div>
     </footer>

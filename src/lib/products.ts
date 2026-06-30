@@ -224,7 +224,7 @@ export function mapProductRow(row: ProductRow): Product {
           month: "long",
           year: "numeric",
         })}`
-      : "Coming soon",
+      : "Availability to be announced",
   };
 
   return {

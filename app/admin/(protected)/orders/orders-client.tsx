@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { confirmDeliveryFeeAction, updateOrderStatusAction } from "@/app/admin/(protected)/orders/actions";
@@ -165,7 +165,7 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
               <Detail label="Area" value={selected.deliveryArea} />
               <Detail label="State" value={selected.deliveryState ?? "Not applicable"} />
               <Detail label="City/Town" value={selected.deliveryCity ?? "Not applicable"} />
-              <Detail label="Delivery quote required" value={selected.deliveryQuoteRequired ? "Yes" : "No"} />
+              <Detail label="Manual delivery confirmation required" value={selected.deliveryQuoteRequired ? "Yes" : "No"} />
               <Detail label="Delivery fee confirmed" value={selected.deliveryFeeConfirmed ? "Yes" : "No"} />
               <Detail
                 label="Delivery date"

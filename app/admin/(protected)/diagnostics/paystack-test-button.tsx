@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import {
@@ -19,7 +19,7 @@ export function PaystackTestButton() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-bold text-stone-950">
-            Paystack initialization test
+            Paystack initialization check
           </h2>
           <p className="mt-1 text-sm text-stone-600">
             Sends a N100 diagnostic initialization request. Secret values are
@@ -36,7 +36,7 @@ export function PaystackTestButton() {
           }}
           className="h-11 rounded-full bg-green-800 px-5 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60"
         >
-          {isPending ? "Testing Paystack..." : "Test Paystack initialization"}
+          {isPending ? "Checking Paystack..." : "Verify Paystack initialization"}
         </button>
       </div>
 

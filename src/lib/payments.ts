@@ -19,7 +19,7 @@ type ProcessResult = {
 };
 
 const PAYMENT_CONFIGURATION_MESSAGE =
-  "Payment is temporarily unavailable because checkout is not configured correctly. Please try again later or contact Noble Farms.";
+  "Payment is temporarily unavailable because checkout is not configured correctly. Please contact Noble Farms or try again.";
 const PAYMENT_CONTACT_MESSAGE =
   "Payment could not be started. Please contact Noble Farms with your order reference.";
 const PAYMENT_REJECTED_MESSAGE = "Payment provider rejected the request.";

@@ -53,14 +53,44 @@ const emptyProduct: Product = {
   primaryMedia: null,
 };
 
+function productFormDefaults(product: Product): Product {
+  return {
+    ...product,
+    pricingMode: product.pricingMode ?? "fixed",
+    isOrderableOnline: product.isOrderableOnline ?? true,
+    displayPriceLabel: product.displayPriceLabel ?? null,
+    quantityStep: product.quantityStep ?? 1,
+    quantityInputType: product.quantityInputType ?? "whole",
+    featuredSortOrder: product.featuredSortOrder ?? 100,
+    supportsWiderDelivery: product.supportsWiderDelivery ?? product.category === "Crop Produce",
+    deliveryClass: product.deliveryClass ?? "standard",
+    deliveryUnitValue: product.deliveryUnitValue ?? 1,
+    handlingFee: product.handlingFee ?? 0,
+    supportsHomeDelivery: product.supportsHomeDelivery ?? true,
+    supportsPickupPoint: product.supportsPickupPoint ?? true,
+    supportsFarmPickup: product.supportsFarmPickup ?? true,
+    requiresDeliveryConfirmation: product.requiresDeliveryConfirmation ?? false,
+    media: product.media ?? [],
+    primaryMedia: product.primaryMedia ?? null,
+  };
+}
 export function AdminProductsClient({
   initialProducts,
-  usingFallback,}: {
+  usingFallback,
+  initialProductId,
+}: {
   initialProducts: Product[];
-  usingFallback: boolean;}) {
+  usingFallback: boolean;
+  initialProductId?: string;
+}) {
+  const initialEditingProduct = initialProductId
+    ? initialProducts.find((product) => product.id === initialProductId) ?? null
+    : null;
   const [items, setItems] = useState(initialProducts);
-  const [editing, setEditing] = useState<Product | null>(null);
-  const [form, setForm] = useState<Product>(emptyProduct);
+  const [editing, setEditing] = useState<Product | null>(initialEditingProduct);
+  const [form, setForm] = useState<Product>(
+    initialEditingProduct ? productFormDefaults(initialEditingProduct) : emptyProduct,
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -72,28 +102,11 @@ export function AdminProductsClient({
 
   const openEdit = (product: Product) => {
     setMessage(null);
-    setForm({
-      ...product,
-      pricingMode: product.pricingMode ?? "fixed",
-      isOrderableOnline: product.isOrderableOnline ?? true,
-      displayPriceLabel: product.displayPriceLabel ?? null,
-      quantityStep: product.quantityStep ?? 1,
-      quantityInputType: product.quantityInputType ?? "whole",
-      featuredSortOrder: product.featuredSortOrder ?? 100,
-      supportsWiderDelivery: product.supportsWiderDelivery ?? product.category === "Crop Produce",
-      deliveryClass: product.deliveryClass ?? "standard",
-      deliveryUnitValue: product.deliveryUnitValue ?? 1,
-      handlingFee: product.handlingFee ?? 0,
-      supportsHomeDelivery: product.supportsHomeDelivery ?? true,
-      supportsPickupPoint: product.supportsPickupPoint ?? true,
-      supportsFarmPickup: product.supportsFarmPickup ?? true,
-      requiresDeliveryConfirmation: product.requiresDeliveryConfirmation ?? false,
-      media: product.media ?? [],
-      primaryMedia: product.primaryMedia ?? null,
-    });
+    setForm(productFormDefaults(product));
     setEditing(product);
   };
-const updateMedia = (media: ProductMedia[]) => {
+
+  const updateMedia = (media: ProductMedia[]) => {
     const primaryMedia =
       media.find((item) => item.mediaType === "image" && item.isPrimary) ??
       media.find((item) => item.mediaType === "image") ??
@@ -135,7 +148,7 @@ const updateMedia = (media: ProductMedia[]) => {
         form.status === "inactive"
           ? "Inactive"
           : form.status === "coming_soon"
-            ? "Coming soon"
+            ? "Availability to be announced"
             : isQuoteRequired
               ? "Available by confirmed supply"
               : "Available now",
@@ -350,7 +363,7 @@ const updateMedia = (media: ProductMedia[]) => {
                   className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal"
                 >
                   <option value="fixed">Fixed price</option>
-                  <option value="quote_required">Quote required</option>
+                  <option value="quote_required">Check availability</option>
                 </select>
               </label>
               <label className="grid gap-2 text-sm font-semibold text-stone-800">
@@ -401,7 +414,7 @@ const updateMedia = (media: ProductMedia[]) => {
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
-                  <option value="coming_soon">Coming soon</option>
+                  <option value="coming_soon">Availability to be announced</option>
                 </select>
               </label>
               <ProductInput
@@ -581,7 +594,7 @@ function ProductMediaManager({
       {message ? <p className="mt-3 text-sm font-semibold text-green-900">{message}</p> : null}
       {media.length === 0 ? (
         <div className="mt-4 rounded-lg bg-white p-4 text-sm text-stone-600">
-          No media yet. Product cards will use the branded Noble Farms placeholder.
+          No media yet. Product cards will use the branded Noble Farms fallback.
         </div>
       ) : (
         <div className="mt-4 grid gap-4 md:grid-cols-2">

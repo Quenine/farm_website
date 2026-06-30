@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
@@ -98,7 +98,7 @@ export async function getAdminInventory() {
         row.status === "active"
           ? "Available now"
           : row.status === "coming_soon"
-            ? "Coming soon"
+            ? "Availability to be announced"
             : "Inactive",
       description: "",
       badge: "Current records",
