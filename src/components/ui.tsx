@@ -1,4 +1,4 @@
-/* eslint-disable @next/next/no-img-element */
+﻿/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { CartLink } from "@/src/components/cart/cart-link";
@@ -79,7 +79,7 @@ export function Footer() {
         <div>
           <p className="font-semibold">Delivery</p>
           <p className="mt-2 text-sm leading-6 text-green-100">
-            Local delivery and wider produce supply available by arrangement.
+            Home delivery, pickup point delivery, and direct pickup are available for supported locations.
           </p>
         </div>
         <div>

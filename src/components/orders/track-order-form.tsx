@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { Search } from "lucide-react";
@@ -57,7 +57,7 @@ export function TrackOrderForm() {
           className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-green-800 px-6 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60"
         >
           <Search size={17} />
-          {isPending ? "Checking…" : "Track"}
+          {isPending ? "Checkingâ€¦" : "Track"}
         </button>
       </form>
       {message ? (
@@ -91,14 +91,15 @@ function TrackedOrder({ order }: { order: Order }) {
         <Detail label="Delivery address" value={order.deliveryAddress} />
         <Detail label="Subtotal" value={formatNaira(order.subtotal)} />
         <Detail label="Delivery fee" value={formatNaira(order.deliveryFee)} />
+        {order.estimatedDeliveryTime ? <Detail label="Estimated delivery" value={order.estimatedDeliveryTime} /> : null}
         <Detail label="Total amount" value={formatNaira(order.totalAmount)} />
       </div>
       {order.paymentStatus === "paid" ? (
         <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">
           Payment confirmed. Your order is in the Noble Farms fulfilment queue.
         </div>
-      ) : order.paymentStatus === "pending" ||
-        order.paymentStatus === "failed" ? (
+      ) : (order.paymentStatus === "pending" || order.paymentStatus === "failed") &&
+        (!order.deliveryQuoteRequired && order.deliveryFeeConfirmed) ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
           <p className="mb-3 text-sm font-semibold text-amber-900">
             {order.paymentStatus === "failed"
@@ -110,6 +111,10 @@ function TrackedOrder({ order }: { order: Order }) {
             phone={order.customerPhone}
             label={order.paymentStatus === "failed" ? "Retry Payment" : "Pay Now"}
           />
+        </div>
+      ) : order.deliveryQuoteRequired || !order.deliveryFeeConfirmed ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+          Online delivery is not currently available for this location. Please contact Noble Farms to arrange this order.
         </div>
       ) : null}
       <div>
@@ -123,7 +128,7 @@ function TrackedOrder({ order }: { order: Order }) {
               <div>
                 <p className="font-bold text-stone-950">{item.productName}</p>
                 <p className="text-stone-500">
-                  {item.quantity} {item.unit} × {formatNaira(item.unitPrice)}
+                  {item.quantity} {item.unit} Ã— {formatNaira(item.unitPrice)}
                 </p>
               </div>
               <p className="font-bold text-green-950">
@@ -139,9 +144,9 @@ function TrackedOrder({ order }: { order: Order }) {
 
 function formatDeliveryMethod(method: Order["deliveryMethod"]) {
   const labels = {
-    local_delivery: "Local Scheduled Delivery",
-    pickup: "Farm Pickup / Direct Arrangement",
-    wider_delivery: "Wider Produce Delivery",
+    home_delivery: "Home Delivery",
+    pickup_point: "Pickup Point Delivery",
+    farm_pickup: "Farm Pickup / Direct Arrangement",
   };
   return labels[method];
 }

@@ -1,6 +1,7 @@
-/* eslint-disable @next/next/no-img-element */
+﻿/* eslint-disable @next/next/no-img-element */
 "use client";
 
+import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import {
   deactivateProductAction,
@@ -25,6 +26,8 @@ const emptyProduct: Product = {
   stockCount: 0,
   minimumOrder: 1,
   minimumUnit: "kg",
+  quantityStep: 1,
+  quantityInputType: "whole",
   category: "Broilers",
   availability: "Available now",
   description: "",
@@ -34,6 +37,13 @@ const emptyProduct: Product = {
   isFeatured: false,
   featuredSortOrder: 100,
   supportsWiderDelivery: false,
+  deliveryClass: "standard",
+  deliveryUnitValue: 1,
+  handlingFee: 0,
+  supportsHomeDelivery: true,
+  supportsPickupPoint: true,
+  supportsFarmPickup: true,
+  requiresDeliveryConfirmation: false,
   isLiveAnimal: false,
   isProcessed: false,
   pricingMode: "fixed",
@@ -45,11 +55,9 @@ const emptyProduct: Product = {
 
 export function AdminProductsClient({
   initialProducts,
-  usingFallback,
-}: {
+  usingFallback,}: {
   initialProducts: Product[];
-  usingFallback: boolean;
-}) {
+  usingFallback: boolean;}) {
   const [items, setItems] = useState(initialProducts);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<Product>(emptyProduct);
@@ -69,15 +77,23 @@ export function AdminProductsClient({
       pricingMode: product.pricingMode ?? "fixed",
       isOrderableOnline: product.isOrderableOnline ?? true,
       displayPriceLabel: product.displayPriceLabel ?? null,
+      quantityStep: product.quantityStep ?? 1,
+      quantityInputType: product.quantityInputType ?? "whole",
       featuredSortOrder: product.featuredSortOrder ?? 100,
       supportsWiderDelivery: product.supportsWiderDelivery ?? product.category === "Crop Produce",
+      deliveryClass: product.deliveryClass ?? "standard",
+      deliveryUnitValue: product.deliveryUnitValue ?? 1,
+      handlingFee: product.handlingFee ?? 0,
+      supportsHomeDelivery: product.supportsHomeDelivery ?? true,
+      supportsPickupPoint: product.supportsPickupPoint ?? true,
+      supportsFarmPickup: product.supportsFarmPickup ?? true,
+      requiresDeliveryConfirmation: product.requiresDeliveryConfirmation ?? false,
       media: product.media ?? [],
       primaryMedia: product.primaryMedia ?? null,
     });
     setEditing(product);
   };
-
-  const updateMedia = (media: ProductMedia[]) => {
+const updateMedia = (media: ProductMedia[]) => {
     const primaryMedia =
       media.find((item) => item.mediaType === "image" && item.isPrimary) ??
       media.find((item) => item.mediaType === "image") ??
@@ -161,11 +177,20 @@ export function AdminProductsClient({
         unit: saved.unit,
         stockCount: saved.stockCount,
         minimumOrder: saved.minimumOrder,
+        quantityStep: saved.quantityStep ?? 1,
+        quantityInputType: saved.quantityInputType ?? "whole",
         status: saved.status ?? "active",
         availableFrom: saved.availableFrom,
         isFeatured: saved.isFeatured ?? false,
         featuredSortOrder: saved.featuredSortOrder ?? 100,
         supportsWiderDelivery: saved.supportsWiderDelivery ?? false,
+        deliveryClass: saved.deliveryClass ?? "standard",
+        deliveryUnitValue: saved.deliveryUnitValue ?? 1,
+        handlingFee: saved.handlingFee ?? 0,
+        supportsHomeDelivery: saved.supportsHomeDelivery ?? true,
+        supportsPickupPoint: saved.supportsPickupPoint ?? true,
+        supportsFarmPickup: saved.supportsFarmPickup ?? true,
+        requiresDeliveryConfirmation: saved.requiresDeliveryConfirmation ?? false,
         isLiveAnimal: saved.isLiveAnimal ?? false,
         isProcessed: saved.isProcessed ?? false,
         pricingMode: saved.pricingMode ?? "fixed",
@@ -294,7 +319,16 @@ export function AdminProductsClient({
               <ProductInput label="Price" type="number" min={0} value={form.price} onChange={(price) => setForm({ ...form, price: Number(price) })} />
               <ProductInput label="Unit" value={form.unit} onChange={(unit) => setForm({ ...form, unit })} />
               <ProductInput label="Stock count" type="number" min={0} value={form.stockCount} onChange={(stockCount) => setForm({ ...form, stockCount: Number(stockCount) })} />
-              <ProductInput label="Minimum order" type="number" min={0.01} value={form.minimumOrder} onChange={(minimumOrder) => setForm({ ...form, minimumOrder: Number(minimumOrder) })} />
+              <ProductInput label="Minimum order" type="number" min={0.01} step={0.01} value={form.minimumOrder} onChange={(minimumOrder) => setForm({ ...form, minimumOrder: Number(minimumOrder) })} />
+              <ProductInput label="Quantity step" type="number" min={0.01} step={0.01} value={form.quantityStep ?? 1} onChange={(quantityStep) => setForm({ ...form, quantityStep: Number(quantityStep) })} />
+              <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                Quantity input type
+                <select value={form.quantityInputType ?? "whole"} onChange={(event) => setForm({ ...form, quantityInputType: event.target.value as Product["quantityInputType"] })} className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal">
+                  <option value="whole">Whole numbers only</option>
+                  <option value="decimal">Decimal quantities</option>
+                </select>
+                <span className="text-xs font-normal leading-5 text-stone-500">Use decimal for produce sold in half bags/baskets. Whole products should use step 1 or another whole number.</span>
+              </label>
               <label className="grid gap-2 text-sm font-semibold text-stone-800">
                 Pricing mode
                 <select
@@ -386,6 +420,49 @@ export function AdminProductsClient({
               <ProductCheckbox label="Live animal" checked={form.isLiveAnimal ?? false} onChange={(isLiveAnimal) => setForm({ ...form, isLiveAnimal })} />
               <ProductCheckbox label="Processed" checked={form.isProcessed ?? false} onChange={(isProcessed) => setForm({ ...form, isProcessed })} />
             </div>
+            <section className="rounded-lg border border-green-900/10 bg-green-50 p-4">
+              <h3 className="text-sm font-bold text-green-950">Delivery availability</h3>
+              <p className="mt-1 text-sm leading-6 text-green-900">
+                These settings control which delivery methods this product can use. Delivery prices are managed separately under Product Delivery Rates.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <ProductCheckbox label="Home Delivery" checked={form.supportsHomeDelivery ?? true} onChange={(supportsHomeDelivery) => setForm({ ...form, supportsHomeDelivery })} />
+                <ProductCheckbox label="Pickup Point Delivery" checked={form.supportsPickupPoint ?? true} onChange={(supportsPickupPoint) => setForm({ ...form, supportsPickupPoint })} />
+                <ProductCheckbox label="Farm Pickup / Direct Arrangement" checked={form.supportsFarmPickup ?? true} onChange={(supportsFarmPickup) => setForm({ ...form, supportsFarmPickup })} />
+                <ProductCheckbox label="Manual delivery confirmation" checked={form.requiresDeliveryConfirmation ?? false} onChange={(requiresDeliveryConfirmation) => setForm({ ...form, requiresDeliveryConfirmation })} />
+              </div>
+            </section>
+            <details className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <summary className="cursor-pointer text-sm font-bold text-amber-950">Legacy/Internal delivery fields</summary>
+              <p className="mt-3 text-sm leading-6 text-amber-900">
+                Product Delivery Rates now control checkout delivery pricing. These legacy fields are kept for compatibility and should not normally be edited.
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                  Delivery class
+                  <select
+                    value={form.deliveryClass ?? "standard"}
+                    onChange={(event) => setForm({ ...form, deliveryClass: event.target.value as Product["deliveryClass"] })}
+                    className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal"
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="fragile">Fragile</option>
+                    <option value="perishable">Perishable</option>
+                    <option value="fragile_produce">Fragile produce</option>
+                    <option value="heavy_produce">Heavy produce</option>
+                    <option value="live_animal">Live animal</option>
+                    <option value="fresh_food">Fresh food</option>
+                    <option value="bulky_farm_input">Bulky farm input</option>
+                  </select>
+                </label>
+                <ProductInput label="Legacy Delivery Load Value" type="number" min={0.01} step={0.01} value={form.deliveryUnitValue ?? 1} onChange={(deliveryUnitValue) => setForm({ ...form, deliveryUnitValue: Number(deliveryUnitValue) })} />
+                <ProductInput label="Legacy handling fee" type="number" min={0} value={form.handlingFee ?? 0} onChange={(handlingFee) => setForm({ ...form, handlingFee: Number(handlingFee) })} />
+              </div>
+            </details>            {form.id ? (
+              <Link href={`/admin/delivery-rates?product=${encodeURIComponent(form.id)}`} className="text-sm font-bold text-green-800 underline underline-offset-4">
+                Manage Delivery Rates for this product
+              </Link>
+            ) : null}
             <label className="grid gap-2 text-sm font-semibold text-stone-800">
               Description
               <textarea
@@ -614,6 +691,7 @@ function ProductInput({
   onChange,
   type = "text",
   min,
+  step,
   required = true,
 }: {
   label: string;
@@ -621,6 +699,7 @@ function ProductInput({
   onChange: (value: string) => void;
   type?: string;
   min?: number;
+  step?: number;
   required?: boolean;
 }) {
   return (
@@ -630,7 +709,7 @@ function ProductInput({
         required={required}
         type={type}
         min={min}
-        step={type === "number" ? "any" : undefined}
+        step={step ?? (type === "number" ? "any" : undefined)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-11 rounded-lg border border-stone-200 px-4 font-normal"
@@ -660,3 +739,6 @@ function ProductCheckbox({
     </label>
   );
 }
+
+
+

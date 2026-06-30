@@ -1,4 +1,16 @@
-import type { LucideIcon } from "lucide-react";
+﻿import type { LucideIcon } from "lucide-react";
+
+export type DeliveryMethod = "home_delivery" | "pickup_point" | "farm_pickup";
+
+export type DeliveryClass =
+  | "standard"
+  | "fragile"
+  | "perishable"
+  | "fragile_produce"
+  | "heavy_produce"
+  | "live_animal"
+  | "fresh_food"
+  | "bulky_farm_input";
 
 export type ProductMedia = {
   id: string;
@@ -23,6 +35,8 @@ export type Product = {
   stockCount: number;
   minimumOrder: number;
   minimumUnit: string;
+  quantityStep?: number;
+  quantityInputType?: "whole" | "decimal";
   category: string;
   availability: string;
   description: string;
@@ -34,6 +48,13 @@ export type Product = {
   isLiveAnimal?: boolean;
   isProcessed?: boolean;
   supportsWiderDelivery?: boolean;
+  deliveryClass?: DeliveryClass;
+  deliveryUnitValue?: number;
+  handlingFee?: number;
+  supportsHomeDelivery?: boolean;
+  supportsPickupPoint?: boolean;
+  supportsFarmPickup?: boolean;
+  requiresDeliveryConfirmation?: boolean;
   pricingMode?: "fixed" | "quote_required";
   isOrderableOnline?: boolean;
   displayPriceLabel?: string | null;
@@ -46,6 +67,55 @@ export type DeliveryZone = {
   area: string;
   distanceKm: number;
   isActive?: boolean;
+};
+
+export type DeliveryRate = {
+  id?: string;
+  state: string;
+  city: string;
+  deliveryMethod: DeliveryMethod;
+  baseFee: number;
+  baseDeliveryUnits: number;
+  extraFeePerUnit: number;
+  estimatedDeliveryTime?: string | null;
+  isActive: boolean;
+  sortOrder: number;
+};
+export type ProductDeliveryRate = {
+  id?: string;
+  productId: string;
+  productName?: string;
+  productSlug?: string;
+  state: string;
+  city: string;
+  deliveryMethod: DeliveryMethod;
+  packageSize: number;
+  firstPackageFee: number;
+  extraPackageFee: number;
+  estimatedDeliveryTime?: string | null;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+export type DeliveryRateBreakdownLine = {
+  productName: string;
+  quantity: number;
+  packageSize: number;
+  packageCount: number;
+  firstPackageFee: number;
+  extraPackageFee: number;
+  isBaseLine: boolean;
+  lineDeliveryCharge: number;
+  matchingRateSource?: "exact" | "all_city_fallback" | "missing";
+};
+
+export type DeliveryRateBreakdown = {
+  model: "product_rate";
+  state: string;
+  city: string;
+  deliveryMethod: DeliveryMethod;
+  estimatedDeliveryTime?: string | null;
+  lines: DeliveryRateBreakdownLine[];
 };
 
 export type DeliverySettings = {
@@ -94,9 +164,16 @@ export type Order = {
   deliveryAddress: string;
   deliveryZoneId: string | null;
   deliveryArea: string;
-  deliveryMethod: "local_delivery" | "pickup" | "wider_delivery";
+  deliveryMethod: DeliveryMethod;
   deliveryState: string | null;
   deliveryCity: string | null;
+  deliveryRateId: string | null;
+  deliveryUnits: number;
+  handlingFee: number;
+  deliveryPricingModel: "product_rate" | "legacy_rate" | string;
+  deliveryPackageCount: number;
+  deliveryRateBreakdown: DeliveryRateBreakdown | null;
+  estimatedDeliveryTime: string | null;
   deliveryQuoteRequired: boolean;
   deliveryFeeConfirmed: boolean;
   deliveryDate: string;
@@ -158,3 +235,7 @@ export type CartLine = {
   quantity: number;
   product?: Product;
 };
+
+
+
+

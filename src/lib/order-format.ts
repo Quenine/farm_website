@@ -1,10 +1,10 @@
-import type {
+﻿import type {
   DatabaseOrderStatus,
   DatabasePaymentStatus,
 } from "@/src/types";
 
 const orderLabels: Record<DatabaseOrderStatus, string> = {
-  pending_delivery_quote: "Delivery Quote Required",
+  pending_delivery_quote: "Delivery Arrangement Needed",
   pending_payment: "Pending Payment",
   paid: "Paid",
   processing: "Processing",

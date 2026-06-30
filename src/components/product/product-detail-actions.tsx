@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import type { Product } from "@/src/types";
 import { AddToCartButton } from "@/src/components/product/add-to-cart-button";
 import { QuantitySelector } from "@/src/components/product/quantity-selector";
 import { isProductOrderable } from "@/src/lib/product-pricing";
+import { getQuantityInputType, getQuantityStep } from "@/src/lib/quantity";
 
 export function ProductDetailActions({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(product.minimumOrder);
@@ -20,6 +21,8 @@ export function ProductDetailActions({ product }: { product: Product }) {
         min={product.minimumOrder}
         max={product.stockCount}
         unit={product.minimumUnit}
+        step={getQuantityStep(product)}
+        inputType={getQuantityInputType(product)}
         onChange={setQuantity}
       />
       <AddToCartButton

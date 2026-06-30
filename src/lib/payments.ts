@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import { randomBytes } from "node:crypto";
 import {
@@ -162,7 +162,7 @@ export async function initializeOrderPayment(orderIdentifier: string) {
     failOrderPaymentValidation(
       order.order_reference,
       "Delivery fee is not confirmed for this order.",
-      "Payment will be available once delivery cost has been confirmed.",
+      "Online delivery is not currently available for this location. Please contact Noble Farms to arrange this order.",
     );
   }
   if (order.payment_status !== "pending" && order.payment_status !== "failed") {

@@ -1,5 +1,10 @@
-import { products } from "@/src/lib/business-data";
+﻿import { products } from "@/src/lib/business-data";
 import { isProductOrderable } from "@/src/lib/product-pricing";
+import {
+  getQuantityInputType,
+  getQuantityStep,
+  normalizeQuantity,
+} from "@/src/lib/quantity";
 import type { CartLine, Product } from "@/src/types";
 
 export const CART_STORAGE_KEY = "noble-farms-cart";
@@ -10,10 +15,13 @@ export function getProductBySlug(slug: string) {
 
 export function clampQuantity(product: Product, quantity: number) {
   if (!isProductOrderable(product)) return 0;
-  return Math.min(
-    Math.max(Math.round(quantity), product.minimumOrder),
-    product.stockCount,
-  );
+  return normalizeQuantity({
+    quantity,
+    min: product.minimumOrder,
+    max: product.stockCount,
+    step: getQuantityStep(product),
+    inputType: getQuantityInputType(product),
+  });
 }
 
 export function normalizeCart(stored: string | CartLine[] | null): CartLine[] {

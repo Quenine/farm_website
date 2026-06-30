@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import "server-only";
 
@@ -30,6 +30,11 @@ const productSchema = z
     unit: z.string().trim().min(1).max(40),
     stockCount: z.number().nonnegative(),
     minimumOrder: z.number().positive(),
+    quantityStep: z.number().positive().default(1),
+    quantityInputType: z.preprocess(
+      (value) => (value === "decimal" ? "decimal" : "whole"),
+      z.enum(["whole", "decimal"]),
+    ),
     status: z.enum(["active", "inactive", "coming_soon"]),
     availableFrom: z.string().nullable().optional(),
     isFeatured: z.boolean(),
@@ -37,6 +42,22 @@ const productSchema = z
     isLiveAnimal: z.boolean(),
     isProcessed: z.boolean(),
     supportsWiderDelivery: z.boolean().default(false),
+    deliveryClass: z.enum([
+      "standard",
+      "fragile",
+      "perishable",
+      "fragile_produce",
+      "heavy_produce",
+      "live_animal",
+      "fresh_food",
+      "bulky_farm_input",
+    ]).default("standard"),
+    deliveryUnitValue: z.number().positive().default(1),
+    handlingFee: z.number().nonnegative().default(0),
+    supportsHomeDelivery: z.boolean().default(true),
+    supportsPickupPoint: z.boolean().default(true),
+    supportsFarmPickup: z.boolean().default(true),
+    requiresDeliveryConfirmation: z.boolean().default(false),
     pricingMode: z.preprocess(
       (value) => (value === "quote_required" ? "quote_required" : "fixed"),
       z.enum(["fixed", "quote_required"]),
@@ -56,6 +77,14 @@ const productSchema = z
       .nullable()
       .optional(),
   })
+  .refine(
+    (product) =>
+      product.quantityInputType === "decimal" || Number.isInteger(product.quantityStep),
+    {
+      path: ["quantityStep"],
+      message: "Whole-number products need a whole-number quantity step.",
+    },
+  )
   .transform((product) => ({
     ...product,
     isOrderableOnline:

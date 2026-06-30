@@ -86,9 +86,18 @@ create table if not exists public.products (
   unit text not null check (char_length(trim(unit)) > 0),
   stock_quantity numeric(12, 2) not null default 0 check (stock_quantity >= 0),
   minimum_order_quantity numeric(12, 2) not null default 1 check (minimum_order_quantity > 0),
+  quantity_step numeric(12, 2) not null default 1,
+  quantity_input_type text not null default 'whole' check (quantity_input_type in ('whole', 'decimal')),
   pricing_mode text not null default 'fixed' check (pricing_mode in ('fixed', 'quote_required')),
   is_orderable_online boolean not null default true,
   display_price_label text,
+  delivery_class text not null default 'standard',
+  delivery_unit_value numeric(12, 2) not null default 1,
+  handling_fee numeric(12, 2) not null default 0,
+  supports_home_delivery boolean not null default true,
+  supports_pickup_point boolean not null default true,
+  supports_farm_pickup boolean not null default true,
+  requires_delivery_confirmation boolean not null default false,
   status public.product_status not null default 'active',
   available_from date,
   is_featured boolean not null default false,
@@ -107,9 +116,18 @@ create table if not exists public.products (
 );
 
 alter table public.products
+  add column if not exists quantity_step numeric(12, 2) not null default 1,
+  add column if not exists quantity_input_type text not null default 'whole',
   add column if not exists pricing_mode text not null default 'fixed',
   add column if not exists is_orderable_online boolean not null default true,
   add column if not exists display_price_label text,
+  add column if not exists delivery_class text not null default 'standard',
+  add column if not exists delivery_unit_value numeric(12, 2) not null default 1,
+  add column if not exists handling_fee numeric(12, 2) not null default 0,
+  add column if not exists supports_home_delivery boolean not null default true,
+  add column if not exists supports_pickup_point boolean not null default true,
+  add column if not exists supports_farm_pickup boolean not null default true,
+  add column if not exists requires_delivery_confirmation boolean not null default false,
   add column if not exists featured_sort_order integer not null default 100,
   add column if not exists supports_wider_delivery boolean not null default false;
 
@@ -124,6 +142,42 @@ begin
     alter table public.products
       add constraint products_pricing_mode_check
       check (pricing_mode in ('fixed', 'quote_required'));
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'products_quantity_step_check'
+      and conrelid = 'public.products'::regclass
+  ) then
+    alter table public.products
+      add constraint products_quantity_step_check
+      check (quantity_step > 0);
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'products_quantity_input_type_check'
+      and conrelid = 'public.products'::regclass
+  ) then
+    alter table public.products
+      add constraint products_quantity_input_type_check
+      check (quantity_input_type in ('whole', 'decimal'));
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'products_delivery_class_check'
+      and conrelid = 'public.products'::regclass
+  ) then
+    alter table public.products
+      add constraint products_delivery_class_check
+      check (delivery_class in (
+        'standard', 'fragile', 'perishable', 'fragile_produce',
+        'heavy_produce', 'live_animal', 'fresh_food', 'bulky_farm_input'
+      ));
   end if;
 
   if not exists (
@@ -160,6 +214,39 @@ create table if not exists public.product_media (
   updated_at timestamptz not null default now()
 );
 
+
+create table if not exists public.product_delivery_rates (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id) on delete cascade,
+  state text not null,
+  city text not null,
+  delivery_method text not null check (delivery_method in ('home_delivery', 'pickup_point', 'farm_pickup')),
+  package_size numeric(12, 2) not null default 1 check (package_size > 0),
+  first_package_fee numeric(12, 2) not null default 0 check (first_package_fee >= 0),
+  extra_package_fee numeric(12, 2) not null default 0 check (extra_package_fee >= 0),
+  estimated_delivery_time text,
+  is_active boolean not null default true,
+  sort_order integer not null default 100,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint product_delivery_rates_unique unique (product_id, state, city, delivery_method),
+  constraint product_delivery_rates_method_check check (delivery_method in ('home_delivery', 'pickup_point', 'farm_pickup'))
+);
+create table if not exists public.delivery_rates (
+  id uuid primary key default gen_random_uuid(),
+  state text not null,
+  city text not null,
+  delivery_method text not null check (delivery_method in ('home_delivery', 'pickup_point', 'farm_pickup')),
+  base_fee numeric(12, 2) not null default 0 check (base_fee >= 0),
+  base_delivery_units numeric(12, 2) not null default 1 check (base_delivery_units >= 0),
+  extra_fee_per_unit numeric(12, 2) not null default 0 check (extra_fee_per_unit >= 0),
+  estimated_delivery_time text,
+  is_active boolean not null default true,
+  sort_order integer not null default 100,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.delivery_zones (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
@@ -179,11 +266,17 @@ create table if not exists public.orders (
   delivery_zone_id uuid references public.delivery_zones(id) on delete restrict,
   delivery_date date not null,
   delivery_note text,
-  delivery_method text not null default 'local_delivery' check (delivery_method in ('local_delivery', 'pickup', 'wider_delivery')),
+  delivery_method text not null default 'home_delivery' check (delivery_method in ('home_delivery', 'pickup_point', 'farm_pickup')),
   delivery_state text,
   delivery_city text,
+  delivery_rate_id uuid references public.delivery_rates(id) on delete set null,
+  delivery_units numeric(12, 2) not null default 0,
+  handling_fee numeric(12, 2) not null default 0,
   delivery_quote_required boolean not null default false,
   delivery_fee_confirmed boolean not null default true,
+  delivery_pricing_model text not null default 'product_rate',
+  delivery_rate_breakdown jsonb,
+  delivery_package_count numeric(12, 2) not null default 0,
   subtotal numeric(12, 2) not null check (subtotal >= 0),
   delivery_fee numeric(12, 2) not null default 0 check (delivery_fee >= 0),
   total_amount numeric(12, 2) not null check (total_amount >= 0),
@@ -276,13 +369,32 @@ alter table public.orders
   add column if not exists payment_status public.payment_status not null default 'pending',
   add column if not exists order_status public.order_status not null default 'pending_payment',
   add column if not exists paystack_reference text,
-  add column if not exists delivery_method text not null default 'local_delivery',
+  add column if not exists delivery_method text not null default 'home_delivery',
   add column if not exists delivery_state text,
   add column if not exists delivery_city text,
+  add column if not exists delivery_rate_id uuid references public.delivery_rates(id) on delete set null,
+  add column if not exists delivery_units numeric(12, 2) not null default 0,
+  add column if not exists handling_fee numeric(12, 2) not null default 0,
   add column if not exists delivery_quote_required boolean not null default false,
   add column if not exists delivery_fee_confirmed boolean not null default true,
+  add column if not exists delivery_pricing_model text not null default 'product_rate',
+  add column if not exists delivery_rate_breakdown jsonb,
+  add column if not exists delivery_package_count numeric(12, 2) not null default 0,
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
+alter table public.orders drop constraint if exists orders_delivery_method_check;
+
+update public.orders
+set delivery_method = case delivery_method
+  when 'local_delivery' then 'home_delivery'
+  when 'pickup' then 'farm_pickup'
+  when 'wider_delivery' then 'home_delivery'
+  else delivery_method
+end
+where delivery_method in ('local_delivery', 'pickup', 'wider_delivery');
+
+alter table public.orders alter column delivery_method set default 'home_delivery';
+
 do $$
 begin
   if not exists (
@@ -293,10 +405,23 @@ begin
   ) then
     alter table public.orders
       add constraint orders_delivery_method_check
-      check (delivery_method in ('local_delivery', 'pickup', 'wider_delivery'));
+      check (delivery_method in ('home_delivery', 'pickup_point', 'farm_pickup'));
   end if;
 end $$;
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'product_delivery_rates_unique'
+      and conrelid = 'public.product_delivery_rates'::regclass
+  ) then
+    alter table public.product_delivery_rates
+      add constraint product_delivery_rates_unique
+      unique (product_id, state, city, delivery_method);
+  end if;
+end $$;
 create index if not exists products_category_id_idx on public.products(category_id);
 create index if not exists products_status_idx on public.products(status);
 create index if not exists products_featured_idx on public.products(is_featured, featured_sort_order) where is_featured = true;
@@ -305,6 +430,14 @@ create index if not exists product_media_product_id_sort_idx on public.product_m
 create unique index if not exists product_media_one_primary_image_uidx
   on public.product_media(product_id)
   where is_primary = true and media_type = 'image';
+create unique index if not exists product_delivery_rates_product_location_method_uidx
+  on public.product_delivery_rates(product_id, lower(state), lower(city), delivery_method);
+create index if not exists product_delivery_rates_active_lookup_idx
+  on public.product_delivery_rates(product_id, is_active, lower(state), lower(city), delivery_method, sort_order);
+create unique index if not exists delivery_rates_state_city_method_uidx
+  on public.delivery_rates(lower(state), lower(city), delivery_method);
+create index if not exists delivery_rates_active_lookup_idx
+  on public.delivery_rates(is_active, lower(state), lower(city), delivery_method, sort_order);
 create index if not exists delivery_zones_active_idx on public.delivery_zones(is_active);
 create index if not exists orders_created_at_idx on public.orders(created_at desc);
 create index if not exists orders_payment_status_idx on public.orders(payment_status);
@@ -358,6 +491,18 @@ create trigger product_media_set_updated_at
 before update on public.product_media
 for each row execute function public.set_updated_at();
 
+drop trigger if exists product_delivery_rates_set_updated_at on public.product_delivery_rates;
+
+create trigger product_delivery_rates_set_updated_at
+before update on public.product_delivery_rates
+for each row execute function public.set_updated_at();
+
+drop trigger if exists delivery_rates_set_updated_at on public.delivery_rates;
+
+create trigger delivery_rates_set_updated_at
+before update on public.delivery_rates
+for each row execute function public.set_updated_at();
+
 drop trigger if exists delivery_zones_set_updated_at on public.delivery_zones;
 
 create trigger delivery_zones_set_updated_at
@@ -381,6 +526,8 @@ alter table public.categories enable row level security;
 alter table public.products enable row level security;
 alter table public.product_images enable row level security;
 alter table public.product_media enable row level security;
+alter table public.product_delivery_rates enable row level security;
+alter table public.delivery_rates enable row level security;
 alter table public.delivery_zones enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
@@ -429,6 +576,20 @@ using (
       and products.status in ('active', 'coming_soon')
   )
 );
+
+
+drop policy if exists "Public can read active product delivery rates" on public.product_delivery_rates;
+
+create policy "Public can read active product delivery rates"
+on public.product_delivery_rates for select
+to anon, authenticated
+using (is_active = true);
+drop policy if exists "Public can read active delivery rates" on public.delivery_rates;
+
+create policy "Public can read active delivery rates"
+on public.delivery_rates for select
+to anon, authenticated
+using (is_active = true);
 
 drop policy if exists "Public can read active delivery zones" on public.delivery_zones;
 
@@ -645,3 +806,11 @@ revoke all on function public.process_paystack_payment(
 grant execute on function public.process_paystack_payment(
   uuid, text, numeric, timestamptz, jsonb
 ) to service_role;
+
+
+
+
+
+
+
+

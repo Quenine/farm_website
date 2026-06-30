@@ -207,12 +207,23 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
               />
               <Detail label="Address" value={selected.deliveryAddress} />
               <Detail label="Delivery fee" value={formatNaira(selected.deliveryFee)} />
+              <Detail label="Delivery pricing model" value={selected.deliveryPricingModel} />
+              <Detail label="Delivery package count" value={String(selected.deliveryPackageCount)} />
+              <Detail label="Legacy delivery units" value={String(selected.deliveryUnits)} />
+              <Detail label="Legacy handling fee" value={formatNaira(selected.handlingFee)} />
+              <Detail label="Estimated delivery" value={selected.estimatedDeliveryTime ?? "Not set"} />
               <Detail label="Total" value={formatNaira(selected.totalAmount)} />
             </div>
-            {selected.deliveryMethod === "wider_delivery" && !selected.deliveryFeeConfirmed ? (
+            {selected.deliveryRateBreakdown ? (
+              <div className="mt-6 rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-800">
+                <h3 className="font-bold text-green-950">Delivery rate breakdown</h3>
+                <pre className="mt-3 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs">{JSON.stringify(selected.deliveryRateBreakdown, null, 2)}</pre>
+              </div>
+            ) : null}
+            {selected.deliveryQuoteRequired && !selected.deliveryFeeConfirmed ? (
               <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-950">
-                <h3 className="font-bold">Confirm wider delivery fee</h3>
-                <p className="mt-2 text-green-900">Set the confirmed delivery fee. Once saved, this order becomes payable from Track Order.</p>
+                <h3 className="font-bold">Confirm manual delivery fee</h3>
+                <p className="mt-2 text-green-900">Set the confirmed delivery fee for this manual arrangement. Once saved, this order becomes payable from Track Order.</p>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <input
                     type="number"
@@ -338,9 +349,9 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
 
 function formatDeliveryMethod(method: Order["deliveryMethod"]) {
   const labels = {
-    local_delivery: "Local Scheduled Delivery",
-    pickup: "Farm Pickup / Direct Arrangement",
-    wider_delivery: "Wider Produce Delivery",
+    home_delivery: "Home Delivery",
+    pickup_point: "Pickup Point Delivery",
+    farm_pickup: "Farm Pickup / Direct Arrangement",
   };
   return labels[method];
 }
@@ -352,3 +363,5 @@ function Detail({ label, value }: { label: string; value: string }) {
     </p>
   );
 }
+
+

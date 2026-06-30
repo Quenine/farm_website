@@ -1,17 +1,12 @@
-import "server-only";
+﻿import "server-only";
 
 import { randomBytes } from "node:crypto";
-import { calculateDeliveryFee } from "@/src/lib/delivery";
-import { getCheckoutDeliveryData } from "@/src/lib/delivery-data";
+import { calculateCheckoutDelivery } from "@/src/lib/product-delivery-rates";
+import { isValidQuantityStep } from "@/src/lib/quantity";
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
-import type {
-  DatabaseOrderStatus,
-  Order,
-  OrderItem,
-} from "@/src/types";
-
-type DeliveryMethod = "local_delivery" | "pickup" | "wider_delivery";
+import type { DatabaseOrderStatus, DeliveryMethod, Order, OrderItem } from "@/src/types";
+import type { DeliveryProductForCalculation } from "@/src/lib/delivery-calculator";
 
 type OrderRow = {
   id: string;
@@ -26,6 +21,12 @@ type OrderRow = {
   delivery_method: DeliveryMethod | null;
   delivery_state: string | null;
   delivery_city: string | null;
+  delivery_rate_id: string | null;
+  delivery_pricing_model: string | null;
+  delivery_rate_breakdown: unknown | null;
+  delivery_package_count: number | string | null;
+  delivery_units: number | string | null;
+  handling_fee: number | string | null;
   delivery_quote_required: boolean | null;
   delivery_fee_confirmed: boolean | null;
   subtotal: number | string;
@@ -35,6 +36,7 @@ type OrderRow = {
   order_status: Order["orderStatus"];
   paystack_reference: string | null;
   created_at: string;
+  delivery_rates: { estimated_delivery_time: string | null } | { estimated_delivery_time: string | null }[] | null;
   delivery_zones: { name: string } | { name: string }[] | null;
   order_items: Array<{
     id: string;
@@ -63,12 +65,11 @@ export type CreateOrderInput = {
   customerEmail: string;
   customerPhone: string;
   deliveryAddress?: string;
-  deliveryZoneId?: string | null;
   deliveryDate: string;
   deliveryNote?: string;
   deliveryMethod: DeliveryMethod;
-  deliveryState?: string;
-  deliveryCity?: string;
+  deliveryState: string;
+  deliveryCity: string;
   items: Array<{ productId: string; quantity: number }>;
 };
 
@@ -85,6 +86,12 @@ const orderColumns = `
   delivery_method,
   delivery_state,
   delivery_city,
+  delivery_rate_id,
+  delivery_pricing_model,
+  delivery_rate_breakdown,
+  delivery_package_count,
+  delivery_units,
+  handling_fee,
   delivery_quote_required,
   delivery_fee_confirmed,
   subtotal,
@@ -94,6 +101,7 @@ const orderColumns = `
   order_status,
   paystack_reference,
   created_at,
+  delivery_rates ( estimated_delivery_time ),
   delivery_zones ( name ),
   order_items (
     id,
@@ -114,12 +122,8 @@ const orderColumns = `
   )
 `;
 
-function relatedName(
-  relation: { name: string } | { name: string }[] | null,
-) {
-  return Array.isArray(relation)
-    ? relation[0]?.name ?? "Not applicable"
-    : relation?.name ?? "Not applicable";
+function relationRow<T>(relation: T | T[] | null): T | null {
+  return Array.isArray(relation) ? relation[0] ?? null : relation;
 }
 
 function currentStock(
@@ -128,8 +132,13 @@ function currentStock(
     | { stock_quantity: number | string }[]
     | null,
 ) {
-  const row = Array.isArray(relation) ? relation[0] : relation;
+  const row = relationRow(relation);
   return row ? Number(row.stock_quantity) : null;
+}
+
+function estimatedDeliveryTime(row: OrderRow) {
+  const breakdown = row.delivery_rate_breakdown as { estimatedDeliveryTime?: string | null } | null;
+  return breakdown?.estimatedDeliveryTime ?? relationRow(row.delivery_rates)?.estimated_delivery_time ?? null;
 }
 
 export function mapOrderRow(row: OrderRow): Order {
@@ -155,18 +164,19 @@ export function mapOrderRow(row: OrderRow): Order {
     customerPhone: row.customer_phone,
     deliveryAddress: row.delivery_address ?? "",
     deliveryZoneId: row.delivery_zone_id,
-    deliveryArea:
-      row.delivery_method === "pickup"
-        ? "Farm Pickup / Direct Arrangement"
-        : row.delivery_method === "wider_delivery"
-          ? [row.delivery_city, row.delivery_state].filter(Boolean).join(", ") ||
-            "Wider Produce Delivery"
-          : relatedName(row.delivery_zones),
+    deliveryArea: [row.delivery_city, row.delivery_state].filter(Boolean).join(", ") || "Not specified",
     deliveryDate: row.delivery_date,
     deliveryNote: row.delivery_note,
-    deliveryMethod: row.delivery_method ?? "local_delivery",
+    deliveryMethod: row.delivery_method ?? "home_delivery",
     deliveryState: row.delivery_state,
     deliveryCity: row.delivery_city,
+    deliveryRateId: row.delivery_rate_id,
+    deliveryUnits: Number(row.delivery_units ?? 0),
+    handlingFee: Number(row.handling_fee ?? 0),
+    deliveryPricingModel: row.delivery_pricing_model ?? "legacy_rate",
+    deliveryPackageCount: Number(row.delivery_package_count ?? 0),
+    deliveryRateBreakdown: row.delivery_rate_breakdown as Order["deliveryRateBreakdown"],
+    estimatedDeliveryTime: estimatedDeliveryTime(row),
     deliveryQuoteRequired: row.delivery_quote_required ?? false,
     deliveryFeeConfirmed: row.delivery_fee_confirmed ?? true,
     subtotal: Number(row.subtotal),
@@ -176,8 +186,7 @@ export function mapOrderRow(row: OrderRow): Order {
     orderStatus: row.order_status,
     paystackReference: row.paystack_reference,
     paymentProvider: latestPayment?.provider ?? null,
-    paidAt:
-      row.payments.find((payment) => payment.status === "paid")?.paid_at ?? null,
+    paidAt: row.payments.find((payment) => payment.status === "paid")?.paid_at ?? null,
     inventoryMovementCount: 0,
     inventoryDeducted: false,
     createdAt: row.created_at,
@@ -208,44 +217,25 @@ function orderReference() {
 }
 
 export async function createOrder(input: CreateOrderInput) {
-  if (input.deliveryDate < todayInLagos()) {
-    throw new Error("Delivery date cannot be in the past.");
-  }
-  if (input.items.length === 0) {
-    throw new Error("Your cart is empty.");
-  }
+  if (input.deliveryDate < todayInLagos()) throw new Error("Delivery date cannot be in the past.");
+  if (input.items.length === 0) throw new Error("Your cart is empty.");
   if (new Set(input.items.map((item) => item.productId)).size !== input.items.length) {
     throw new Error("Duplicate cart items are not allowed.");
   }
 
   const supabase = createAdminSupabaseClient();
   const uniqueProductIds = [...new Set(input.items.map((item) => item.productId))];
-  const [{ zones, settings }, productsResult] = await Promise.all([
-    getCheckoutDeliveryData(),
-    supabase
-      .from("products")
-      .select(
-        "id, name, price, unit, stock_quantity, minimum_order_quantity, status, pricing_mode, is_orderable_online, supports_wider_delivery, categories ( name )",
-      )
-      .in("id", uniqueProductIds),
-  ]);
+  const { data: products, error: productsError } = await supabase
+    .from("products")
+    .select(
+      "id, name, price, unit, stock_quantity, minimum_order_quantity, quantity_step, quantity_input_type, status, pricing_mode, is_orderable_online, delivery_unit_value, handling_fee, supports_home_delivery, supports_pickup_point, supports_farm_pickup, requires_delivery_confirmation",
+    )
+    .in("id", uniqueProductIds);
 
-  if (productsResult.error) {
-    throw new Error(`Unable to validate cart products: ${productsResult.error.message}`);
-  }
+  if (productsError) throw new Error(`Unable to validate cart products: ${productsError.message}`);
 
-  const deliveryMethod = input.deliveryMethod;
-  const zone = deliveryMethod === "local_delivery"
-    ? zones.find((item) => item.id === input.deliveryZoneId)
-    : null;
-  if (deliveryMethod === "local_delivery" && (!zone?.id || zone.isActive === false)) {
-    throw new Error("Select an active delivery zone.");
-  }
-
-  const productsById = new Map(
-    (productsResult.data ?? []).map((product) => [product.id, product]),
-  );
-  let containsWiderEligibleProduct = false;
+  const productsById = new Map((products ?? []).map((product) => [product.id, product]));
+  const deliveryProducts: DeliveryProductForCalculation[] = [];
   const orderItems = input.items.map((item) => {
     const product = productsById.get(item.productId) as
       | {
@@ -255,45 +245,48 @@ export async function createOrder(input: CreateOrderInput) {
           unit: string;
           stock_quantity: number | string;
           minimum_order_quantity: number | string;
+          quantity_step: number | string | null;
+          quantity_input_type: "whole" | "decimal" | null;
           status: string;
           pricing_mode: string | null;
           is_orderable_online: boolean | null;
-          supports_wider_delivery: boolean | null;
-          categories: { name: string } | { name: string }[] | null;
+          supports_home_delivery: boolean | null;
+          supports_pickup_point: boolean | null;
+          supports_farm_pickup: boolean | null;
+          requires_delivery_confirmation: boolean | null;
         }
       | undefined;
-    if (!product) {
-      throw new Error("A product in your cart is no longer available.");
-    }
-    if (product.status !== "active") {
-      throw new Error(`${product.name} is not currently available to order.`);
-    }
-    if (
-      product.pricing_mode === "quote_required" ||
-      product.is_orderable_online === false ||
-      Number(product.price) <= 0
-    ) {
-      throw new Error(
-        `${product.name} requires availability confirmation before checkout.`,
-      );
+    if (!product) throw new Error("A product in your cart is no longer available.");
+    if (product.status !== "active") throw new Error(`${product.name} is not currently available to order.`);
+    if (product.pricing_mode === "quote_required" || product.is_orderable_online === false || Number(product.price) <= 0) {
+      throw new Error(`${product.name} requires availability confirmation before checkout.`);
     }
 
-    const categoryName = Array.isArray(product.categories)
-      ? product.categories[0]?.name
-      : product.categories?.name;
-    if (product.supports_wider_delivery || categoryName === "Crop Produce") {
-      containsWiderEligibleProduct = true;
-    }
-
-    const quantity = Math.round(item.quantity);
+    const quantity = item.quantity;
     const minimum = Number(product.minimum_order_quantity);
     const stock = Number(product.stock_quantity);
-    if (quantity < minimum) {
-      throw new Error(`${product.name} requires a minimum order of ${minimum}.`);
+    const quantityStep = Number(product.quantity_step ?? 1);
+    const quantityInputType = product.quantity_input_type === "decimal" ? "decimal" : "whole";
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error(`${product.name} has an invalid quantity.`);
+    if (quantity < minimum) throw new Error(`${product.name} requires a minimum order of ${minimum}.`);
+    if (quantity > stock) throw new Error(`${product.name} only has ${stock} available.`);
+    if (!isValidQuantityStep({ quantity, min: minimum, max: stock, step: quantityStep, inputType: quantityInputType })) {
+      throw new Error(`${product.name} quantity must follow the allowed order step.`);
     }
-    if (quantity > stock) {
-      throw new Error(`${product.name} only has ${stock} available.`);
-    }
+
+    deliveryProducts.push({
+      productId: product.id,
+      name: product.name,
+      quantity,
+      minimumOrder: minimum,
+      stockCount: stock,
+      quantityStep,
+      quantityInputType,
+      supportsHomeDelivery: product.supports_home_delivery ?? true,
+      supportsPickupPoint: product.supports_pickup_point ?? true,
+      supportsFarmPickup: product.supports_farm_pickup ?? true,
+      requiresDeliveryConfirmation: product.requires_delivery_confirmation ?? false,
+    });
 
     const unitPrice = Number(product.price);
     return {
@@ -306,25 +299,20 @@ export async function createOrder(input: CreateOrderInput) {
     };
   });
 
-  if (deliveryMethod === "wider_delivery" && !containsWiderEligibleProduct) {
-    throw new Error("Wider produce delivery is only available for eligible produce orders.");
-  }
+  const delivery = await calculateCheckoutDelivery({
+    products: deliveryProducts,
+    state: input.deliveryState,
+    city: input.deliveryCity,
+    deliveryMethod: input.deliveryMethod,
+  });
+  if (!delivery.supported) throw new Error(delivery.reason);
 
   const subtotal = orderItems.reduce((sum, item) => sum + item.total_price, 0);
-  const deliveryFee = deliveryMethod === "local_delivery" && zone
-    ? calculateDeliveryFee(zone, settings)
-    : 0;
-  const deliveryQuoteRequired = deliveryMethod === "wider_delivery";
-  const deliveryFeeConfirmed = !deliveryQuoteRequired;
+  const deliveryFee = delivery.deliveryFee;
   const totalAmount = subtotal + deliveryFee;
   const phone = normalizePhone(input.customerPhone);
-  const orderStatus: DatabaseOrderStatus = deliveryQuoteRequired
-    ? "pending_delivery_quote"
-    : "pending_payment";
-  const deliveryAddress =
-    deliveryMethod === "pickup"
-      ? input.deliveryAddress?.trim() || "Farm Pickup / Direct Arrangement"
-      : input.deliveryAddress?.trim() || "";
+  const deliveryAddress = input.deliveryAddress?.trim() ||
+    (input.deliveryMethod === "farm_pickup" ? "Farm Pickup / Direct Arrangement" : "");
 
   let insertedOrder: { id: string; order_reference: string } | null = null;
   let lastError: Error | null = null;
@@ -338,40 +326,40 @@ export async function createOrder(input: CreateOrderInput) {
         customer_email: input.customerEmail,
         customer_phone: phone,
         delivery_address: deliveryAddress,
-        delivery_zone_id: zone?.id ?? null,
+        delivery_zone_id: null,
         delivery_date: input.deliveryDate,
         delivery_note: input.deliveryNote || null,
-        delivery_method: deliveryMethod,
-        delivery_state: input.deliveryState || null,
-        delivery_city: input.deliveryCity || null,
-        delivery_quote_required: deliveryQuoteRequired,
-        delivery_fee_confirmed: deliveryFeeConfirmed,
+        delivery_method: input.deliveryMethod,
+        delivery_state: input.deliveryState,
+        delivery_city: input.deliveryCity,
+        delivery_rate_id: null,
+        delivery_pricing_model: delivery.deliveryPricingModel,
+        delivery_rate_breakdown: delivery.deliveryRateBreakdown,
+        delivery_package_count: delivery.deliveryPackageCount,
+        delivery_units: delivery.deliveryUnits,
+        handling_fee: delivery.handlingFee,
+        delivery_quote_required: false,
+        delivery_fee_confirmed: true,
         subtotal,
         delivery_fee: deliveryFee,
         total_amount: totalAmount,
         payment_status: "pending",
-        order_status: orderStatus,
+        order_status: "pending_payment",
       })
       .select("id, order_reference")
       .single();
 
-    if (!error && data) {
-      insertedOrder = data;
-    } else {
+    if (!error && data) insertedOrder = data;
+    else {
       lastError = new Error(error?.message ?? "Unable to create order.");
       if (error?.code !== "23505") break;
     }
   }
 
-  if (!insertedOrder) {
-    throw lastError ?? new Error("Unable to create order.");
-  }
+  if (!insertedOrder) throw lastError ?? new Error("Unable to create order.");
 
   const { error: itemError } = await supabase.from("order_items").insert(
-    orderItems.map((item) => ({
-      ...item,
-      order_id: insertedOrder.id,
-    })),
+    orderItems.map((item) => ({ ...item, order_id: insertedOrder.id })),
   );
 
   if (itemError) {
@@ -382,7 +370,7 @@ export async function createOrder(input: CreateOrderInput) {
   return {
     orderId: insertedOrder.id,
     reference: insertedOrder.order_reference,
-    paymentDeferred: deliveryQuoteRequired,
+    paymentDeferred: false,
   };
 }
 
@@ -423,10 +411,7 @@ export async function getAdminOrders() {
   const { data: movements, error: movementError } = await supabase
     .from("inventory_movements")
     .select("order_id")
-    .in(
-      "order_id",
-      orders.map((order) => order.id),
-    )
+    .in("order_id", orders.map((order) => order.id))
     .eq("movement_type", "stock_out");
 
   if (movementError) return orders;
@@ -434,10 +419,7 @@ export async function getAdminOrders() {
   const movementCounts = new Map<string, number>();
   for (const movement of movements ?? []) {
     if (!movement.order_id) continue;
-    movementCounts.set(
-      movement.order_id,
-      (movementCounts.get(movement.order_id) ?? 0) + 1,
-    );
+    movementCounts.set(movement.order_id, (movementCounts.get(movement.order_id) ?? 0) + 1);
   }
 
   return orders.map((order) => {
@@ -445,16 +427,12 @@ export async function getAdminOrders() {
     return {
       ...order,
       inventoryMovementCount: movementCount,
-      inventoryDeducted:
-        order.items.length > 0 && movementCount === order.items.length,
+      inventoryDeducted: order.items.length > 0 && movementCount === order.items.length,
     };
   });
 }
 
-export async function updateAdminOrderStatus(
-  orderId: string,
-  status: DatabaseOrderStatus,
-) {
+export async function updateAdminOrderStatus(orderId: string, status: DatabaseOrderStatus) {
   await requireAdmin();
   const supabase = createAdminSupabaseClient();
   const { data, error } = await supabase
@@ -469,9 +447,7 @@ export async function updateAdminOrderStatus(
 
 export async function confirmAdminOrderDeliveryFee(orderId: string, deliveryFee: number) {
   await requireAdmin();
-  if (!Number.isFinite(deliveryFee) || deliveryFee < 0) {
-    throw new Error("Enter a valid delivery fee.");
-  }
+  if (!Number.isFinite(deliveryFee) || deliveryFee < 0) throw new Error("Enter a valid delivery fee.");
   const supabase = createAdminSupabaseClient();
   const { data: order, error: loadError } = await supabase
     .from("orders")
@@ -498,3 +474,7 @@ export async function confirmAdminOrderDeliveryFee(orderId: string, deliveryFee:
   if (error) throw new Error(`Unable to confirm delivery fee: ${error.message}`);
   return mapOrderRow(data as unknown as OrderRow);
 }
+
+
+
+

@@ -1,4 +1,4 @@
-import { AdminProductsClient } from "@/app/admin/(protected)/products/products-client";
+﻿import { AdminProductsClient } from "@/app/admin/(protected)/products/products-client";
 import { getAdminProducts } from "@/src/lib/products";
 
 export const dynamic = "force-dynamic";

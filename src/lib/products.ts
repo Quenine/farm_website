@@ -1,11 +1,11 @@
-import "server-only";
+﻿import "server-only";
 
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { products as fallbackProducts } from "@/src/lib/business-data";
 import { hasAdminSupabaseConfig, hasPublicSupabaseConfig } from "@/src/lib/supabase/config";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
-import type { Product, ProductMedia } from "@/src/types";
+import type { DeliveryClass, Product, ProductMedia } from "@/src/types";
 
 type ProductMediaRow = {
   id: string;
@@ -29,6 +29,8 @@ type ProductRow = {
   unit: string;
   stock_quantity: number | string;
   minimum_order_quantity: number | string;
+  quantity_step: number | string | null;
+  quantity_input_type: "whole" | "decimal" | null;
   pricing_mode: "fixed" | "quote_required" | null;
   is_orderable_online: boolean | null;
   display_price_label: string | null;
@@ -37,6 +39,13 @@ type ProductRow = {
   is_featured: boolean;
   featured_sort_order: number | string | null;
   supports_wider_delivery: boolean | null;
+  delivery_class: DeliveryClass | null;
+  delivery_unit_value: number | string | null;
+  handling_fee: number | string | null;
+  supports_home_delivery: boolean | null;
+  supports_pickup_point: boolean | null;
+  supports_farm_pickup: boolean | null;
+  requires_delivery_confirmation: boolean | null;
   is_live_animal: boolean;
   is_processed: boolean;
   created_at: string;
@@ -54,11 +63,20 @@ export type AdminProductInput = {
   unit: string;
   stockCount: number;
   minimumOrder: number;
+  quantityStep: number;
+  quantityInputType: "whole" | "decimal";
   status: "active" | "inactive" | "coming_soon";
   availableFrom?: string | null;
   isFeatured: boolean;
   featuredSortOrder?: number;
   supportsWiderDelivery?: boolean;
+  deliveryClass?: DeliveryClass;
+  deliveryUnitValue?: number;
+  handlingFee?: number;
+  supportsHomeDelivery?: boolean;
+  supportsPickupPoint?: boolean;
+  supportsFarmPickup?: boolean;
+  requiresDeliveryConfirmation?: boolean;
   isLiveAnimal: boolean;
   isProcessed: boolean;
   pricingMode: "fixed" | "quote_required";
@@ -75,6 +93,8 @@ const productColumns = `
   unit,
   stock_quantity,
   minimum_order_quantity,
+  quantity_step,
+  quantity_input_type,
   pricing_mode,
   is_orderable_online,
   display_price_label,
@@ -83,6 +103,13 @@ const productColumns = `
   is_featured,
   featured_sort_order,
   supports_wider_delivery,
+  delivery_class,
+  delivery_unit_value,
+  handling_fee,
+  supports_home_delivery,
+  supports_pickup_point,
+  supports_farm_pickup,
+  requires_delivery_confirmation,
   is_live_animal,
   is_processed,
   created_at,
@@ -179,6 +206,8 @@ function primaryMedia(media: ProductMedia[]) {
 export function mapProductRow(row: ProductRow): Product {
   const stockCount = Number(row.stock_quantity);
   const minimumOrder = Number(row.minimum_order_quantity);
+  const quantityStep = Number(row.quantity_step ?? 1);
+  const quantityInputType = row.quantity_input_type === "decimal" ? "decimal" : "whole";
   const unitLabel = pluralizeUnit(row.unit, stockCount);
   const category = categoryName(row);
   const pricingMode = row.pricing_mode ?? "fixed";
@@ -210,6 +239,8 @@ export function mapProductRow(row: ProductRow): Product {
         : `${stockCount} ${unitLabel} available`,
     stockCount,
     minimumOrder,
+    quantityStep: Number.isFinite(quantityStep) && quantityStep > 0 ? quantityStep : 1,
+    quantityInputType,
     minimumUnit: pluralizeUnit(row.unit, minimumOrder),
     category,
     availability: statusLabels[row.status],
@@ -220,6 +251,13 @@ export function mapProductRow(row: ProductRow): Product {
     isFeatured: row.is_featured,
     featuredSortOrder: Number(row.featured_sort_order ?? 100),
     supportsWiderDelivery: row.supports_wider_delivery ?? category === "Crop Produce",
+    deliveryClass: row.delivery_class ?? "standard",
+    deliveryUnitValue: Number(row.delivery_unit_value ?? 1),
+    handlingFee: Number(row.handling_fee ?? 0),
+    supportsHomeDelivery: row.supports_home_delivery ?? true,
+    supportsPickupPoint: row.supports_pickup_point ?? true,
+    supportsFarmPickup: row.supports_farm_pickup ?? true,
+    requiresDeliveryConfirmation: row.requires_delivery_confirmation ?? false,
     isLiveAnimal: row.is_live_animal,
     isProcessed: row.is_processed,
     pricingMode,
@@ -334,12 +372,21 @@ export async function saveAdminProduct(input: AdminProductInput) {
     unit: input.unit.replaceAll("-", "_"),
     stock_quantity: input.stockCount,
     minimum_order_quantity: input.minimumOrder,
+    quantity_step: input.quantityStep,
+    quantity_input_type: input.quantityInputType,
     status: input.status,
     available_from:
       input.status === "coming_soon" ? input.availableFrom : null,
     is_featured: input.isFeatured,
     featured_sort_order: input.featuredSortOrder ?? 100,
     supports_wider_delivery: input.supportsWiderDelivery ?? false,
+    delivery_class: input.deliveryClass ?? "standard",
+    delivery_unit_value: input.deliveryUnitValue ?? 1,
+    handling_fee: input.handlingFee ?? 0,
+    supports_home_delivery: input.supportsHomeDelivery ?? true,
+    supports_pickup_point: input.supportsPickupPoint ?? true,
+    supports_farm_pickup: input.supportsFarmPickup ?? true,
+    requires_delivery_confirmation: input.requiresDeliveryConfirmation ?? false,
     is_live_animal: input.isLiveAnimal,
     is_processed: input.isProcessed,
     pricing_mode: input.pricingMode,

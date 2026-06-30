@@ -1,4 +1,4 @@
-import {
+﻿import {
   BarChart3,
   Boxes,
   CircleGauge,
@@ -313,7 +313,7 @@ export const adminNav: AdminNavItem[] = [
   { href: "/admin/products", label: "Products", icon: PackageCheck },
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes },
-  { href: "/admin/delivery-zones", label: "Delivery Zones", icon: MapPin },
+  { href: "/admin/delivery-rates", label: "Delivery Rates", icon: MapPin },
   { href: "/admin/diagnostics", label: "Diagnostics", icon: CircleGauge },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
@@ -323,3 +323,4 @@ export { formatNaira };
 export function getProduct(slug: string) {
   return products.find((product) => product.slug === slug);
 }
+

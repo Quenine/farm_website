@@ -1,7 +1,16 @@
-alter table public.products
+﻿alter table public.products
   add column if not exists pricing_mode text not null default 'fixed',
   add column if not exists is_orderable_online boolean not null default true,
+  add column if not exists quantity_step numeric(12, 2) not null default 1,
+  add column if not exists quantity_input_type text not null default 'whole',
   add column if not exists display_price_label text,
+  add column if not exists delivery_class text not null default 'standard',
+  add column if not exists delivery_unit_value numeric(12, 2) not null default 1,
+  add column if not exists handling_fee numeric(12, 2) not null default 0,
+  add column if not exists supports_home_delivery boolean not null default true,
+  add column if not exists supports_pickup_point boolean not null default true,
+  add column if not exists supports_farm_pickup boolean not null default true,
+  add column if not exists requires_delivery_confirmation boolean not null default false,
   add column if not exists featured_sort_order integer not null default 100,
   add column if not exists supports_wider_delivery boolean not null default false;
 
@@ -240,3 +249,41 @@ where slug in (
   'pepper-ata-rodo', 'carrots', 'cabbage', 'broccoli', 'avocado',
   'cucumber', 'shombo-pepper', 'cauliflower', 'basket-of-tomatoes'
 );
+
+update public.products
+set unit = product_defaults.unit,
+    minimum_order_quantity = product_defaults.minimum_order_quantity,
+    quantity_step = product_defaults.quantity_step,
+    quantity_input_type = product_defaults.quantity_input_type,
+    delivery_class = product_defaults.delivery_class,
+    delivery_unit_value = product_defaults.delivery_unit_value,
+    handling_fee = product_defaults.handling_fee,
+    supports_home_delivery = true,
+    supports_pickup_point = true,
+    supports_farm_pickup = true,
+    requires_delivery_confirmation = false
+from (
+  values
+    ('crate-of-eggs', 'crate', 5::numeric, 1::numeric, 'whole', 'fragile', 1::numeric, 500::numeric),
+    ('half-crate-of-eggs', 'half_crate', 5::numeric, 1::numeric, 'whole', 'fragile', 0.5::numeric, 300::numeric),
+    ('basket-of-tomatoes', 'basket', 0.5::numeric, 0.5::numeric, 'decimal', 'fragile_produce', 1::numeric, 1000::numeric),
+    ('onions', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'heavy_produce', 1::numeric, 0::numeric),
+    ('irish-potatoes', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'heavy_produce', 1.5::numeric, 0::numeric),
+    ('sweet-potatoes', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'heavy_produce', 1.5::numeric, 0::numeric),
+    ('bell-peppers', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'fragile_produce', 1::numeric, 700::numeric),
+    ('pepper-ata-rodo', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'perishable', 1::numeric, 500::numeric),
+    ('shombo-pepper', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'perishable', 1::numeric, 500::numeric),
+    ('carrots', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'perishable', 1::numeric, 300::numeric),
+    ('cabbage', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'perishable', 1::numeric, 300::numeric),
+    ('broccoli', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'perishable', 1::numeric, 500::numeric),
+    ('avocado', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'fragile_produce', 1::numeric, 700::numeric),
+    ('cucumber', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'fragile_produce', 1::numeric, 500::numeric),
+    ('cauliflower', 'bag', 0.5::numeric, 0.5::numeric, 'decimal', 'perishable', 1::numeric, 500::numeric),
+    ('6-week-table-size-broilers', 'kg', 5::numeric, 1::numeric, 'whole', 'fresh_food', 0.05::numeric, 300::numeric),
+    ('live-broiler-chicken', 'kg', 5::numeric, 1::numeric, 'whole', 'fresh_food', 0.05::numeric, 300::numeric),
+    ('processed-whole-chicken', 'kg', 5::numeric, 1::numeric, 'whole', 'fresh_food', 0.05::numeric, 200::numeric),
+    ('old-layers', 'bird', 10::numeric, 1::numeric, 'whole', 'live_animal', 1::numeric, 500::numeric),
+    ('manure', 'bag', 3::numeric, 1::numeric, 'whole', 'bulky_farm_input', 2.5::numeric, 1500::numeric)
+ ) as product_defaults(slug, unit, minimum_order_quantity, quantity_step, quantity_input_type, delivery_class, delivery_unit_value, handling_fee)
+where public.products.slug = product_defaults.slug;
+

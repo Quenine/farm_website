@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { CheckCircle2, ShieldCheck, Truck, type LucideIcon } from "lucide-react";
+import { HeroSlideshowPanel } from "@/src/components/home-hero-slideshow";
 import { PageShell, ProductCard, SectionHeader } from "@/src/components/ui";
 import { categoryRank, getPublicProducts } from "@/src/lib/products";
+import type { Product } from "@/src/types";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,40 @@ const trustFeatures: {
   },
 ];
 
+function heroSlideImages(featuredProducts: Product[], activeProducts: Product[]) {
+  const images: Array<{ url: string; alt: string }> = [];
+  const seen = new Set<string>();
+
+  const addImage = (product: Product, url?: string | null, alt?: string | null) => {
+    if (!url || seen.has(url) || images.length >= 5) return;
+    seen.add(url);
+    images.push({
+      url,
+      alt: alt || `${product.name} from Noble Farms`,
+    });
+  };
+
+  for (const product of featuredProducts) {
+    if (product.primaryMedia?.mediaType === "image") {
+      addImage(product, product.primaryMedia.url, product.primaryMedia.altText);
+    }
+  }
+
+  for (const product of featuredProducts) {
+    for (const media of product.media ?? []) {
+      if (media.mediaType === "image") addImage(product, media.url, media.altText);
+    }
+  }
+
+  for (const product of activeProducts) {
+    for (const media of product.media ?? []) {
+      if (media.mediaType === "image") addImage(product, media.url, media.altText);
+    }
+  }
+
+  return images;
+}
+
 export default async function Home() {
   const products = await getPublicProducts();
   const activeProducts = products.filter(
@@ -35,6 +71,7 @@ export default async function Home() {
   const featuredProducts = activeProducts.filter(
     (product) => product.isFeatured,
   );
+  const slideshowImages = heroSlideImages(featuredProducts, activeProducts);
   const homepageProducts = (
     featuredProducts.length > 0
       ? featuredProducts.sort(
@@ -82,38 +119,36 @@ export default async function Home() {
               </Link>
             </div>
           </div>
-          <div className="rounded-lg bg-green-950 p-6 text-white shadow-xl">
-            <div className="grid min-h-[360px] place-items-center rounded-lg bg-[linear-gradient(135deg,#fff7ed_0%,#dcfce7_45%,#fde68a_100%)] p-6 text-green-950">
-              <div className="w-full max-w-sm">
-                <div className="rounded-lg bg-white/85 p-5 shadow-sm">
-                  <p className="text-sm font-bold text-amber-700">
-                    Today at farm gate
-                  </p>
-                  <p className="mt-3 text-4xl font-bold">Egg supply</p>
-                  <p className="mt-2 text-sm text-stone-700">
-                    Crates and half-crates for homes, vendors, bakeries, and
-                    resellers.
+          <HeroSlideshowPanel images={slideshowImages}>
+            <div className="w-full max-w-sm">
+              <div className="rounded-lg bg-white/[0.88] p-5 shadow-sm ring-1 ring-white/60 backdrop-blur-md">
+                <p className="text-sm font-bold text-amber-700">
+                  Today at farm gate
+                </p>
+                <p className="mt-3 text-4xl font-bold">Egg supply</p>
+                <p className="mt-2 text-sm text-stone-700">
+                  Crates and half-crates for homes, vendors, bakeries, and
+                  resellers.
+                </p>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div className="rounded-lg bg-white/[0.84] p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
+                  <p className="text-2xl font-bold">Broilers</p>
+                  <p className="text-xs font-semibold text-stone-600">
+                    4-week and table-size broilers available for scheduled
+                    orders.
                   </p>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div className="rounded-lg bg-white/80 p-4">
-                    <p className="text-2xl font-bold">Broilers</p>
-                    <p className="text-xs font-semibold text-stone-600">
-                      4-week and table-size broilers available for scheduled
-                      orders.
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-white/80 p-4">
-                    <p className="text-2xl font-bold">Fresh crops</p>
-                    <p className="text-xs font-semibold text-stone-600">
-                      Tomatoes, peppers, potatoes, onions, carrots, cabbage,
-                      and other produce supplied by confirmed availability.
-                    </p>
-                  </div>
+                <div className="rounded-lg bg-white/[0.84] p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
+                  <p className="text-2xl font-bold">Fresh crops</p>
+                  <p className="text-xs font-semibold text-stone-600">
+                    Tomatoes, peppers, potatoes, onions, carrots, cabbage,
+                    and other produce supplied by confirmed availability.
+                  </p>
                 </div>
               </div>
             </div>
-          </div>
+          </HeroSlideshowPanel>
         </div>
       </section>
 

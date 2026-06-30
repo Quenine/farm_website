@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import {
   formatPaymentStatus,
 } from "@/src/lib/order-format";
 import { getOrderSuccess } from "@/src/lib/orders";
+import type { DeliveryMethod } from "@/src/types";
 
 export const dynamic = "force-dynamic";
 
@@ -34,20 +35,11 @@ export default async function OrderSuccessPage({
           <div className="text-center">
             <CheckCircle2 className="mx-auto text-green-700" size={56} />
             <h1 className="mt-5 text-4xl font-bold text-green-950">
-              {isPaid ? "Payment confirmed" : order.deliveryQuoteRequired ? "Order request created" : "Order created"}
+              {isPaid ? "Payment confirmed" : "Order created"}
             </h1>
             <p className="mt-4 text-stone-700">
-              {isPaid
-                ? "Your payment is confirmed and Noble Farms is processing your order."
-                : order.deliveryQuoteRequired
-                  ? "Your order request has been created. Noble Farms will confirm product availability and delivery cost before payment."
-                  : "Your order is pending payment. Complete payment to move it into processing."}
+              {isPaid ? "Your payment is confirmed and Noble Farms is processing your order." : "Your order is pending payment. Complete payment to move it into processing."}
             </p>
-            {payment === "delivery_quote_pending" && !isPaid ? (
-              <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm font-semibold text-green-900">
-                Your order request has been received. Noble Farms will confirm delivery cost and availability before payment.
-              </p>
-            ) : null}
             {payment === "initialization_failed" && !isPaid ? (
               <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-900">
                 {paymentMessage ||
@@ -101,13 +93,13 @@ export default async function OrderSuccessPage({
   );
 }
 
-function formatDeliveryMethod(method: "local_delivery" | "pickup" | "wider_delivery") {
+function formatDeliveryMethod(method: DeliveryMethod) {
   const labels = {
-    local_delivery: "Local Scheduled Delivery",
-    pickup: "Farm Pickup / Direct Arrangement",
-    wider_delivery: "Wider Produce Delivery",
+    home_delivery: "Home Delivery",
+    pickup_point: "Pickup Point Delivery",
+    farm_pickup: "Farm Pickup / Direct Arrangement",
   };
-  return labels[method];
+  return labels[method] ?? method;
 }
 
 function Summary({ label, value }: { label: string; value: string }) {
