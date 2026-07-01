@@ -283,6 +283,9 @@ create table if not exists public.orders (
   payment_status public.payment_status not null default 'pending',
   order_status public.order_status not null default 'pending_payment',
   paystack_reference text unique,
+  admin_email_notified_at timestamptz,
+  admin_whatsapp_notified_at timestamptz,
+  customer_email_notified_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint orders_total_check check (total_amount = subtotal + delivery_fee)
@@ -310,6 +313,16 @@ create table if not exists public.payments (
   status public.payment_status not null default 'pending',
   paid_at timestamptz,
   raw_response jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.order_status_notifications (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  status text not null,
+  channel text not null check (channel in ('customer_email', 'customer_whatsapp')),
+  recipient text not null,
+  sent_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
 
@@ -353,6 +366,14 @@ alter table public.payments
   add column if not exists raw_response jsonb,
   add column if not exists created_at timestamptz not null default now();
 
+alter table public.order_status_notifications
+  add column if not exists order_id uuid references public.orders(id) on delete cascade,
+  add column if not exists status text,
+  add column if not exists channel text,
+  add column if not exists recipient text,
+  add column if not exists sent_at timestamptz not null default now(),
+  add column if not exists created_at timestamptz not null default now();
+
 alter table public.inventory_movements
   add column if not exists product_id uuid references public.products(id) on delete cascade,
   add column if not exists order_id uuid references public.orders(id) on delete set null,
@@ -369,6 +390,9 @@ alter table public.orders
   add column if not exists payment_status public.payment_status not null default 'pending',
   add column if not exists order_status public.order_status not null default 'pending_payment',
   add column if not exists paystack_reference text,
+  add column if not exists admin_email_notified_at timestamptz,
+  add column if not exists admin_whatsapp_notified_at timestamptz,
+  add column if not exists customer_email_notified_at timestamptz,
   add column if not exists delivery_method text not null default 'home_delivery',
   add column if not exists delivery_state text,
   add column if not exists delivery_city text,
@@ -421,6 +445,28 @@ begin
       add constraint product_delivery_rates_unique
       unique (product_id, state, city, delivery_method);
   end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'order_status_notifications_unique'
+      and conrelid = 'public.order_status_notifications'::regclass
+  ) then
+    alter table public.order_status_notifications
+      add constraint order_status_notifications_unique
+      unique (order_id, status, channel, recipient);
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'order_status_notifications_channel_check'
+      and conrelid = 'public.order_status_notifications'::regclass
+  ) then
+    alter table public.order_status_notifications
+      add constraint order_status_notifications_channel_check
+      check (channel in ('customer_email', 'customer_whatsapp'));
+  end if;
 end $$;
 create index if not exists products_category_id_idx on public.products(category_id);
 create index if not exists products_status_idx on public.products(status);
@@ -446,6 +492,7 @@ create index if not exists orders_delivery_zone_id_idx on public.orders(delivery
 create index if not exists order_items_order_id_idx on public.order_items(order_id);
 create index if not exists order_items_product_id_idx on public.order_items(product_id);
 create index if not exists payments_order_id_idx on public.payments(order_id);
+create index if not exists order_status_notifications_order_idx on public.order_status_notifications(order_id, status);
 create index if not exists inventory_movements_product_created_idx
   on public.inventory_movements(product_id, created_at desc);
 create index if not exists inventory_movements_order_created_idx
@@ -532,6 +579,7 @@ alter table public.delivery_zones enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.payments enable row level security;
+alter table public.order_status_notifications enable row level security;
 alter table public.inventory_movements enable row level security;
 alter table public.app_settings enable row level security;
 

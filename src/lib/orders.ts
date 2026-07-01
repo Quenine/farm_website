@@ -1,7 +1,9 @@
-﻿import "server-only";
+import "server-only";
 
 import { randomBytes } from "node:crypto";
 import { calculateCheckoutDelivery } from "@/src/lib/product-delivery-rates";
+import { sendCustomerOrderStatusNotification } from "@/src/lib/notifications";
+import type { NotificationOrderRow } from "@/src/lib/notifications";
 import { isValidQuantityStep } from "@/src/lib/quantity";
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
@@ -435,6 +437,14 @@ export async function getAdminOrders() {
 export async function updateAdminOrderStatus(orderId: string, status: DatabaseOrderStatus) {
   await requireAdmin();
   const supabase = createAdminSupabaseClient();
+  const { data: existingOrder, error: existingError } = await supabase
+    .from("orders")
+    .select("order_status")
+    .eq("id", orderId)
+    .single();
+  if (existingError) throw new Error(`Unable to load order: ${existingError.message}`);
+
+  const previousStatus = (existingOrder as { order_status: DatabaseOrderStatus }).order_status;
   const { data, error } = await supabase
     .from("orders")
     .update({ order_status: status })
@@ -442,6 +452,22 @@ export async function updateAdminOrderStatus(orderId: string, status: DatabaseOr
     .select(orderColumns)
     .single();
   if (error) throw new Error(`Unable to update order: ${error.message}`);
+
+  if (previousStatus !== status) {
+    try {
+      await sendCustomerOrderStatusNotification(data as unknown as NotificationOrderRow, status);
+    } catch (notificationError) {
+      console.error("[Order Status Notification Failed]", {
+        orderId,
+        status,
+        reason:
+          notificationError instanceof Error
+            ? notificationError.message
+            : "Unknown notification error",
+      });
+    }
+  }
+
   return mapOrderRow(data as unknown as OrderRow);
 }
 
@@ -474,7 +500,3 @@ export async function confirmAdminOrderDeliveryFee(orderId: string, deliveryFee:
   if (error) throw new Error(`Unable to confirm delivery fee: ${error.message}`);
   return mapOrderRow(data as unknown as OrderRow);
 }
-
-
-
-

@@ -117,6 +117,9 @@ function TrackedOrder({ order }: { order: Order }) {
           Online delivery is not currently available for this location. Please contact Noble Farms to arrange this order.
         </div>
       ) : null}
+      <div className="rounded-lg border border-green-100 bg-white p-4 text-sm leading-6 text-stone-700 shadow-sm">
+        Need help with this order? Call or WhatsApp <a href="https://wa.me/2349035712314" className="font-bold text-green-800">+2349035712314</a> or email <a href="mailto:info@noblefarms.xyz" className="font-bold text-green-800">info@noblefarms.xyz</a>.
+      </div>
       <div>
         <h2 className="text-lg font-bold text-green-950">Order items</h2>
         <div className="mt-3 divide-y divide-stone-100 rounded-lg border border-stone-200">

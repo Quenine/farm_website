@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { randomBytes } from "node:crypto";
 import { requireAdmin } from "@/src/lib/admin-auth";
@@ -48,7 +48,7 @@ export async function testPaystackInitializationAction(): Promise<PaystackDiagno
     ? `${siteUrlValidation.siteUrl}/payment/callback`
     : "Unavailable";
 
-  console.log("[Paystack Diagnostic Init]", {
+  console.info("[Paystack Diagnostic Init]", {
     siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
     callbackUrl,
     hasSecretKey: keyDiagnostics.secretKey.configured,

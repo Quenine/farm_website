@@ -294,7 +294,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
           {fieldErrors.deliveryNote?.[0] ? <span className="text-xs text-red-700">{fieldErrors.deliveryNote[0]}</span> : null}
         </label>
         <button type="submit" disabled={isPending || !calculation.supported || !selectedDeliveryMethod} className="inline-flex h-12 items-center justify-center rounded-full bg-green-800 px-6 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">
-          {isPending ? "Starting payment..." : calculation.supported ? "Pay Now" : "Delivery unavailable"}
+          {isPending ? "Starting secure payment..." : calculation.supported ? "Pay securely" : "Delivery unavailable"}
         </button>
       </form>
       <aside className="grid h-fit gap-4">

@@ -8,6 +8,7 @@ import {
   verifyPaystackTransaction,
   type PaystackTransaction,
 } from "@/src/lib/paystack";
+import { sendPaidOrderNotifications } from "@/src/lib/notifications";
 import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 
@@ -131,7 +132,7 @@ export async function initializeOrderPayment(orderIdentifier: string) {
     ? `${siteUrlValidationForLog.siteUrl}/payment/callback`
     : null;
 
-  console.log("[Order Paystack Init]", {
+  console.info("[Order Paystack Init]", {
     orderReference,
     orderIdPresent: Boolean(order?.id),
     orderFound: Boolean(order),
@@ -214,7 +215,7 @@ export async function initializeOrderPayment(orderIdentifier: string) {
   const reference = paymentReference(order.order_reference);
   const callbackUrl = `${siteUrlValidation.siteUrl}/payment/callback`;
 
-  console.log("[Paystack Init]", {
+  console.info("[Paystack Init]", {
     orderReference: order.order_reference,
     siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
     callbackUrl,
@@ -255,7 +256,7 @@ export async function initializeOrderPayment(orderIdentifier: string) {
     throw error;
   }
 
-  console.log("[Order Paystack Init Success]", {
+  console.info("[Order Paystack Init Success]", {
     orderReference: order.order_reference,
     authorizationUrlPresent: Boolean(response?.data?.authorization_url),
     reference: response?.data?.reference,
@@ -393,6 +394,11 @@ export async function processVerifiedPaystackTransaction(
     needs_review?: boolean;
     already_processed?: boolean;
   };
+
+  if (!result.already_processed) {
+    await sendPaidOrderNotifications(order.id);
+  }
+
   return result.needs_review
     ? {
         orderId: order.id,

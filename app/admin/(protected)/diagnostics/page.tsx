@@ -12,6 +12,71 @@ function yesNo(value: boolean) {
   return value ? "Yes" : "No";
 }
 
+function notificationsAreEnabled() {
+  return process.env.NOTIFICATIONS_ENABLED?.trim().toLowerCase() === "true";
+}
+
+function selectedEmailProvider() {
+  const provider = process.env.EMAIL_PROVIDER?.trim();
+  if (provider) return provider;
+  return process.env.RESEND_API_KEY?.trim()
+    ? "resend (from RESEND_API_KEY)"
+    : "Not selected";
+}
+
+function gmailConfigured() {
+  const host = process.env.GMAIL_SMTP_HOST?.trim() || "smtp.gmail.com";
+  const port = Number(process.env.GMAIL_SMTP_PORT?.trim() || 465);
+  return Boolean(
+    host &&
+      Number.isInteger(port) &&
+      port > 0 &&
+      process.env.GMAIL_USER?.trim() &&
+      process.env.GMAIL_APP_PASSWORD?.trim() &&
+      process.env.FROM_EMAIL?.trim(),
+  );
+}
+
+function emailProviderConfigured() {
+  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
+  if (provider === "gmail") return gmailConfigured();
+  if (provider === "resend") {
+    return Boolean(process.env.RESEND_API_KEY?.trim() && process.env.FROM_EMAIL?.trim());
+  }
+  return Boolean(process.env.RESEND_API_KEY?.trim() && process.env.FROM_EMAIL?.trim());
+}
+
+function selectedWhatsAppProvider() {
+  return process.env.WHATSAPP_PROVIDER?.trim() || "Not selected";
+}
+
+function whatsAppProviderConfigured() {
+  const provider = process.env.WHATSAPP_PROVIDER?.trim().toLowerCase();
+  if (provider === "cloud") {
+    return Boolean(
+      process.env.WHATSAPP_CLOUD_API_TOKEN?.trim() &&
+        process.env.WHATSAPP_PHONE_NUMBER_ID?.trim(),
+    );
+  }
+  if (provider === "webhook") return Boolean(process.env.WHATSAPP_WEBHOOK_URL?.trim());
+  if (provider === "callmebot") return Boolean(process.env.CALLMEBOT_API_KEY?.trim());
+  return false;
+}
+
+function customerWhatsAppStatusNotificationsPossible() {
+  const provider = process.env.WHATSAPP_PROVIDER?.trim().toLowerCase();
+  if (!notificationsAreEnabled()) return false;
+  if (provider === "cloud") {
+    return Boolean(
+      process.env.WHATSAPP_CLOUD_API_TOKEN?.trim() &&
+        process.env.WHATSAPP_PHONE_NUMBER_ID?.trim() &&
+        process.env.WHATSAPP_CUSTOMER_STATUS_TEMPLATE_NAME?.trim(),
+    );
+  }
+  if (provider === "webhook") return Boolean(process.env.WHATSAPP_WEBHOOK_URL?.trim());
+  return false;
+}
+
 export default async function AdminDiagnosticsPage() {
   await connection();
 
@@ -108,6 +173,56 @@ export default async function AdminDiagnosticsPage() {
     {
       label: "ADMIN_EMAIL",
       value: configurationStatus(process.env.ADMIN_EMAIL),
+      isSecret: true,
+    },
+    {
+      label: "Notifications enabled",
+      value: yesNo(notificationsAreEnabled()),
+      isSecret: false,
+    },
+    {
+      label: "Email provider selected",
+      value: selectedEmailProvider(),
+      isSecret: false,
+    },
+    {
+      label: "Email provider configured",
+      value: yesNo(emailProviderConfigured()),
+      isSecret: true,
+    },
+    {
+      label: "Gmail configured",
+      value: yesNo(gmailConfigured()),
+      isSecret: true,
+    },
+    {
+      label: "Admin notification email configured",
+      value: yesNo(Boolean(process.env.ADMIN_NOTIFICATION_EMAIL?.trim())),
+      isSecret: true,
+    },
+    {
+      label: "Customer email status notifications possible",
+      value: yesNo(notificationsAreEnabled() && emailProviderConfigured()),
+      isSecret: true,
+    },
+    {
+      label: "WhatsApp provider selected",
+      value: selectedWhatsAppProvider(),
+      isSecret: false,
+    },
+    {
+      label: "WhatsApp provider configured",
+      value: yesNo(whatsAppProviderConfigured()),
+      isSecret: true,
+    },
+    {
+      label: "Admin WhatsApp recipient configured",
+      value: yesNo(Boolean(process.env.ADMIN_NOTIFICATION_WHATSAPP_TO?.trim())),
+      isSecret: true,
+    },
+    {
+      label: "Customer WhatsApp status notifications possible",
+      value: yesNo(customerWhatsAppStatusNotificationsPossible()),
       isSecret: true,
     },
   ];

@@ -115,7 +115,9 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
           "Order",
           "Customer",
           "Phone",
-          "Amount",
+          "Delivery",
+          "Delivery fee",
+          "Total",
           "Payment",
           "Order status",
           "Delivery date",
@@ -127,6 +129,8 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
           </span>,
           order.customerName,
           order.customerPhone,
+          `${formatDeliveryMethod(order.deliveryMethod)} · ${order.deliveryCity ?? ""}${order.deliveryState ? `, ${order.deliveryState}` : ""}`,
+          formatNaira(order.deliveryFee),
           formatNaira(order.totalAmount),
           <StatusBadge
             key="payment"
