@@ -1,3 +1,4 @@
+﻿import { siteConfig, siteContact } from "@/src/config/site";
 import type { Product } from "@/src/types";
 
 export function isProductOrderable(product: Product) {
@@ -26,7 +27,9 @@ export function productAvailabilityMessage(product: Product) {
 
 export function productRequestUrl(product: Product) {
   const message = encodeURIComponent(
-    `Hello Noble Farms, I would like to check availability for ${product.name}.`,
+    `Hello ${siteConfig.name}, I would like to check availability for ${product.name}.`,
   );
-  return `https://wa.me/2349035712314?text=${message}`;
+  return `${siteContact.whatsappHref}?text=${message}`;
 }
+
+

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Search } from "lucide-react";
+import { siteConfig, siteContact } from "@/src/config/site";
 import { trackOrderAction } from "@/app/track-order/actions";
 import { PayNowButton } from "@/src/components/payments/pay-now-button";
 import { formatNaira } from "@/src/lib/format";
@@ -96,7 +97,7 @@ function TrackedOrder({ order }: { order: Order }) {
       </div>
       {order.paymentStatus === "paid" ? (
         <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">
-          Payment confirmed. Your order is in the Noble Farms fulfilment queue.
+          Payment confirmed. Your order is in the fulfilment queue.
         </div>
       ) : (order.paymentStatus === "pending" || order.paymentStatus === "failed") &&
         (!order.deliveryQuoteRequired && order.deliveryFeeConfirmed) ? (
@@ -114,11 +115,11 @@ function TrackedOrder({ order }: { order: Order }) {
         </div>
       ) : order.deliveryQuoteRequired || !order.deliveryFeeConfirmed ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
-          Online delivery is not currently available for this location. Please contact Noble Farms to arrange this order.
+          Online delivery is not currently available for this location. Please contact {siteConfig.name} to arrange this order.
         </div>
       ) : null}
       <div className="rounded-lg border border-green-100 bg-white p-4 text-sm leading-6 text-stone-700 shadow-sm">
-        Need help with this order? Call or WhatsApp <a href="https://wa.me/2349035712314" className="font-bold text-green-800">+2349035712314</a> or email <a href="mailto:info@noblefarms.xyz" className="font-bold text-green-800">info@noblefarms.xyz</a>.
+        Need help with this order? Call or WhatsApp <a href={siteContact.whatsappHref} className="font-bold text-green-800">{siteConfig.phone}</a> or email <a href={siteContact.supportEmailHref} className="font-bold text-green-800">{siteConfig.supportEmail}</a>.
       </div>
       <div>
         <h2 className="text-lg font-bold text-green-950">Order items</h2>
@@ -187,3 +188,6 @@ function Detail({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+
+

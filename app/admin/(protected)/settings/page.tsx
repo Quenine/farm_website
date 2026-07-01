@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
+import { siteConfig } from "@/src/config/site";
 import { AdminHeader } from "@/src/components/admin";
 import { deliverySettings } from "@/src/lib/business-data";
 import type { DeliverySettings } from "@/src/types";
@@ -29,8 +30,8 @@ export default function AdminSettingsPage() {
       />
       <div className="grid gap-6 rounded-lg bg-white p-6 shadow-sm">
         <div className="grid gap-5 md:grid-cols-2">
-          <SettingInput label="Business name" value="Noble Farms" disabled />
-          <SettingInput label="Domain" value="noblefarms.xyz" disabled />
+          <SettingInput label="Business name" value={siteConfig.name} disabled />
+          <SettingInput label="Domain" value={siteConfig.domain} disabled />
           <SettingInput label="Delivery city" value="Ibadan" disabled />
           <SettingInput
             label="Fuel price per litre"
@@ -118,3 +119,5 @@ function SettingInput({
     </label>
   );
 }
+
+

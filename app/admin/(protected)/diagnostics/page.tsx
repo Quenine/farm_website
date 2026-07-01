@@ -1,5 +1,6 @@
-import { connection } from "next/server";
+﻿import { connection } from "next/server";
 import { AdminHeader } from "@/src/components/admin";
+import { siteConfig } from "@/src/config/site";
 import { getPaystackEnvironmentDiagnostics } from "@/src/lib/paystack";
 import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
 import { PaystackTestButton } from "./paystack-test-button";
@@ -88,6 +89,16 @@ export default async function AdminDiagnosticsPage() {
     : `Unavailable: ${siteUrlValidation.reason}`;
 
   const diagnostics = [
+    {
+      label: "Configured site name",
+      value: siteConfig.name,
+      isSecret: false,
+    },
+    {
+      label: "Configured site domain",
+      value: siteConfig.domain,
+      isSecret: false,
+    },
     {
       label: "NEXT_PUBLIC_SITE_URL",
       value: siteUrl || "Missing",
@@ -260,3 +271,5 @@ export default async function AdminDiagnosticsPage() {
     </>
   );
 }
+
+

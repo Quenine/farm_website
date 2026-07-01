@@ -1,6 +1,7 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { CheckCircle2, ShieldCheck, Truck, type LucideIcon } from "lucide-react";
 import { HeroSlideshowPanel } from "@/src/components/home-hero-slideshow";
+import { siteConfig } from "@/src/config/site";
 import { PageShell, ProductCard, SectionHeader } from "@/src/components/ui";
 import { categoryRank, getPublicProducts } from "@/src/lib/products";
 import type { Product } from "@/src/types";
@@ -14,7 +15,7 @@ const trustFeatures: {
 }[] = [
   {
     title: "Farm-direct supply",
-    body: "Order poultry, eggs, and fresh produce directly from Noble Farms with clear product information and reliable fulfilment.",
+    body: `Order poultry, eggs, and fresh produce directly from ${siteConfig.name} with clear product information and reliable fulfilment.`,
     Icon: CheckCircle2,
   },
   {
@@ -38,7 +39,7 @@ function heroSlideImages(featuredProducts: Product[], activeProducts: Product[])
     seen.add(url);
     images.push({
       url,
-      alt: alt || `${product.name} from Noble Farms`,
+      alt: alt || `${product.name} from ${siteConfig.name}`,
     });
   };
 
@@ -92,14 +93,14 @@ export default async function Home() {
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-20">
           <div className="flex flex-col justify-center">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-green-700">
-              Noble Farms
+              {siteConfig.name}
             </p>
             <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight text-green-950 sm:text-6xl">
               Fresh poultry, eggs, and crop produce supplied with care.
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-stone-700">
               Order eggs, broilers, fresh vegetables, tubers, tomatoes,
-              peppers, and selected farm inputs directly from Noble Farms. We
+              peppers, and selected farm inputs directly from {siteConfig.name}. We
               serve households, food vendors, restaurants, caterers, resellers,
               and bulk buyers with clear pricing, secure checkout, and reliable
               fulfilment.
@@ -169,7 +170,7 @@ export default async function Home() {
           <SectionHeader
             eyebrow="Shop"
             title="Popular Farm Produce"
-            body="Noble Farms supplies eggs, broilers, tomatoes, peppers, potatoes, onions, carrots, cabbage, and other fresh produce based on confirmed availability, quantity, and logistics."
+            body={`${siteConfig.name} supplies eggs, broilers, tomatoes, peppers, potatoes, onions, carrots, cabbage, and other fresh produce based on confirmed availability, quantity, and logistics.`}
           />
           <Link href="/shop" className="font-bold text-green-800 hover:text-green-950">
             View all products
@@ -183,7 +184,7 @@ export default async function Home() {
         <div className="mt-8 rounded-lg bg-green-50 p-5 text-green-950">
           <h2 className="text-lg font-bold">Fresh crop produce supply</h2>
           <p className="mt-2 text-sm font-semibold leading-6 text-green-900">
-            Noble Farms supplies eggs, broilers, tomatoes, peppers, potatoes,
+            {siteConfig.name} supplies eggs, broilers, tomatoes, peppers, potatoes,
             onions, carrots, cabbage, and other fresh produce based on confirmed
             availability, quantity, and logistics.
           </p>
@@ -192,3 +193,6 @@ export default async function Home() {
     </PageShell>
   );
 }
+
+
+

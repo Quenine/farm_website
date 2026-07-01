@@ -4,6 +4,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { siteConfig } from "@/src/config/site";
 import { z } from "zod";
 import { requireAdmin } from "@/src/lib/admin-auth";
 import {
@@ -249,7 +250,7 @@ export async function uploadProductMediaAction(
         media_type: parsedMediaType,
         url: publicUrlData.publicUrl,
         storage_path: storagePath,
-        alt_text: parsedMediaType === "image" ? "Noble Farms product photo" : null,
+        alt_text: parsedMediaType === "image" ? `${siteConfig.name} product photo` : null,
         caption: null,
         sort_order: nextSortOrder,
         is_primary: shouldBePrimary,
@@ -413,3 +414,5 @@ export async function deleteProductMediaAction(
     };
   }
 }
+
+

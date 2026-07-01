@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { siteConfig, siteContact } from "@/src/config/site";
 import { createOrderAction } from "@/app/checkout/actions";
 import { useCart } from "@/src/components/cart/cart-provider";
 import { CartSummary } from "@/src/components/cart/cart-summary";
@@ -17,7 +18,7 @@ import {
 import { getQuantityInputType, getQuantityStep } from "@/src/lib/quantity";
 import type { DeliveryMethod, Product, ProductDeliveryRate } from "@/src/types";
 
-const whatsappHref = "https://wa.me/2349035712314";
+const whatsappHref = siteContact.whatsappHref;
 
 const deliveryMethods: Array<{
   value: DeliveryMethod;
@@ -37,7 +38,7 @@ const deliveryMethods: Array<{
   {
     value: "farm_pickup",
     label: "Farm Pickup / Direct Arrangement",
-    description: "Pick up from Noble Farms or arrange fulfilment directly with our team.",
+    description: "Pick up from the farm or arrange fulfilment directly with our team.",
   },
 ];
 
@@ -141,7 +142,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
     : {
         supported: false,
         code: "UNSUPPORTED_PRODUCT_DELIVERY_METHOD",
-        reason: "Some items in your cart require direct fulfilment. Please contact Noble Farms to complete this order.",
+        reason: `Some items in your cart require direct fulfilment. Please contact {siteConfig.name} to complete this order.`,
         unsupportedProducts: deliveryProducts.map((product) => ({
           productId: product.productId,
           productName: product.name,
@@ -172,7 +173,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
     setFieldErrors({});
 
     if (!selectedDeliveryMethod) {
-      setMessage("Some items in your cart require direct fulfilment. Please contact Noble Farms to complete this order.");
+      setMessage(`Some items in your cart require direct fulfilment. Please contact {siteConfig.name} to complete this order.`);
       return;
     }
 
@@ -226,7 +227,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
   }
 
   if (rates.length === 0) {
-    return <EmptyState title="Delivery rates are temporarily unavailable" body="Online delivery is not currently available for this location. Please contact Noble Farms to arrange this order." actionHref="/contact" actionLabel="Contact us" />;
+    return <EmptyState title="Delivery rates are temporarily unavailable" body={`Online delivery is not currently available for this location. Please contact ${siteConfig.name} to arrange this order.`} actionHref="/contact" actionLabel="Contact us" />;
   }
 
   return (
@@ -235,7 +236,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
         {message ? (
           <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
             <p>{message}</p>
-            <p className="mt-2 text-xs font-medium text-red-800">Try another delivery method or contact Noble Farms for direct fulfilment.</p>
+            <p className="mt-2 text-xs font-medium text-red-800">Try another delivery method or contact {siteConfig.name} for direct fulfilment.</p>
           </div>
         ) : null}
         <section className="grid gap-3 rounded-lg bg-green-50 p-4">
@@ -274,9 +275,9 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
           ) : (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
               <p className="font-bold">Some items in your cart require direct fulfilment.</p>
-              <p>Please contact Noble Farms to complete this order.</p>
+              <p>Please contact {siteConfig.name} to complete this order.</p>
               <a href={whatsappHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-full bg-green-800 px-4 py-2 text-xs font-bold text-white">
-                Chat with Noble Farms on WhatsApp
+                Chat with {siteConfig.name} on WhatsApp
               </a>
             </div>
           )}
@@ -309,14 +310,14 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
           ) : (
             <div className="grid gap-3">
               <p>{calculation.reason}</p>
-              <p className="text-xs font-semibold text-stone-500">Try another delivery method or contact Noble Farms for direct fulfilment.</p>
+              <p className="text-xs font-semibold text-stone-500">Try another delivery method or contact {siteConfig.name} for direct fulfilment.</p>
               {debugLines.length > 0 ? (
                 <div className="rounded-lg bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">
                   {debugLines.map((line) => <p key={line}>{line}</p>)}
                 </div>
               ) : null}
               <a href={whatsappHref} target="_blank" rel="noreferrer" className="inline-flex w-fit rounded-full bg-green-800 px-4 py-2 text-xs font-bold text-white">
-                Chat with Noble Farms on WhatsApp
+                Chat with {siteConfig.name} on WhatsApp
               </a>
             </div>
           )}
@@ -356,6 +357,9 @@ function CheckoutInput({
     </label>
   );
 }
+
+
+
 
 
 

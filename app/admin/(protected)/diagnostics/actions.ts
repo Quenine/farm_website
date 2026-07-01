@@ -1,6 +1,7 @@
 ﻿"use server";
 
 import { randomBytes } from "node:crypto";
+import { siteConfig } from "@/src/config/site";
 import { requireAdmin } from "@/src/lib/admin-auth";
 import {
   getPaystackEnvironmentDiagnostics,
@@ -95,8 +96,8 @@ export async function testPaystackInitializationAction(): Promise<PaystackDiagno
     reference: `NF-DIAG-${Date.now()}-${randomBytes(3).toString("hex").toUpperCase()}`,
     callbackUrl,
     metadata: {
-      business: "noble_farms",
-      app: "noble_farms_web",
+      business: siteConfig.name,
+      app: siteConfig.domain,
       diagnostic: true,
     },
   });
@@ -121,3 +122,5 @@ export async function testPaystackInitializationAction(): Promise<PaystackDiagno
     callbackUrl,
   };
 }
+
+

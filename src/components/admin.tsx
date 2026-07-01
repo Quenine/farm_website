@@ -1,6 +1,7 @@
-/* eslint-disable @next/next/no-img-element */
+﻿/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { LogOut } from "lucide-react";
+import { siteConfig } from "@/src/config/site";
 import { logoutAdmin } from "@/app/admin/logout/actions";
 import { adminNav } from "@/src/lib/business-data";
 
@@ -12,13 +13,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="flex items-center gap-3 rounded-lg bg-white/10 p-4">
             <span className="grid size-11 place-items-center overflow-hidden rounded-full bg-white">
               <img
-                src="/images/noble-farms-logo.png"
-                alt="Noble Farms logo"
+                src={siteConfig.logoPath}
+                alt={`${siteConfig.name} logo`}
                 className="h-9 w-9 object-contain"
               />
             </span>
             <span>
-              <span className="text-lg font-bold">Noble Farms</span>
+              <span className="text-lg font-bold">{siteConfig.name}</span>
               <span className="mt-1 block text-xs text-green-100">Owner admin</span>
             </span>
           </Link>
@@ -164,3 +165,6 @@ export function AdminTable({
     </div>
   );
 }
+
+
+

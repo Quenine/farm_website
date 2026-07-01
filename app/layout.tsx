@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { CartProvider } from "@/src/components/cart/cart-provider";
+import { siteConfig } from "@/src/config/site";
 import { getSiteUrl } from "@/src/lib/site-url";
 import "./globals.css";
 
@@ -14,35 +15,34 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteName = process.env.NEXT_PUBLIC_SITE_NAME?.trim() || "Noble Farms";
-const description =
-  "Order eggs, broilers, fresh crop produce, tomatoes, peppers, potatoes, onions, and selected farm inputs from Noble Farms. Secure checkout, order tracking, and reliable fulfilment.";
+const siteName = siteConfig.name;
+const description = siteConfig.description;
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: "Noble Farms | Poultry, Eggs & Fresh Farm Produce",
+    default: `${siteConfig.name} | Poultry, Eggs & Fresh Farm Produce`,
     template: `%s | ${siteName}`,
   },
   description,
   icons: {
     icon: "/favicon.ico",
-    apple: "/images/noble-farms-logo.png",
+    apple: siteConfig.logoPath,
   },
   openGraph: {
     type: "website",
     locale: "en_NG",
     url: "/",
     siteName,
-    title: "Noble Farms | Poultry, Eggs & Fresh Farm Produce",
+    title: `${siteConfig.name} | Poultry, Eggs & Fresh Farm Produce`,
     description,
-    images: ["/images/noble-farms-logo.png"],
+    images: [siteConfig.logoPath],
   },
   twitter: {
     card: "summary",
     title: siteName,
     description,
-    images: ["/images/noble-farms-logo.png"],
+    images: [siteConfig.logoPath],
   },
 };
 
@@ -62,3 +62,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+

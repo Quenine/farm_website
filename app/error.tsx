@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { siteConfig } from "@/src/config/site";
 
 import Link from "next/link";
 
@@ -11,7 +13,7 @@ export default function ErrorPage({
   return (
     <main className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
       <p className="text-sm font-semibold uppercase tracking-[0.2em] text-green-700">
-        Noble Farms
+        {siteConfig.name}
       </p>
       <h1 className="mt-4 text-3xl font-bold text-slate-900">
         Something went wrong
@@ -38,3 +40,5 @@ export default function ErrorPage({
     </main>
   );
 }
+
+

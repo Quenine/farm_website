@@ -1,9 +1,10 @@
-/* eslint-disable @next/next/no-img-element */
+﻿/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { CartLink } from "@/src/components/cart/cart-link";
 import { AddToCartButton } from "@/src/components/product/add-to-cart-button";
 import { ProductMediaThumbnail } from "@/src/components/product/product-media";
+import { siteConfig, siteContact } from "@/src/config/site";
 import { formatNaira } from "@/src/lib/format";
 import {
   isProductOrderable,
@@ -19,17 +20,17 @@ export function PublicHeader() {
         <Link href="/" className="flex items-center gap-3">
           <span className="grid size-11 place-items-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-green-900/10">
             <img
-              src="/images/noble-farms-logo.png"
-              alt="Noble Farms logo"
+              src={siteConfig.logoPath}
+              alt={`${siteConfig.name} logo`}
               className="h-9 w-9 object-contain"
             />
           </span>
           <span>
             <span className="block text-lg font-bold leading-5 text-green-950">
-              Noble Farms
+              {siteConfig.name}
             </span>
             <span className="text-xs font-medium text-stone-600">
-              Poultry, eggs & fresh produce
+              {siteConfig.tagline}
             </span>
           </span>
         </Link>
@@ -61,15 +62,15 @@ export function Footer() {
           <div className="flex items-center gap-3">
             <span className="grid size-12 place-items-center overflow-hidden rounded-full bg-white">
               <img
-                src="/images/noble-farms-logo.png"
-                alt="Noble Farms logo"
+                src={siteConfig.logoPath}
+                alt={`${siteConfig.name} logo`}
                 className="h-10 w-10 object-contain"
               />
             </span>
-            <p className="text-lg font-bold">Noble Farms</p>
+            <p className="text-lg font-bold">{siteConfig.name}</p>
           </div>
           <p className="mt-3 text-sm leading-6 text-green-100">
-            Noble Farms supplies poultry, eggs, fresh crop produce, and selected
+            {siteConfig.name} supplies poultry, eggs, fresh crop produce, and selected
             farm inputs with clear pricing and reliable fulfilment.
           </p>
         </div>
@@ -85,10 +86,10 @@ export function Footer() {
         <div>
           <p className="font-semibold">Contact</p>
           <div className="mt-2 grid gap-1 text-sm leading-6 text-green-100">
-            <p>Noble Farms, Alapata, Ibadan, Nigeria</p>
-            <a href="tel:+2349035712314" className="hover:text-white">+2349035712314</a>
-            <a href="mailto:info@noblefarms.xyz" className="hover:text-white">info@noblefarms.xyz</a>
-            <a href="https://noblefarms.xyz" className="hover:text-white">noblefarms.xyz</a>
+            <p>{siteConfig.address}</p>
+            <a href={siteContact.phoneHref} className="hover:text-white">{siteConfig.phone}</a>
+            <a href={siteContact.emailHref} className="hover:text-white">{siteConfig.email}</a>
+            <a href={siteConfig.url} className="hover:text-white">{siteConfig.domain}</a>
           </div>
         </div>
       </div>
@@ -245,3 +246,7 @@ export function TextArea({
     </label>
   );
 }
+
+
+
+

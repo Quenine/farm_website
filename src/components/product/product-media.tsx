@@ -1,11 +1,12 @@
-/* eslint-disable @next/next/no-img-element */
+﻿/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState } from "react";
 import { Play, Sprout } from "lucide-react";
+import { siteConfig } from "@/src/config/site";
 import type { Product } from "@/src/types";
 
-function BrandedPlaceholder({ label = "Noble Farms supply" }: { label?: string }) {
+function BrandedPlaceholder({ label = `${siteConfig.name} supply` }: { label?: string }) {
   return (
     <div className="grid h-full min-h-[180px] w-full place-items-center bg-[linear-gradient(135deg,#ecfccb,#fef3c7)] text-green-950">
       <div className="text-center">
@@ -42,7 +43,7 @@ export function ProductMediaThumbnail({ product }: { product: Product }) {
   return (
     <img
       src={media.url}
-      alt={media.altText || `${product.name} from Noble Farms`}
+      alt={media.altText || `${product.name} from ${siteConfig.name}`}
       className="h-full min-h-[180px] w-full object-cover"
       onError={() => setFailed(true)}
     />
@@ -74,7 +75,7 @@ export function ProductMediaGallery({ product }: { product: Product }) {
             <img
               key={active.id}
               src={active.url}
-              alt={active.altText || `${product.name} from Noble Farms`}
+              alt={active.altText || `${product.name} from ${siteConfig.name}`}
               className="h-full w-full object-cover"
               onError={() => setFailedIds((current) => [...current, active.id])}
             />
@@ -102,7 +103,7 @@ export function ProductMediaGallery({ product }: { product: Product }) {
                     <Play size={18} fill="currentColor" />
                   </div>
                 ) : failedIds.includes(item.id) ? (
-                  <BrandedPlaceholder label="Noble Farms" />
+                  <BrandedPlaceholder label={siteConfig.name} />
                 ) : (
                   <img
                     src={item.url}
@@ -119,3 +120,5 @@ export function ProductMediaGallery({ product }: { product: Product }) {
     </div>
   );
 }
+
+

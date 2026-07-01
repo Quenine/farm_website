@@ -1,6 +1,7 @@
 ﻿"use server";
 
 import { z } from "zod";
+import { siteConfig } from "@/src/config/site";
 import { createOrder } from "@/src/lib/orders";
 import {
   initializeOrderPayment,
@@ -63,8 +64,8 @@ function checkoutErrorMessage(error: unknown) {
     "Your cart is empty.",
     "Duplicate cart items are not allowed.",
     "A product in your cart is no longer available.",
-    "Online delivery is not currently available for this location. Please contact Noble Farms to arrange this order.",
-    "Online delivery is not currently available for one or more items in your cart at this location. Please contact Noble Farms to arrange this order.",
+    `Online delivery is not currently available for this location. Please contact ${siteConfig.name} to arrange this order.`,
+    `Online delivery is not currently available for one or more items in your cart at this location. Please contact ${siteConfig.name} to arrange this order.`,
     "Selected delivery method is not available for one or more items in your cart.",
   ];
 
@@ -144,6 +145,8 @@ export async function createOrderAction(
     };
   }
 }
+
+
 
 
 

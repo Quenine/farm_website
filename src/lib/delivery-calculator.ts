@@ -1,4 +1,5 @@
-﻿import { isValidQuantityStep, type QuantityInputType } from "@/src/lib/quantity";
+﻿import { siteConfig } from "@/src/config/site";
+import { isValidQuantityStep, type QuantityInputType } from "@/src/lib/quantity";
 import type {
   DeliveryMethod,
   DeliveryRateBreakdown,
@@ -9,7 +10,7 @@ export const DELIVERY_METHOD_UNAVAILABLE_MESSAGE =
   "Selected delivery method is not available for one or more items in your cart.";
 
 export const PRODUCT_DELIVERY_UNAVAILABLE_MESSAGE =
-  "Online delivery is not currently available for one or more items in your cart at this location. Please contact Noble Farms to arrange this order.";
+  `Online delivery is not currently available for one or more items in your cart at this location. Please contact ${siteConfig.name} to arrange this order.`;
 
 export const PRODUCT_DELIVERY_UNAVAILABLE_SHORT_MESSAGE =
   "Online delivery is not currently available for one or more items in your cart at this location.";
@@ -321,3 +322,4 @@ export function calculateDeliveryFromProductRates({
     estimatedDeliveryTime,
   };
 }
+

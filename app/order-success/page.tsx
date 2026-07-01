@@ -3,6 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { PayNowButton } from "@/src/components/payments/pay-now-button";
+import { siteConfig } from "@/src/config/site";
 import { PageShell } from "@/src/components/ui";
 import { formatNaira } from "@/src/lib/format";
 import {
@@ -38,7 +39,7 @@ export default async function OrderSuccessPage({
               {isPaid ? "Payment confirmed" : "Order created"}
             </h1>
             <p className="mt-4 text-stone-700">
-              {isPaid ? "Your payment is confirmed and Noble Farms is processing your order." : "Your order is pending payment. Complete payment to move it into processing."}
+              {isPaid ? `Your payment is confirmed and ${siteConfig.name} is processing your order.` : "Your order is pending payment. Complete payment to move it into processing."}
             </p>
             {payment === "initialization_failed" && !isPaid ? (
               <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-900">
@@ -110,3 +111,5 @@ function Summary({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+

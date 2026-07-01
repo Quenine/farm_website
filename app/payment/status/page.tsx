@@ -1,4 +1,5 @@
-import Link from "next/link";
+﻿import Link from "next/link";
+import { siteConfig } from "@/src/config/site";
 import { AlertTriangle, CheckCircle2, Clock3 } from "lucide-react";
 import { z } from "zod";
 import { PayNowButton } from "@/src/components/payments/pay-now-button";
@@ -115,14 +116,14 @@ function getPresentation(result: string, orderIsPaid: boolean) {
           ? "Payment already confirmed"
           : "Payment successful",
       message:
-        "Your payment is confirmed and Noble Farms is processing your order.",
+        `Your payment is confirmed and ${siteConfig.name} is processing your order.`,
     };
   }
   if (result === "review") {
     return {
       icon: AlertTriangle,
       iconClass: "text-amber-700",
-      title: "Payment received — order under review",
+      title: "Payment received â€” order under review",
       message:
         "Payment was received, but stock changed before confirmation. The owner will review this order.",
     };
@@ -162,3 +163,5 @@ function Summary({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+

@@ -1,7 +1,8 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { Leaf } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AdminLoginForm } from "@/app/admin/login/login-form";
+import { siteConfig } from "@/src/config/site";
 import { getAuthenticatedAdmin } from "@/src/lib/admin-auth";
 
 export default async function AdminLoginPage({
@@ -22,7 +23,7 @@ export default async function AdminLoginPage({
           </span>
           <span>
             <span className="block text-xl font-bold text-green-950">
-              Noble Farms
+              {siteConfig.name}
             </span>
             <span className="text-xs font-semibold text-stone-500">
               Owner administration
@@ -31,12 +32,11 @@ export default async function AdminLoginPage({
         </Link>
         <h1 className="mt-7 text-3xl font-bold text-stone-950">Admin login</h1>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          Sign in with the owner account configured for this Noble Farms
-          project.
+          Sign in with the owner account configured for this {siteConfig.name} project.
         </p>
         {error === "unauthorized" ? (
           <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
-            That account is signed in but is not authorized as the Noble Farms
+            That account is signed in but is not authorized as the {siteConfig.name}
             owner.
           </div>
         ) : null}
@@ -57,3 +57,6 @@ export default async function AdminLoginPage({
     </main>
   );
 }
+
+
+

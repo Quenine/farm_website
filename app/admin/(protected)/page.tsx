@@ -1,4 +1,5 @@
-import Link from "next/link";
+﻿import Link from "next/link";
+import { siteConfig } from "@/src/config/site";
 import { AdminHeader, AdminTable, StatCard, StatusBadge } from "@/src/components/admin";
 import { formatNaira } from "@/src/lib/format";
 import {
@@ -95,7 +96,7 @@ export default async function AdminDashboardPage() {
     <>
       <AdminHeader
         title="Dashboard"
-        body="A live overview of Noble Farms orders, payments, fulfilment, stock, and delivery rate readiness."
+        body={`A live overview of ${siteConfig.name} orders, payments, fulfilment, stock, and delivery rate readiness.`}
       />
       <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
         Before accepting online orders for a destination, every orderable product must have an active Product Delivery Rate for that destination and delivery method, or an All-city fallback.
@@ -167,3 +168,5 @@ export default async function AdminDashboardPage() {
     </>
   );
 }
+
+

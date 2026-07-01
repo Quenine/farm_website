@@ -1,6 +1,7 @@
 ﻿import "server-only";
 
 import { randomBytes } from "node:crypto";
+import { siteConfig } from "@/src/config/site";
 import {
   initializePaystackTransaction,
   parsePaystackMetadata,
@@ -20,9 +21,9 @@ type ProcessResult = {
 };
 
 const PAYMENT_CONFIGURATION_MESSAGE =
-  "Payment is temporarily unavailable because checkout is not configured correctly. Please contact Noble Farms or try again.";
+  `Payment is temporarily unavailable because checkout is not configured correctly. Please contact ${siteConfig.name} or try again.`;
 const PAYMENT_CONTACT_MESSAGE =
-  "Payment could not be started. Please contact Noble Farms with your order reference.";
+  `Payment could not be started. Please contact ${siteConfig.name} with your order reference.`;
 const PAYMENT_REJECTED_MESSAGE = "Payment provider rejected the request.";
 
 export class PaymentInitializationError extends Error {
@@ -118,7 +119,7 @@ function assertStockAvailable(
     }
     if (Number(item.quantity) > Number(product.stock_quantity)) {
       throw new Error(
-        "An item in this order no longer has enough stock. Please contact Noble Farms.",
+        `An item in this order no longer has enough stock. Please contact ${siteConfig.name}.`,
       );
     }
   }
@@ -163,7 +164,7 @@ export async function initializeOrderPayment(orderIdentifier: string) {
     failOrderPaymentValidation(
       order.order_reference,
       "Delivery fee is not confirmed for this order.",
-      "Online delivery is not currently available for this location. Please contact Noble Farms to arrange this order.",
+      `Online delivery is not currently available for this location. Please contact ${siteConfig.name} to arrange this order.`,
     );
   }
   if (order.payment_status !== "pending" && order.payment_status !== "failed") {
@@ -235,8 +236,8 @@ export async function initializeOrderPayment(orderIdentifier: string) {
       callbackUrl,
       orderReference: order.order_reference,
       metadata: {
-        business: "noble_farms",
-        app: "noble_farms_web",
+        business: siteConfig.name,
+        app: siteConfig.domain,
         order_id: order.id,
         order_reference: order.order_reference,
       },
@@ -305,7 +306,7 @@ async function resolveOrderForTransaction(transaction: PaystackTransaction) {
 
   const orderId = payment?.order_id ?? metadata.order_id;
   if (!orderId || typeof orderId !== "string") {
-    throw new Error("Payment does not identify a Noble Farms order.");
+    throw new Error(`Payment does not identify a ${siteConfig.name} order.`);
   }
 
   const { data: order, error } = await supabase
@@ -431,3 +432,6 @@ export async function findOrderIdByPaymentReference(reference: string) {
     .maybeSingle();
   return data?.order_id ?? null;
 }
+
+
+

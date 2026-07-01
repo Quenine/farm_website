@@ -1,11 +1,11 @@
-const PRODUCTION_SITE_URL = "https://noblefarms.xyz";
+﻿import { siteConfig } from "@/src/config/site";
 
 export type SiteUrlValidation =
   | { valid: true; siteUrl: string }
   | { valid: false; reason: string };
 
 export function validateConfiguredSiteUrl(): SiteUrlValidation {
-  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const configuredUrl = siteConfig.url.trim();
 
   if (!configuredUrl) {
     return { valid: false, reason: "NEXT_PUBLIC_SITE_URL is missing." };
@@ -47,5 +47,6 @@ export function validateConfiguredSiteUrl(): SiteUrlValidation {
 
 export function getSiteUrl() {
   const validation = validateConfiguredSiteUrl();
-  return validation.valid ? validation.siteUrl : PRODUCTION_SITE_URL;
+  return validation.valid ? validation.siteUrl : siteConfig.url;
 }
+

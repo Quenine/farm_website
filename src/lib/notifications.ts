@@ -1,6 +1,7 @@
-import "server-only";
+﻿import "server-only";
 
 import nodemailer from "nodemailer";
+import { siteConfig } from "@/src/config/site";
 import { formatNaira } from "@/src/lib/format";
 import { getSiteUrl } from "@/src/lib/site-url";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
@@ -72,19 +73,19 @@ const customerStatusLabels: Record<CustomerStatusNotificationStatus, string> = {
 };
 
 const customerStatusSubjects: Record<CustomerStatusNotificationStatus, string> = {
-  packed: "Your Noble Farms order is packed",
-  out_for_delivery: "Your Noble Farms order is out for delivery",
-  delivered: "Your Noble Farms order has been delivered",
-  cancelled: "Your Noble Farms order was cancelled",
+  packed: `Your ${siteConfig.name} order is packed`,
+  out_for_delivery: `Your ${siteConfig.name} order is out for delivery`,
+  delivered: `Your ${siteConfig.name} order has been delivered`,
+  cancelled: `Your ${siteConfig.name} order was cancelled`,
 };
 
 const customerStatusMessages: Record<CustomerStatusNotificationStatus, string> = {
   packed: "Your order has been packed and is being prepared for dispatch.",
   out_for_delivery:
     "Your order is now out for delivery. Please keep your phone available in case our delivery team needs to reach you.",
-  delivered: "Your order has been marked as delivered. Thank you for ordering from Noble Farms.",
+  delivered: `Your order has been marked as delivered. Thank you for ordering from ${siteConfig.name}.`,
   cancelled:
-    "Your order has been cancelled. If you believe this is a mistake or need help, please contact Noble Farms.",
+    `Your order has been cancelled. If you believe this is a mistake or need help, please contact ${siteConfig.name}.`,
 };
 
 function notificationsEnabled() {
@@ -114,7 +115,7 @@ function itemSummary(order: NotificationOrderRow) {
 
 function adminOrderMessage(order: NotificationOrderRow) {
   const siteUrl = getSiteUrl();
-  return `New paid order on Noble Farms
+  return `New paid order on ${siteConfig.name}
 
 Order: ${order.order_reference}
 Customer: ${order.customer_name}
@@ -135,7 +136,7 @@ ${siteUrl}/admin/orders`;
 function adminEmailHtml(order: NotificationOrderRow) {
   const siteUrl = getSiteUrl();
   return `
-    <h2>New paid order on Noble Farms</h2>
+    <h2>New paid order on ${siteConfig.name}</h2>
     <p><strong>Order:</strong> ${order.order_reference}</p>
     <p><strong>Customer:</strong> ${order.customer_name}</p>
     <p><strong>Phone:</strong> ${order.customer_phone || "Not provided"}</p>
@@ -155,7 +156,7 @@ function adminEmailHtml(order: NotificationOrderRow) {
 function customerEmailHtml(order: NotificationOrderRow) {
   const siteUrl = getSiteUrl();
   return `
-    <h2>Your Noble Farms order is confirmed</h2>
+    <h2>Your ${siteConfig.name} order is confirmed</h2>
     <p>Thank you for your order. We have confirmed your payment.</p>
     <p><strong>Order:</strong> ${order.order_reference}</p>
     <p><strong>Payment status:</strong> Paid</p>
@@ -163,7 +164,7 @@ function customerEmailHtml(order: NotificationOrderRow) {
     <p><strong>Delivery method:</strong> ${deliveryMethodLabel(order.delivery_method)}</p>
     <p><strong>Delivery location:</strong> ${deliveryLocation(order)}</p>
     <p>You can track your order at <a href="${siteUrl}/track-order">${siteUrl}/track-order</a> using your order reference and phone number.</p>
-    <p>Need help? Call or WhatsApp +2349035712314, or email info@noblefarms.xyz.</p>
+    <p>Need help? Call or WhatsApp ${siteConfig.phone}, or email ${siteConfig.supportEmail}.</p>
   `;
 }
 
@@ -171,7 +172,7 @@ function customerStatusEmailHtml(order: NotificationOrderRow, status: CustomerSt
   const siteUrl = getSiteUrl();
   const statusLabel = customerStatusLabels[status];
   return `
-    <h2>Your Noble Farms order update</h2>
+    <h2>Your ${siteConfig.name} order update</h2>
     <p>Hello ${order.customer_name || "there"},</p>
     <p>${customerStatusMessages[status]}</p>
     <p><strong>Order:</strong> ${order.order_reference}</p>
@@ -180,13 +181,13 @@ function customerStatusEmailHtml(order: NotificationOrderRow, status: CustomerSt
     <p><strong>Delivery location:</strong> ${deliveryLocation(order)}</p>
     <p><strong>Order total:</strong> ${formatNaira(Number(order.total_amount))}</p>
     <p>You can track your order at <a href="${siteUrl}/track-order">${siteUrl}/track-order</a> using your order reference and phone number.</p>
-    <p>Need help? Call or WhatsApp +2349035712314, or email info@noblefarms.xyz.</p>
+    <p>Need help? Call or WhatsApp ${siteConfig.phone}, or email ${siteConfig.supportEmail}.</p>
   `;
 }
 
 function customerStatusMessage(order: NotificationOrderRow, status: CustomerStatusNotificationStatus) {
   const siteUrl = getSiteUrl();
-  return `Noble Farms order update
+  return `${siteConfig.name} order update
 
 Hello ${order.customer_name || "there"},
 ${customerStatusMessages[status]}
@@ -198,7 +199,7 @@ Location: ${deliveryLocation(order)}
 Total: ${formatNaira(Number(order.total_amount))}
 
 Track your order: ${siteUrl}/track-order
-Need help? Call or WhatsApp +2349035712314, or email info@noblefarms.xyz.`;
+Need help? Call or WhatsApp ${siteConfig.phone}, or email ${siteConfig.supportEmail}.`;
 }
 
 function selectedEmailProvider() {
@@ -378,7 +379,7 @@ export async function sendAdminEmailNotification(order: NotificationOrderRow) {
 
   const sent = await sendEmail({
     to,
-    subject: `New paid order \u2014 Noble Farms #${order.order_reference}`,
+    subject: `New paid order \u2014 ${siteConfig.name} #${order.order_reference}`,
     html: adminEmailHtml(order),
   });
 
@@ -390,7 +391,7 @@ export async function sendCustomerOrderConfirmation(order: NotificationOrderRow)
 
   const sent = await sendEmail({
     to: order.customer_email,
-    subject: "Your Noble Farms order is confirmed",
+    subject: `Your ${siteConfig.name} order is confirmed`,
     html: customerEmailHtml(order),
   });
 
@@ -751,3 +752,6 @@ export async function sendPaidOrderNotifications(orderId: string) {
 
   await sendAdminOrderNotifications(data as unknown as NotificationOrderRow);
 }
+
+
+

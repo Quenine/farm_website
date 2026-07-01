@@ -1,6 +1,8 @@
 ﻿/* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { siteConfig } from "@/src/config/site";
+
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import {
@@ -31,7 +33,7 @@ const emptyProduct: Product = {
   category: "Broilers",
   availability: "Available now",
   description: "",
-  badge: "Noble Farms supply",
+  badge: `${siteConfig.name} supply`,
   status: "active",
   availableFrom: null,
   isFeatured: false,
@@ -594,7 +596,7 @@ function ProductMediaManager({
       {message ? <p className="mt-3 text-sm font-semibold text-green-900">{message}</p> : null}
       {media.length === 0 ? (
         <div className="mt-4 rounded-lg bg-white p-4 text-sm text-stone-600">
-          No media yet. Product cards will use the branded Noble Farms fallback.
+          No media yet. Product cards will use the configured branded fallback.
         </div>
       ) : (
         <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -752,6 +754,8 @@ function ProductCheckbox({
     </label>
   );
 }
+
+
 
 
 
