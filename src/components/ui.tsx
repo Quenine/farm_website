@@ -1,4 +1,4 @@
-﻿/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { CartLink } from "@/src/components/cart/cart-link";
@@ -45,9 +45,6 @@ export function PublicHeader() {
           </Link>
           <Link href="/track-order" className="hover:text-green-800">
             Track order
-          </Link>
-          <Link href="/admin" className="hover:text-green-800">
-            Admin
           </Link>
         </nav>
         <CartLink />

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
@@ -189,7 +189,7 @@ export function AdminProductDeliveryRatesClient({
       />
       {message ? <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">{message}</div> : null}
       <div className="mb-4 rounded-lg border border-green-100 bg-white p-4 text-sm leading-6 text-stone-700 shadow-sm">
-        <p className="font-bold text-green-950">Every orderable product needs an active delivery rate for each location/method where it should be sold online.</p>
+        <p className="font-bold text-green-950">Before accepting online orders for a destination, every orderable product must have an active Product Delivery Rate for that destination and delivery method, or an All-city fallback.</p>
         <p>Rates are product-specific. If a cart has three products, all three products need a matching rate before checkout can calculate delivery.</p>
         {filters.productId !== "all" ? (
           <p className="mt-2 rounded-lg bg-amber-50 p-3 text-amber-900">You are viewing rates for this product only. Other cart items also need rates before checkout can calculate delivery.</p>
