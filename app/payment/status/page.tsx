@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { siteConfig } from "@/src/config/site";
 import { AlertTriangle, CheckCircle2, Clock3 } from "lucide-react";
 import { z } from "zod";
@@ -123,7 +123,7 @@ function getPresentation(result: string, orderIsPaid: boolean) {
     return {
       icon: AlertTriangle,
       iconClass: "text-amber-700",
-      title: "Payment received â€” order under review",
+      title: "Payment received - order under review",
       message:
         "Payment was received, but stock changed before confirmation. The owner will review this order.",
     };

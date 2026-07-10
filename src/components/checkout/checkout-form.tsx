@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,7 @@ import {
   type DeliveryCalculationResult,
   type DeliveryProductForCalculation,
 } from "@/src/lib/delivery-calculator";
+import { getNigeriaCities, mergeUniqueSorted, nigeriaStateNames } from "@/src/lib/nigeria-locations";
 import { getQuantityInputType, getQuantityStep } from "@/src/lib/quantity";
 import type { DeliveryMethod, Product, ProductDeliveryRate } from "@/src/types";
 
@@ -54,10 +55,6 @@ type FormFields = {
   deliveryNote: string;
 };
 
-function uniqueSorted(values: string[]) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
-}
-
 function deliveryProduct(product: Product, quantity: number): DeliveryProductForCalculation {
   return {
     productId: product.id ?? "",
@@ -88,8 +85,8 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
     customerPhone: "",
     deliveryMethod: "home_delivery",
     deliveryAddress: "",
-    deliveryState: rates[0]?.state ?? "",
-    deliveryCity: rates[0]?.city ?? "",
+    deliveryState: rates[0]?.state ?? nigeriaStateNames[0] ?? "",
+    deliveryCity: rates[0]?.city ?? getNigeriaCities(rates[0]?.state ?? nigeriaStateNames[0] ?? "")[0] ?? "",
     deliveryDate: "",
     deliveryNote: "",
   });
@@ -115,12 +112,13 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
     [cartProducts],
   );
 
-  const states = uniqueSorted(rates.filter((rate) => rate.isActive).map((rate) => rate.state));
-  const cities = uniqueSorted(
-    rates
+  const states = mergeUniqueSorted([...nigeriaStateNames, ...rates.filter((rate) => rate.isActive).map((rate) => rate.state)]);
+  const cities = mergeUniqueSorted([
+    ...getNigeriaCities(fields.deliveryState),
+    ...rates
       .filter((rate) => rate.isActive && rate.state === fields.deliveryState)
       .map((rate) => rate.city),
-  );
+  ]);
 
   const availableDeliveryMethods = deliveryMethods.filter((method) =>
     deliveryProducts.every((product) => supportsDeliveryMethod(product, method.value)),
@@ -142,7 +140,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
     : {
         supported: false,
         code: "UNSUPPORTED_PRODUCT_DELIVERY_METHOD",
-        reason: `Some items in your cart require direct fulfilment. Please contact {siteConfig.name} to complete this order.`,
+        reason: `Some items in your cart require direct fulfilment. Please contact ${siteConfig.name} to complete this order.`,
         unsupportedProducts: deliveryProducts.map((product) => ({
           productId: product.productId,
           productName: product.name,
@@ -158,7 +156,10 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
     setFields((current) => {
       const next = { ...current, [key]: value };
       if (key === "deliveryState") {
-        const nextCity = rates.find((rate) => rate.state === value)?.city ?? "";
+        const nextCity = mergeUniqueSorted([
+          ...getNigeriaCities(value),
+          ...rates.filter((rate) => rate.isActive && rate.state === value).map((rate) => rate.city),
+        ])[0] ?? "";
         next.deliveryCity = nextCity;
       }
       return next;
@@ -173,7 +174,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
     setFieldErrors({});
 
     if (!selectedDeliveryMethod) {
-      setMessage(`Some items in your cart require direct fulfilment. Please contact {siteConfig.name} to complete this order.`);
+      setMessage(`Some items in your cart require direct fulfilment. Please contact ${siteConfig.name} to complete this order.`);
       return;
     }
 
@@ -305,7 +306,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
           {calculation.supported ? (
             <p>
               Delivery fee: <strong>{new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(calculation.deliveryFee)}</strong>
-              {calculation.estimatedDeliveryTime ? <> · Estimated time: {calculation.estimatedDeliveryTime}</> : null}
+              {calculation.estimatedDeliveryTime ? <> Â· Estimated time: {calculation.estimatedDeliveryTime}</> : null}
             </p>
           ) : (
             <div className="grid gap-3">

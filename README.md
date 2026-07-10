@@ -64,13 +64,32 @@ variables:
 3. Run [database/seed.sql](database/seed.sql).
 4. For an existing Step 4 database, also run
    [database/step5-paystack.sql](database/step5-paystack.sql).
-5. In **Authentication → Providers**, enable email/password authentication.
-6. In **Authentication → Users**, create the owner user and confirm the email.
+5. In **Authentication -> Providers**, enable email/password authentication.
+6. In **Authentication -> Users**, create the owner user and confirm the email.
 7. Set `ADMIN_EMAIL` to that exact email address.
 
 The service-role key bypasses Row Level Security and must remain server-only.
 The storefront uses public read policies; privileged product, order, payment,
 inventory, and settings mutations run on the server.
+
+## Catalogue and universal delivery-rate updates
+
+For catalogue/rate alignment, run these scripts in each farm's own Supabase project:
+
+1. `database/seed-updated-crop-products.sql`
+2. `database/seed-legacy-product-prices.sql`
+3. `database/backfill-universal-rates-for-all-orderable-products.sql`
+4. `database/verify-all-products-orderable-and-rated.sql`
+
+Run them separately for Noble Farms and Shields Farms if both farms should stay aligned. The legacy price seed applies confirmed legacy prices, uses clear placeholder prices where prices were missing, and avoids â‚¦0 checkout products. Admin should review placeholder prices before public launch.
+
+The universal delivery backfill creates product delivery rates for every active fixed-price orderable product using city = `All` for every Nigerian state plus FCT:
+
+- Pickup Point Delivery: package size 1, first package N10,000, extra package N3,000.
+- Home Delivery: package size 1, first package N15,000, extra package N3,000.
+- Farm Pickup: package size 1, first package N0, extra package N0.
+
+Admin can later override a state-wide `All` rate with a specific city/product rate. Run `database/verify-all-products-orderable-and-rated.sql` to confirm every orderable product has 111 universal fallback rates.
 
 ## Payment and inventory behavior
 
@@ -118,11 +137,11 @@ npm run build
 ## Deploy to Vercel
 
 1. Push the repository to a Git provider supported by Vercel.
-2. In Vercel, select **Add New → Project** and import the repository.
+2. In Vercel, select **Add New -> Project** and import the repository.
 3. Keep the detected Next.js framework settings and default install/build
    commands.
 4. Add every variable from the production environment table under
-   **Project Settings → Environment Variables**.
+   **Project Settings -> Environment Variables**.
 5. Set `NEXT_PUBLIC_SITE_URL` to `https://noblefarms.xyz`.
 6. Deploy and confirm the build completes.
 
@@ -132,7 +151,7 @@ untrusted preview deployments.
 
 ## Connect noblefarms.xyz
 
-1. Open the Vercel project and go to **Settings → Domains**.
+1. Open the Vercel project and go to **Settings -> Domains**.
 2. Add `noblefarms.xyz`.
 3. Optionally add `www.noblefarms.xyz` and redirect it to the apex domain.
 4. At the domain registrar, add the DNS records Vercel displays.

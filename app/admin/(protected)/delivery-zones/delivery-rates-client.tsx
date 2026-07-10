@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useState, useTransition } from "react";
 import { saveDeliveryRateAction } from "@/app/admin/(protected)/delivery-zones/actions";
 import { AdminHeader, AdminTable, StatusBadge } from "@/src/components/admin";
 import { formatNaira } from "@/src/lib/format";
+import { getNigeriaCities, nigeriaStateNames } from "@/src/lib/nigeria-locations";
 import type { DeliveryMethod, DeliveryRate } from "@/src/types";
 
 const emptyRate: DeliveryRate = {
@@ -86,8 +87,21 @@ export function AdminDeliveryRatesClient({ initialRates }: { initialRates: Deliv
           <form onSubmit={saveRate} className="grid max-h-[90vh] w-full max-w-2xl gap-4 overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
             <h2 className="text-xl font-bold text-green-950">{form.id ? "Edit delivery rate" : "Create delivery rate"}</h2>
             <div className="grid gap-4 md:grid-cols-2">
-              <RateInput label="State" value={form.state} onChange={(state) => setForm({ ...form, state })} />
-              <RateInput label="City / Area" value={form.city} onChange={(city) => setForm({ ...form, city })} />
+              <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                State
+                <select value={form.state} onChange={(event) => {
+                  const state = event.target.value;
+                  setForm({ ...form, state, city: getNigeriaCities(state)[0] ?? "All" });
+                }} className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal">
+                  {nigeriaStateNames.map((state) => <option key={state} value={state}>{state}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                City / Area
+                <select value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal">
+                  {getNigeriaCities(form.state).map((city) => <option key={city} value={city}>{city}</option>)}
+                </select>
+              </label>
               <label className="grid gap-2 text-sm font-semibold text-stone-800">
                 Delivery method
                 <select value={form.deliveryMethod} onChange={(event) => setForm({ ...form, deliveryMethod: event.target.value as DeliveryMethod })} className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal">

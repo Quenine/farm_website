@@ -1,10 +1,11 @@
-﻿import "server-only";
+import "server-only";
 
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { products as fallbackProducts } from "@/src/lib/business-data";
 import { hasAdminSupabaseConfig, hasPublicSupabaseConfig } from "@/src/lib/supabase/config";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
+import { formatProductUnit, normalizeProductUnitKey, pluralizeProductUnit } from "@/src/lib/units";
 import type { DeliveryClass, Product, ProductMedia } from "@/src/types";
 
 type ProductMediaRow = {
@@ -159,19 +160,6 @@ function productBadge(row: ProductRow, category: string) {
   return "Farm-direct";
 }
 
-function pluralizeUnit(unit: string, quantity: number) {
-  const labels: Record<string, string> = {
-    kg: "kg",
-    crate: quantity === 1 ? "crate" : "crates",
-    half_crate: quantity === 1 ? "half-crate" : "half-crates",
-    bird: quantity === 1 ? "bird" : "birds",
-    bag: quantity === 1 ? "bag" : "bags",
-    basket: quantity === 1 ? "basket" : "baskets",
-    unit: quantity === 1 ? "unit" : "units",
-  };
-  return labels[unit] ?? unit.replaceAll("_", " ");
-}
-
 export function mapProductMedia(row: ProductMediaRow): ProductMedia {
   return {
     id: row.id,
@@ -208,7 +196,7 @@ export function mapProductRow(row: ProductRow): Product {
   const minimumOrder = Number(row.minimum_order_quantity);
   const quantityStep = Number(row.quantity_step ?? 1);
   const quantityInputType = row.quantity_input_type === "decimal" ? "decimal" : "whole";
-  const unitLabel = pluralizeUnit(row.unit, stockCount);
+  const unitLabel = pluralizeProductUnit(row.unit, stockCount);
   const category = categoryName(row);
   const pricingMode = row.pricing_mode ?? "fixed";
   const isOrderableOnline = row.is_orderable_online ?? true;
@@ -232,7 +220,7 @@ export function mapProductRow(row: ProductRow): Product {
     slug: row.slug,
     name: row.name,
     price: Number(row.price),
-    unit: row.unit.replaceAll("_", "-"),
+    unit: formatProductUnit(row.unit),
     stock:
       pricingMode === "quote_required"
         ? "Availability depends on quantity, season, and logistics"
@@ -241,7 +229,7 @@ export function mapProductRow(row: ProductRow): Product {
     minimumOrder,
     quantityStep: Number.isFinite(quantityStep) && quantityStep > 0 ? quantityStep : 1,
     quantityInputType,
-    minimumUnit: pluralizeUnit(row.unit, minimumOrder),
+    minimumUnit: pluralizeProductUnit(row.unit, minimumOrder),
     category,
     availability: statusLabels[row.status],
     description: row.description ?? "",
@@ -369,7 +357,7 @@ export async function saveAdminProduct(input: AdminProductInput) {
     description: input.description,
     category_id: categoryId,
     price: input.price,
-    unit: input.unit.replaceAll("-", "_"),
+    unit: normalizeProductUnitKey(input.unit),
     stock_quantity: input.stockCount,
     minimum_order_quantity: input.minimumOrder,
     quantity_step: input.quantityStep,

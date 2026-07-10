@@ -37,7 +37,12 @@ Use this checklist after creating the Shields Farms deployment and before accept
 - [ ] `database/schema.sql` has been run.
 - [ ] `database/step-notifications.sql` has been run if it is still separate.
 - [ ] `database/seed-full-catalogue.sql` has been run.
-- [ ] `database/seed-product-delivery-rates.sql` has been run.
+- [ ] `database/seed-updated-crop-products.sql` has been run.
+- [ ] `database/seed-legacy-product-prices.sql` has been run.
+- [ ] `database/backfill-universal-rates-for-all-orderable-products.sql` has been run.
+- [ ] `database/verify-product-and-rate-update.sql` shows the crop products are complete.
+- [ ] `database/verify-all-products-orderable-and-rated.sql` shows every product is orderable, no product has a zero price, and every orderable product is rated.
+- [ ] `database/verify-universal-delivery-rates.sql` shows all 37 state-wide fallback rates are complete and correctly priced.
 - [ ] Products, prices, stock defaults, and delivery rates match Noble Farms as intended.
 - [ ] `database/verify-new-brand-reference-data.sql` shows reference data exists.
 - [ ] Transactional tables are empty before launch.
@@ -47,12 +52,19 @@ Use this checklist after creating the Shields Farms deployment and before accept
 - [ ] Product media has been uploaded through admin or copied into the Shields Farms Supabase Storage project.
 - [ ] Product media records point to Shields Farms-owned storage paths or URLs.
 - [ ] Product detail pages show images correctly.
+- [ ] Stock has been reviewed after seeding.
+- [ ] Placeholder prices have been reviewed in admin.
+- [ ] Featured products have been reviewed after seeding.
 
 The product catalogue and delivery rates can be seeded, but product image files in Supabase Storage may not automatically copy to the new Shields Supabase project. If product images do not appear, upload them again through Shields admin or copy the `product-media` bucket manually.
 
 ## Delivery Rates
 
 - [ ] Product delivery rates match Noble Farms as intended.
+- [ ] Universal `All` city rates exist for Pickup Point Delivery, Home Delivery, and Farm Pickup across all Nigerian states plus FCT.
+- [ ] Pickup Point uses package size 1, first package N10,000, extra package N3,000.
+- [ ] Home Delivery uses package size 1, first package N15,000, extra package N3,000.
+- [ ] Farm Pickup uses package size 1, first package N0, extra package N0.
 - [ ] Product delivery rates exist for every launch destination and delivery method.
 - [ ] All-city fallback rates exist where intended.
 - [ ] The admin coverage checker passes for launch locations.

@@ -1,8 +1,11 @@
-﻿import "server-only";
+import "server-only";
 
 import { requireAdmin } from "@/src/lib/admin-auth";
 import {
   calculateDeliveryFromProductRates,
+  deliveryDebugLines,
+  normalizeDeliveryLocation,
+  type DeliveryCalculationResult,
   type DeliveryProductForCalculation,
 } from "@/src/lib/delivery-calculator";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
@@ -23,6 +26,8 @@ export type ProductDeliveryRateRow = {
   created_at?: string;
   products?: { name: string; slug: string } | { name: string; slug: string }[] | null;
 };
+
+const PRODUCT_DELIVERY_RATE_PAGE_SIZE = 1000;
 
 const productDeliveryRateColumns = `
   id,
@@ -63,37 +68,81 @@ export function mapProductDeliveryRateRow(row: ProductDeliveryRateRow): ProductD
   };
 }
 
-export async function getActiveProductDeliveryRates(productIds?: string[]) {
-  const supabase = createAdminSupabaseClient();
-  let query = supabase
-    .from("product_delivery_rates")
-    .select(productDeliveryRateColumns)
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true })
-    .order("state", { ascending: true })
-    .order("city", { ascending: true });
+type ProductDeliveryRateFetchOptions = {
+  activeOnly?: boolean;
+  productIds?: string[];
+  deliveryMethod?: DeliveryMethod;
+};
 
-  if (productIds && productIds.length > 0) {
-    query = query.in("product_id", productIds);
+async function fetchProductDeliveryRatePages(options: ProductDeliveryRateFetchOptions = {}) {
+  const supabase = createAdminSupabaseClient();
+  const rows: ProductDeliveryRateRow[] = [];
+  let from = 0;
+
+  while (true) {
+    let query = supabase
+      .from("product_delivery_rates")
+      .select(productDeliveryRateColumns)
+      .order("state", { ascending: true })
+      .order("city", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .order("delivery_method", { ascending: true })
+      .range(from, from + PRODUCT_DELIVERY_RATE_PAGE_SIZE - 1);
+
+    if (options.activeOnly) query = query.eq("is_active", true);
+    if (options.deliveryMethod) query = query.eq("delivery_method", options.deliveryMethod);
+    if (options.productIds && options.productIds.length > 0) {
+      query = query.in("product_id", [...new Set(options.productIds)]);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Unable to load product delivery rates: ${error.message}`);
+
+    const page = (data ?? []) as unknown as ProductDeliveryRateRow[];
+    rows.push(...page);
+    if (page.length < PRODUCT_DELIVERY_RATE_PAGE_SIZE) break;
+    from += PRODUCT_DELIVERY_RATE_PAGE_SIZE;
   }
 
-  const { data, error } = await query;
-  if (error) throw new Error(`Unable to load product delivery rates: ${error.message}`);
-  return ((data ?? []) as unknown as ProductDeliveryRateRow[]).map(mapProductDeliveryRateRow);
+  return rows.map(mapProductDeliveryRateRow);
+}
+
+export async function getActiveProductDeliveryRates(productIds?: string[]) {
+  return fetchProductDeliveryRatePages({ activeOnly: true, productIds });
 }
 
 export async function getAdminProductDeliveryRates() {
   await requireAdmin();
-  const supabase = createAdminSupabaseClient();
-  const { data, error } = await supabase
-    .from("product_delivery_rates")
-    .select(productDeliveryRateColumns)
-    .order("sort_order", { ascending: true })
-    .order("state", { ascending: true })
-    .order("city", { ascending: true });
+  return fetchProductDeliveryRatePages();
+}
 
-  if (error) throw new Error(`Unable to load product delivery rates: ${error.message}`);
-  return ((data ?? []) as unknown as ProductDeliveryRateRow[]).map(mapProductDeliveryRateRow);
+function targetCheckoutRates({
+  rates,
+  state,
+  city,
+}: {
+  rates: ProductDeliveryRate[];
+  state: string;
+  city: string;
+}) {
+  const normalizedState = normalizeDeliveryLocation(state);
+  const normalizedCity = normalizeDeliveryLocation(city);
+
+  return rates.filter((rate) => {
+    if (!rate.isActive) return false;
+    if (normalizeDeliveryLocation(rate.state) !== normalizedState) return false;
+    const rateCity = normalizeDeliveryLocation(rate.city);
+    return rateCity === normalizedCity || rateCity === "all";
+  });
+}
+
+function logDeliveryDiagnostics(result: DeliveryCalculationResult, rates: ProductDeliveryRate[]) {
+  if (process.env.NODE_ENV === "production" || result.supported) return;
+
+  console.info("[Delivery Lookup Diagnostics]", {
+    debug: deliveryDebugLines(result),
+    candidateRatesLoaded: rates.length,
+  });
 }
 
 export async function calculateCheckoutDelivery(input: {
@@ -102,10 +151,20 @@ export async function calculateCheckoutDelivery(input: {
   city: string;
   deliveryMethod: DeliveryMethod;
 }) {
-  const rates = await getActiveProductDeliveryRates(
-    input.products.map((product) => product.productId),
-  );
-  return calculateDeliveryFromProductRates({ rates, ...input });
+  const productIds = input.products.map((product) => product.productId);
+  const candidateRates = await fetchProductDeliveryRatePages({
+    activeOnly: true,
+    productIds,
+    deliveryMethod: input.deliveryMethod,
+  });
+  const rates = targetCheckoutRates({
+    rates: candidateRates,
+    state: input.state,
+    city: input.city,
+  });
+  const result = calculateDeliveryFromProductRates({ rates, ...input });
+  logDeliveryDiagnostics(result, rates);
+  return result;
 }
 
 export async function saveAdminProductDeliveryRate(input: ProductDeliveryRate) {

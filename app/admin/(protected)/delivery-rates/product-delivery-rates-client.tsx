@@ -12,10 +12,8 @@ import {
   type MatchingRateSource,
 } from "@/src/lib/delivery-calculator";
 import { formatNaira } from "@/src/lib/format";
+import { getNigeriaCities, mergeUniqueSorted, nigeriaStateNames } from "@/src/lib/nigeria-locations";
 import type { DeliveryMethod, Product, ProductDeliveryRate } from "@/src/types";
-
-const commonStates = ["Oyo", "Lagos", "FCT", "Plateau"];
-const commonCities = ["Ibadan", "Lagos Mainland", "Lagos Island", "Abuja", "Jos", "All"];
 
 const emptyRate = (product?: Product): ProductDeliveryRate => ({
   productId: product?.id ?? "",
@@ -85,8 +83,12 @@ export function AdminProductDeliveryRatesClient({
     () => new Map(selectableProducts.map((product) => [product.id, product])),
     [selectableProducts],
   );
-  const states = uniqueSorted([...rates.map((rate) => rate.state), ...commonStates]);
-  const cities = uniqueSorted([...rates.map((rate) => rate.city), ...commonCities]);
+  const states = mergeUniqueSorted([...nigeriaStateNames, ...rates.map((rate) => rate.state)]);
+  const filterCities = filters.state === "all"
+    ? mergeUniqueSorted([...nigeriaLocationsCityNames(), ...rates.map((rate) => rate.city)])
+    : mergeUniqueSorted([...getNigeriaCities(filters.state), ...rates.filter((rate) => rate.state === filters.state).map((rate) => rate.city)]);
+  const coverageCities = mergeUniqueSorted([...getNigeriaCities(coverageFilter.state), ...rates.filter((rate) => rate.state === coverageFilter.state).map((rate) => rate.city)]);
+  const formCities = mergeUniqueSorted([...getNigeriaCities(form.state), ...rates.filter((rate) => rate.state === form.state).map((rate) => rate.city)]);
 
   const filteredRates = rates.filter((rate) => {
     if (filters.productId !== "all" && rate.productId !== filters.productId) return false;
@@ -200,13 +202,13 @@ export function AdminProductDeliveryRatesClient({
           <option value="all">All products</option>
           {selectableProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
         </FilterSelect>
-        <FilterSelect label="State" value={filters.state} onChange={(state) => setFilters({ ...filters, state })}>
+        <FilterSelect label="State" value={filters.state} onChange={(state) => setFilters({ ...filters, state, city: "all" })}>
           <option value="all">All states</option>
           {states.map((state) => <option key={state} value={state}>{state}</option>)}
         </FilterSelect>
         <FilterSelect label="City" value={filters.city} onChange={(city) => setFilters({ ...filters, city })}>
           <option value="all">All cities</option>
-          {cities.map((city) => <option key={city} value={city}>{city}</option>)}
+          {filterCities.map((city) => <option key={city} value={city}>{city}</option>)}
         </FilterSelect>
         <FilterSelect label="Method" value={filters.deliveryMethod} onChange={(deliveryMethod) => setFilters({ ...filters, deliveryMethod: deliveryMethod as FilterState["deliveryMethod"] })}>
           <option value="all">All methods</option>
@@ -219,15 +221,15 @@ export function AdminProductDeliveryRatesClient({
             Add Rate
           </button>
           {selectedProduct ? (
-            <button type="button" onClick={() => openCreate({ productId: selectedProduct.id, state: "Lagos", city: "Lagos Mainland", deliveryMethod: "home_delivery" })} className="h-11 rounded-full border border-green-800 px-4 text-xs font-bold text-green-950">
-              Create Lagos Mainland
+            <button type="button" onClick={() => openCreate({ productId: selectedProduct.id, state: "Lagos", city: "All", deliveryMethod: "home_delivery" })} className="h-11 rounded-full border border-green-800 px-4 text-xs font-bold text-green-950">
+              Create Lagos fallback
             </button>
           ) : null}
         </div>
       </div>
       {selectedProductHasCommonDestinationWarning ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
-          {selectedProduct?.name} has no active Lagos Mainland/Home Delivery rate or Lagos/All fallback yet.
+          {selectedProduct?.name} has no active Lagos/Home Delivery All-city fallback yet.
         </div>
       ) : null}
       <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
@@ -239,7 +241,7 @@ export function AdminProductDeliveryRatesClient({
       <CoverageChecker
         rows={coverageRows}
         states={states}
-        cities={cities}
+        cities={coverageCities}
         filter={coverageFilter}
         onFilterChange={setCoverageFilter}
         onAddRate={(product) => openCreate({
@@ -284,8 +286,22 @@ export function AdminProductDeliveryRatesClient({
                   {selectableProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
                 </select>
               </label>
-              <RateInput label="State" value={form.state} onChange={(state) => setForm({ ...form, state })} />
-              <RateInput label="City / Area" value={form.city} onChange={(city) => setForm({ ...form, city })} />
+              <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                State
+                <select value={form.state} onChange={(event) => {
+                  const state = event.target.value;
+                  const city = mergeUniqueSorted([...getNigeriaCities(state), ...rates.filter((rate) => rate.state === state).map((rate) => rate.city)])[0] ?? "All";
+                  setForm({ ...form, state, city });
+                }} className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal">
+                  {states.map((state) => <option key={state} value={state}>{state}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                City / Area
+                <select value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal">
+                  {formCities.map((city) => <option key={city} value={city}>{city}</option>)}
+                </select>
+              </label>
               <label className="grid gap-2 text-sm font-semibold text-stone-800">
                 Delivery method
                 <select value={form.deliveryMethod} onChange={(event) => setForm({ ...form, deliveryMethod: event.target.value as DeliveryMethod })} className="h-11 rounded-lg border border-stone-200 bg-white px-4 font-normal">
@@ -346,7 +362,7 @@ function CoverageChecker({
           <p className="mt-1 text-sm leading-6 text-stone-600">Select a destination and method to see which orderable products are ready for checkout.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <FilterSelect label="State" value={filter.state} onChange={(state) => onFilterChange({ ...filter, state })}>
+          <FilterSelect label="State" value={filter.state} onChange={(state) => onFilterChange({ ...filter, state, city: getNigeriaCities(state)[0] ?? "All" })}>
             {states.map((state) => <option key={state} value={state}>{state}</option>)}
           </FilterSelect>
           <FilterSelect label="City" value={filter.city} onChange={(city) => onFilterChange({ ...filter, city })}>
@@ -420,8 +436,8 @@ function toDeliveryProduct(product: ProductWithId): DeliveryProductForCalculatio
   };
 }
 
-function uniqueSorted(values: string[]) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+function nigeriaLocationsCityNames() {
+  return nigeriaStateNames.flatMap((state) => getNigeriaCities(state));
 }
 
 function sourceToLabel(source: MatchingRateSource) {

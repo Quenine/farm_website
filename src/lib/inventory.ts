@@ -1,7 +1,8 @@
-﻿import "server-only";
+import "server-only";
 
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { formatProductUnit, pluralizeProductUnit } from "@/src/lib/units";
 import type { InventoryMovement, Product } from "@/src/types";
 
 type ProductInventoryRow = {
@@ -36,12 +37,6 @@ type MovementRow = {
 
 function first<T>(value: T | T[] | null) {
   return Array.isArray(value) ? value[0] ?? null : value;
-}
-
-function unitLabel(unit: string, quantity: number) {
-  if (unit === "kg") return "kg";
-  const label = unit.replaceAll("_", "-");
-  return quantity === 1 ? label : `${label}s`;
 }
 
 export async function getAdminInventory() {
@@ -88,11 +83,11 @@ export async function getAdminInventory() {
       slug: row.slug,
       name: row.name,
       price: Number(row.price),
-      unit: row.unit.replaceAll("_", "-"),
-      stock: `${stockCount} ${unitLabel(row.unit, stockCount)} available`,
+      unit: formatProductUnit(row.unit),
+      stock: `${stockCount} ${pluralizeProductUnit(row.unit, stockCount)} available`,
       stockCount,
       minimumOrder,
-      minimumUnit: unitLabel(row.unit, minimumOrder),
+      minimumUnit: pluralizeProductUnit(row.unit, minimumOrder),
       category,
       availability:
         row.status === "active"

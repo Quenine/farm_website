@@ -85,13 +85,32 @@ Products, prices, stock defaults, and delivery rates can match Noble Farms. Orde
 2. Run `database/schema.sql`.
 3. Run `database/step-notifications.sql` if it is still separate in the deployment branch.
 4. Run `database/seed-full-catalogue.sql`.
-5. Run `database/seed-product-delivery-rates.sql`.
-6. Run `database/verify-new-brand-reference-data.sql`.
-7. Confirm reference data exists.
-8. Confirm transactional tables are empty.
-9. Create the Shields Farms admin user for `heeshat@gmail.com`.
-10. Confirm admin login works at `/admin`.
-11. Upload product images through Shields admin or copy product media storage from Noble Farms.
+5. Run `database/seed-updated-crop-products.sql`.
+6. Run `database/seed-legacy-product-prices.sql`.
+7. Run `database/backfill-universal-rates-for-all-orderable-products.sql`.
+8. Run `database/verify-product-and-rate-update.sql`.
+9. Run `database/verify-all-products-orderable-and-rated.sql`.
+10. Run `database/verify-new-brand-reference-data.sql`.
+11. Confirm reference data exists.
+12. Confirm transactional tables are empty.
+13. Review product stock, featured products, quote-required legacy products, and product media in admin.
+14. Review delivery rates in admin after the universal backfill.
+15. Create the Shields Farms admin user for `heeshat@gmail.com`.
+16. Confirm admin login works at `/admin`.
+17. Upload product images through Shields admin or copy product media storage from Noble Farms.
+
+## Shared Catalogue And Delivery Updates
+
+When Noble Farms and Shields Farms should share the same catalogue/rate setup, run these scripts separately in each Supabase project:
+
+1. `database/seed-updated-crop-products.sql`
+2. `database/seed-legacy-product-prices.sql`
+3. `database/backfill-universal-rates-for-all-orderable-products.sql`
+4. `database/verify-all-products-orderable-and-rated.sql`
+
+The crop seed creates the latest crop produce SKU-style products, such as `Tomatoes - Farmers Basket` and `Carrots - Custard Rubber`, without deleting legacy products. The legacy price seed applies confirmed legacy prices, uses clear placeholder prices where prices were missing, and avoids zero-price checkout products without deleting products, media, orders, stock, featured settings, or categories. The universal delivery backfill adds city = `All` product delivery rates for every active fixed-price orderable product across all Nigerian states plus FCT: Pickup Point first package N10,000 plus N3,000 extra packages, Home Delivery first package N15,000 plus N3,000 extra packages, and Farm Pickup N0.
+
+After running the seeds, review stock, featured products, product media, and delivery rates in admin. Product media may need uploading separately per farm because Supabase Storage files do not automatically move with database seed data.
 
 ## Product Media Storage
 
