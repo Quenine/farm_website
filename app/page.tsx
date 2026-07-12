@@ -126,7 +126,7 @@ export default async function Home() {
                 <p className="text-sm font-bold text-amber-700">
                   Today at farm gate
                 </p>
-                <p className="mt-3 text-4xl font-bold">Egg supply</p>
+                <p className="mt-3 text-4xl font-bold">Fresh crops</p>
                 <p className="mt-2 text-sm text-stone-700">
                   Tomatoes, peppers, potatoes, onions, carrots, cabbage,
                   and other produce supplied by confirmed availability.
@@ -141,7 +141,7 @@ export default async function Home() {
                   </p>
                 </div>
                 <div className="rounded-lg bg-white/[0.84] p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
-                  <p className="text-2xl font-bold">Fresh crops</p>
+                  <p className="text-2xl font-bold">Egg supply</p>
                   <p className="text-xs font-semibold text-stone-600">
                     Crates and half-crates for homes, vendors, bakeries, and
                     resellers.
