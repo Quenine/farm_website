@@ -17,6 +17,7 @@ import {
 } from "@/src/lib/delivery-calculator";
 import { getNigeriaCities, mergeUniqueSorted, nigeriaStateNames } from "@/src/lib/nigeria-locations";
 import { getQuantityInputType, getQuantityStep } from "@/src/lib/quantity";
+import { getAttributionSnapshot, productToAnalyticsItem, trackAddShippingInfo, trackBeginCheckout } from "@/src/lib/analytics";
 import type { DeliveryMethod, Product, ProductDeliveryRate } from "@/src/types";
 
 const whatsappHref = siteContact.whatsappHref;
@@ -193,10 +194,17 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
       return;
     }
 
+    const payableTotal = subtotal + (deliveryFee ?? 0);
+    trackBeginCheckout(cartProducts.map((item) => productToAnalyticsItem(item.product as Product, item.line.quantity)), payableTotal);
+    trackAddShippingInfo(selectedDeliveryMethod, payableTotal);
+    const attribution = getAttributionSnapshot();
+
     startTransition(async () => {
       const result = await createOrderAction({
         ...fields,
         deliveryMethod: selectedDeliveryMethod,
+        firstTouchAttribution: attribution.firstTouch,
+        lastTouchAttribution: attribution.lastTouch,
         items,
       });
       if (!result.success) {
@@ -379,6 +387,10 @@ function RequiredLabel({ text, required = true }: { text: string; required?: boo
     </span>
   );
 }
+
+
+
+
 
 
 

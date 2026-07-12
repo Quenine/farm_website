@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ShopFilters } from "@/app/shop/shop-filters";
+import { ShopAnalytics } from "@/app/shop/shop-analytics";
 import { siteConfig, siteContact } from "@/src/config/site";
 import { PageShell, ProductCard, SectionHeader } from "@/src/components/ui";
 import { getPublicProducts } from "@/src/lib/products";
@@ -93,6 +94,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           </p>
         </div>
 
+        <ShopAnalytics products={filteredProducts} search={search} />
         <ShopFilters
           key={filterKey}
           categories={categories}
@@ -130,6 +132,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
     </PageShell>
   );
 }
+
 
 
 

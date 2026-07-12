@@ -200,7 +200,11 @@ After deployment, verify:
 9. Reopening the callback does not deduct inventory again.
 10. Vercel build/runtime logs contain no credentials or raw customer secrets.
 
-## Intentionally not implemented
+
+## Marketing readiness
+
+The app includes consent-based analytics readiness, campaign attribution, tracked campaign links, QR-code SVG generation, and a Business Supply page. Next phase: Shields Farms organic marketing launch, including campaign creatives, printed and digital flyers, WhatsApp content, food-business outreach and tracked QR campaigns.
+`r`n## Intentionally not implemented
 
 - Mobile application
 - Customer accounts or customer authentication
@@ -208,3 +212,4 @@ After deployment, verify:
 - Automated refunds and chargeback handling
 - Product image upload/storage workflow
 - Deployment execution, registrar DNS changes, or Paystack live-mode activation
+

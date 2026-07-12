@@ -62,6 +62,18 @@ type OrderRow = {
   }>;
 };
 
+export type SafeAttribution = {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  utm_id?: string;
+  referrer?: string;
+  landing_path?: string;
+  first_seen_at?: string;
+};
+
 export type CreateOrderInput = {
   customerName: string;
   customerEmail: string;
@@ -73,6 +85,8 @@ export type CreateOrderInput = {
   deliveryState: string;
   deliveryCity: string;
   items: Array<{ productId: string; quantity: number }>;
+  firstTouchAttribution?: SafeAttribution | null;
+  lastTouchAttribution?: SafeAttribution | null;
 };
 
 const orderColumns = `
@@ -213,6 +227,27 @@ function todayInLagos() {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+function safeAttribution(input: unknown): SafeAttribution | null {
+  if (!input || typeof input !== "object") return null;
+  const source = input as Record<string, unknown>;
+  const allowed: Array<keyof SafeAttribution> = [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "utm_term",
+    "utm_id",
+    "referrer",
+    "landing_path",
+    "first_seen_at",
+  ];
+  const output: SafeAttribution = {};
+  for (const key of allowed) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) output[key] = value.trim().slice(0, 300);
+  }
+  return Object.keys(output).length > 0 ? output : null;
+}
 function orderReference() {
   const date = todayInLagos().replaceAll("-", "");
   return `NF-${date}-${randomBytes(2).toString("hex").toUpperCase()}`;
@@ -347,6 +382,8 @@ export async function createOrder(input: CreateOrderInput) {
         total_amount: totalAmount,
         payment_status: "pending",
         order_status: "pending_payment",
+        first_touch_attribution: safeAttribution(input.firstTouchAttribution),
+        last_touch_attribution: safeAttribution(input.lastTouchAttribution),
       })
       .select("id, order_reference")
       .single();
@@ -500,3 +537,5 @@ export async function confirmAdminOrderDeliveryFee(orderId: string, deliveryFee:
   if (error) throw new Error(`Unable to confirm delivery fee: ${error.message}`);
   return mapOrderRow(data as unknown as OrderRow);
 }
+
+

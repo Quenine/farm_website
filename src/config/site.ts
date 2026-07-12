@@ -1,6 +1,12 @@
-﻿function publicEnv(name: string, fallback: string) {
+function publicEnv(name: string, fallback: string) {
   const value = process.env[name]?.trim();
   return value || fallback;
+}
+
+function publicBool(name: string, fallback: boolean) {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (!value) return fallback;
+  return ["1", "true", "yes", "on"].includes(value);
 }
 
 function phoneDigits(value: string) {
@@ -35,6 +41,14 @@ export const siteConfig = {
   logoPath: publicEnv("NEXT_PUBLIC_LOGO_PATH", "/images/noble-farms-logo.png"),
 };
 
+export const marketingConfig = {
+  enabled: publicBool("NEXT_PUBLIC_MARKETING_ENABLED", false),
+  gaMeasurementId: publicEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", ""),
+  metaPixelId: publicEnv("NEXT_PUBLIC_META_PIXEL_ID", ""),
+  primaryRegion: publicEnv("NEXT_PUBLIC_MARKETING_PRIMARY_REGION", ""),
+  businessSupplyEnabled: publicBool("NEXT_PUBLIC_BUSINESS_SUPPLY_ENABLED", true),
+};
+
 export const siteContact = {
   phoneHref: `tel:${siteConfig.phone}`,
   emailHref: `mailto:${siteConfig.email}`,
@@ -44,3 +58,6 @@ export const siteContact = {
   trackOrderUrl: `${siteConfig.url.replace(/\/$/, "")}/track-order`,
 };
 
+export function whatsappUrl(message: string) {
+  return `${siteContact.whatsappHref}?text=${encodeURIComponent(message)}`;
+}

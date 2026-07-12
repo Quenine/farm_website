@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { z } from "zod";
 import { siteConfig } from "@/src/config/site";
@@ -9,6 +9,19 @@ import {
 } from "@/src/lib/payments";
 import { PaystackRequestError } from "@/src/lib/paystack";
 
+const attributionTouchSchema = z
+  .object({
+    utm_source: z.string().trim().max(160).optional(),
+    utm_medium: z.string().trim().max(160).optional(),
+    utm_campaign: z.string().trim().max(160).optional(),
+    utm_content: z.string().trim().max(160).optional(),
+    utm_term: z.string().trim().max(160).optional(),
+    utm_id: z.string().trim().max(160).optional(),
+    referrer: z.string().trim().max(300).optional(),
+    landing_path: z.string().trim().max(300).optional(),
+    first_seen_at: z.string().trim().max(80).optional(),
+  })
+  .partial();
 const checkoutSchema = z
   .object({
     customerName: z.string().trim().min(2, "Enter your full name.").max(120),
@@ -20,6 +33,8 @@ const checkoutSchema = z
     deliveryCity: z.string().trim().min(2, "Select a city or area.").max(120),
     deliveryDate: z.iso.date("Select a valid delivery date."),
     deliveryNote: z.string().trim().max(1000).optional(),
+    firstTouchAttribution: attributionTouchSchema.nullish(),
+    lastTouchAttribution: attributionTouchSchema.nullish(),
     items: z
       .array(
         z.object({
@@ -145,6 +160,7 @@ export async function createOrderAction(
     };
   }
 }
+
 
 
 

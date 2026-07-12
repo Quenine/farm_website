@@ -14,6 +14,7 @@ import {
   persistCart,
 } from "@/src/lib/cart-store";
 import { isProductOrderable } from "@/src/lib/product-pricing";
+import { productToAnalyticsItem, trackAddToCart, trackRemoveFromCart } from "@/src/lib/analytics";
 import type { CartLine, Product } from "@/src/types";
 
 type CartContextValue = {
@@ -62,6 +63,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const addItem = useCallback(
     (product: Product, quantity = product.minimumOrder) => {
       if (!isProductOrderable(product)) return;
+      trackAddToCart(productToAnalyticsItem(product, quantity));
       commit((current) => {
         const existing = current.find((line) => line.slug === product.slug);
         if (!existing) {
@@ -98,9 +100,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const removeItem = useCallback(
     (slug: string) => {
+      const line = lines.find((item) => item.slug === slug);
+      if (line?.product) trackRemoveFromCart(productToAnalyticsItem(line.product, line.quantity));
       commit((current) => current.filter((line) => line.slug !== slug));
     },
-    [commit],
+    [commit, lines],
   );
 
   const clearCart = useCallback(() => {
@@ -137,3 +141,5 @@ export function useCart() {
   }
   return context;
 }
+
+

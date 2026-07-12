@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import { useCart } from "@/src/components/cart/cart-provider";
 import { CartSummary } from "@/src/components/cart/cart-summary";
@@ -10,6 +10,8 @@ import { EmptyState } from "@/src/components/ui/empty-state";
 import { getProductBySlug } from "@/src/lib/cart-store";
 import { formatNaira } from "@/src/lib/format";
 import { formatQuantity, getQuantityInputType, getQuantityStep } from "@/src/lib/quantity";
+import { productToAnalyticsItem, trackLead, trackShare, trackViewCart } from "@/src/lib/analytics";
+import { siteConfig, whatsappUrl } from "@/src/config/site";
 
 export function CartPageClient() {
   const {
@@ -36,10 +38,20 @@ export function CartPageClient() {
     0,
   );
 
+  const shareCartMessage = `${siteConfig.name} cart enquiry: ${items.map((item) => `${item.product.name} x ${item.quantity}`).join(", ")}. ${typeof window !== "undefined" ? window.location.origin : siteConfig.url}/cart`;
+  const shareCart = () => {
+    trackShare("whatsapp");
+    trackLead("cart_whatsapp_share");
+    window.open(whatsappUrl(shareCartMessage), "_blank", "noopener,noreferrer");
+  };
+  useEffect(() => {
+    if (hydrated && items.length > 0) trackViewCart(items.map((item) => productToAnalyticsItem(item.product, item.quantity)), subtotal);
+  }, [hydrated, items, subtotal]);
+
   if (!hydrated) {
     return (
       <div className="rounded-lg bg-white p-8 text-center text-sm text-stone-600 shadow-sm">
-        Loading cart…
+        Loading cart�
       </div>
     );
   }
@@ -108,6 +120,13 @@ export function CartPageClient() {
       </div>
       <div className="grid h-fit gap-4">
         <CartSummary subtotal={subtotal} />
+        <button
+          type="button"
+          onClick={shareCart}
+          className="inline-flex h-12 items-center justify-center rounded-full border border-green-800 px-6 text-sm font-bold text-green-950"
+        >
+          Share cart on WhatsApp
+        </button>
         <Link
           href="/checkout"
           className="inline-flex h-12 items-center justify-center rounded-full bg-green-800 px-6 text-sm font-bold text-white"
@@ -124,3 +143,5 @@ export function CartPageClient() {
     </div>
   );
 }
+
+

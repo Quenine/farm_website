@@ -1,8 +1,9 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { PayNowButton } from "@/src/components/payments/pay-now-button";
+import { PurchaseTracker } from "@/src/components/marketing-purchase-tracker";
 import { siteConfig } from "@/src/config/site";
 import { PageShell } from "@/src/components/ui";
 import { formatNaira } from "@/src/lib/format";
@@ -31,6 +32,13 @@ export default async function OrderSuccessPage({
 
   return (
     <PageShell>
+      <PurchaseTracker
+        paid={isPaid}
+        reference={order.reference}
+        total={order.totalAmount}
+        shipping={order.deliveryFee}
+        items={order.items.map((item) => ({ item_id: item.productId ?? item.productName, item_name: item.productName, item_variant: item.unit, price: item.unitPrice, quantity: item.quantity }))}
+      />
       <section className="mx-auto grid min-h-[60vh] max-w-3xl place-items-center px-4 py-16 sm:px-6 lg:px-8">
         <div className="w-full rounded-lg bg-white p-8 shadow-sm">
           <div className="text-center">
@@ -111,5 +119,6 @@ function Summary({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
 
 

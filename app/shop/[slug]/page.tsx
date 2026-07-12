@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ProductDetailActions } from "@/src/components/product/product-detail-actions";
 import { ProductMediaGallery } from "@/src/components/product/product-media";
+import { ProductMarketingActions } from "@/src/components/product/product-marketing-actions";
 import { InfoRow, PageShell } from "@/src/components/ui";
 import { formatNaira } from "@/src/lib/format";
 import { getPublicProductBySlug } from "@/src/lib/products";
@@ -81,6 +82,7 @@ export default async function ProductDetailPage({
               )}
             </div>
             <ProductDetailActions product={product} />
+            <ProductMarketingActions product={product} />
             <div className="mt-4">
               {isOrderable ? (
                 <Link
@@ -105,3 +107,4 @@ export default async function ProductDetailPage({
     </PageShell>
   );
 }
+

@@ -1,10 +1,10 @@
-﻿import type { MetadataRoute } from "next";
+import type { MetadataRoute } from "next";
 
 import { getSiteUrl } from "@/src/lib/site-url";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const siteUrl = getSiteUrl();
-  const routes = ["", "/shop", "/about", "/contact", "/delivery", "/refund-policy", "/privacy-policy", "/terms", "/track-order"];
+  const routes = ["", "/shop", "/business-supply", "/about", "/contact", "/delivery", "/refund-policy", "/privacy-policy", "/terms", "/track-order"];
 
   return routes.map((route) => ({
     url: `${siteUrl}${route}`,
@@ -13,3 +13,4 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: route === "" ? 1 : route === "/shop" ? 0.9 : 0.6,
   }));
 }
+
