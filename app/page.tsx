@@ -15,7 +15,7 @@ const trustFeatures: {
 }[] = [
   {
     title: "Farm-direct supply",
-    body: `Order poultry, eggs, and fresh produce directly from ${siteConfig.name} with clear product information and reliable fulfilment.`,
+    body: `Order fresh produce, chicken and eggs directly from ${siteConfig.name} with clear product information and reliable fulfilment.`,
     Icon: CheckCircle2,
   },
   {
@@ -96,10 +96,10 @@ export default async function Home() {
               {siteConfig.name}
             </p>
             <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight text-green-950 sm:text-6xl">
-              Fresh poultry, eggs, and crop produce supplied with care.
+              Fresh crop produce, eggs, and chicken supplied with care.
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-stone-700">
-              Order eggs, broilers, fresh vegetables, tubers, tomatoes,
+              Order eggs, chicken, fresh vegetables, tubers, tomatoes,
               peppers, and selected farm inputs directly from {siteConfig.name}. We
               serve households, food vendors, restaurants, caterers, resellers,
               and bulk buyers with clear pricing, secure checkout, and reliable
@@ -128,23 +128,23 @@ export default async function Home() {
                 </p>
                 <p className="mt-3 text-4xl font-bold">Egg supply</p>
                 <p className="mt-2 text-sm text-stone-700">
-                  Crates and half-crates for homes, vendors, bakeries, and
-                  resellers.
+                  Tomatoes, peppers, potatoes, onions, carrots, cabbage,
+                  and other produce supplied by confirmed availability.
                 </p>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="rounded-lg bg-white/[0.84] p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
                   <p className="text-2xl font-bold">Broilers</p>
                   <p className="text-xs font-semibold text-stone-600">
-                    4-week and table-size broilers available for scheduled
+                    4-week and table-size chicken available for scheduled
                     orders.
                   </p>
                 </div>
                 <div className="rounded-lg bg-white/[0.84] p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
                   <p className="text-2xl font-bold">Fresh crops</p>
                   <p className="text-xs font-semibold text-stone-600">
-                    Tomatoes, peppers, potatoes, onions, carrots, cabbage,
-                    and other produce supplied by confirmed availability.
+                    Crates and half-crates for homes, vendors, bakeries, and
+                    resellers.
                   </p>
                 </div>
               </div>
@@ -184,7 +184,7 @@ export default async function Home() {
         <div className="mt-8 rounded-lg bg-green-50 p-5 text-green-950">
           <h2 className="text-lg font-bold">Fresh crop produce supply</h2>
           <p className="mt-2 text-sm font-semibold leading-6 text-green-900">
-            {siteConfig.name} supplies eggs, broilers, tomatoes, peppers, potatoes,
+            {siteConfig.name} supplies eggs, chicken, tomatoes, peppers, potatoes,
             onions, carrots, cabbage, and other fresh produce based on confirmed
             availability, quantity, and logistics.
           </p>
