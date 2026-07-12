@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { siteConfig } from "@/src/config/site";
 import { AdminHeader, AdminTable, StatCard, StatusBadge } from "@/src/components/admin";
 import { formatNaira } from "@/src/lib/format";
@@ -13,18 +13,6 @@ import type { DeliveryMethod, Product, ProductDeliveryRate } from "@/src/types";
 
 export const dynamic = "force-dynamic";
 
-const launchChecklist = [
-  "Admin links are hidden from the public site",
-  "Product prices confirmed",
-  "Product stock reviewed after test cleanup",
-  "Product images uploaded",
-  "Delivery coverage checked",
-  "Notifications tested",
-  "WhatsApp notification configured if used",
-  "Paystack mode confirmed",
-  "Test orders cleared before launch",
-  "Someone assigned to monitor orders",
-];
 
 const commonDestinations: Array<{ state: string; city: string; method: DeliveryMethod }> = [
   { state: "Oyo", city: "Ibadan", method: "home_delivery" },
@@ -103,22 +91,17 @@ export default async function AdminDashboardPage() {
       </div>
       <section className="mb-6 grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
         <div className="rounded-lg border border-green-100 bg-white p-5 shadow-sm">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-            <div>
-              <h2 className="text-lg font-bold text-green-950">Launch checklist</h2>
-              <p className="mt-1 text-sm leading-6 text-stone-600">Use this before opening or scaling real public orders.</p>
-            </div>
-            <Link href="/admin/diagnostics" className="inline-flex h-10 items-center justify-center rounded-full bg-green-800 px-4 text-sm font-bold text-white">
-              Check diagnostics
+          <h2 className="text-lg font-bold text-green-950">Launch readiness</h2>
+          <p className="mt-2 text-sm leading-6 text-stone-600">
+            Use the dedicated checklist and coverage checker before opening or scaling real public orders.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/admin/launch-checklist" className="inline-flex h-10 items-center justify-center rounded-full bg-green-800 px-4 text-sm font-bold text-white">
+              Open Launch Checklist
             </Link>
-          </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {launchChecklist.map((item) => (
-              <label key={item} className="flex items-start gap-3 rounded-lg border border-stone-100 bg-stone-50 p-3 text-sm font-semibold text-stone-800">
-                <input type="checkbox" className="mt-1 size-4 rounded border-stone-300" />
-                <span>{item}</span>
-              </label>
-            ))}
+            <Link href="/admin/delivery-coverage" className="inline-flex h-10 items-center justify-center rounded-full border border-green-800 px-4 text-sm font-bold text-green-950">
+              Check Delivery Coverage
+            </Link>
           </div>
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
@@ -126,8 +109,7 @@ export default async function AdminDashboardPage() {
           <p className="mt-2">Test orders can be cancelled instead of deleted. Real paid orders should not be deleted; keep records for Paystack, inventory, delivery, and payment reconciliation.</p>
           <p className="mt-3 font-semibold">Monitor paid orders daily and move each order through Packed, Out for Delivery, Delivered, or Cancelled as fulfilment changes.</p>
         </div>
-      </section>
-      <div className="grid gap-4 md:grid-cols-3">
+      </section>      <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Today's orders" value={String(todayOrders.length)} note="Orders created today" />
         <StatCard label="Pending payment" value={String(pendingPayment.length)} note="Awaiting successful Paystack payment" />
         <StatCard label="Paid / processing" value={String(paidProcessing.length)} note="Paid orders being prepared or delivered" />
@@ -168,5 +150,8 @@ export default async function AdminDashboardPage() {
     </>
   );
 }
+
+
+
 
 

@@ -1,9 +1,11 @@
-﻿import {
+import {
   BarChart3,
   Boxes,
   CircleGauge,
   ClipboardList,
+  ListChecks,
   MapPin,
+  MapPinned,
   PackageCheck,
   Settings,
 } from "lucide-react";
@@ -314,6 +316,8 @@ export const adminNav: AdminNavItem[] = [
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes },
   { href: "/admin/delivery-rates", label: "Delivery Rates", icon: MapPin },
+  { href: "/admin/delivery-coverage", label: "Delivery Coverage", icon: MapPinned },
+  { href: "/admin/launch-checklist", label: "Launch Checklist", icon: ListChecks },
   { href: "/admin/diagnostics", label: "Diagnostics", icon: CircleGauge },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
@@ -323,4 +327,5 @@ export { formatNaira };
 export function getProduct(slug: string) {
   return products.find((product) => product.slug === slug);
 }
+
 

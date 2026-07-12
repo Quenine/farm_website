@@ -1,10 +1,10 @@
-﻿/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { siteConfig } from "@/src/config/site";
 
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   deactivateProductAction,
   deleteProductMediaAction,
@@ -94,7 +94,52 @@ export function AdminProductsClient({
     initialEditingProduct ? productFormDefaults(initialEditingProduct) : emptyProduct,
   );
   const [message, setMessage] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [pricingFilter, setPricingFilter] = useState("all");
+  const [orderableFilter, setOrderableFilter] = useState("all");
+  const [mediaFilter, setMediaFilter] = useState("all");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [sort, setSort] = useState("newest");
   const [isPending, startTransition] = useTransition();
+
+  const categories = useMemo(
+    () => Array.from(new Set(items.map((product) => product.category))).sort(),
+    [items],
+  );
+
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const result = items.filter((product) => {
+      if (query && ![product.name, product.slug, product.category].join(" ").toLowerCase().includes(query)) return false;
+      if (categoryFilter !== "all" && product.category !== categoryFilter) return false;
+      if (statusFilter !== "all" && product.status !== statusFilter) return false;
+      if (pricingFilter !== "all" && product.pricingMode !== pricingFilter) return false;
+      if (orderableFilter === "orderable" && !product.isOrderableOnline) return false;
+      if (orderableFilter === "not-orderable" && product.isOrderableOnline) return false;
+      if (mediaFilter === "missing" && (product.media?.length ?? 0) > 0) return false;
+      if (stockFilter === "low" && product.stockCount > 5) return false;
+      return true;
+    });
+    return [...result].sort((a, b) => {
+      if (sort === "name") return a.name.localeCompare(b.name);
+      if (sort === "price") return a.price - b.price;
+      if (sort === "stock") return a.stockCount - b.stockCount;
+      return (b.id ?? b.slug).localeCompare(a.id ?? a.slug);
+    });
+  }, [categoryFilter, items, mediaFilter, orderableFilter, pricingFilter, search, sort, statusFilter, stockFilter]);
+
+  const resetFilters = () => {
+    setSearch("");
+    setCategoryFilter("all");
+    setStatusFilter("all");
+    setPricingFilter("all");
+    setOrderableFilter("all");
+    setMediaFilter("all");
+    setStockFilter("all");
+    setSort("newest");
+  };
 
   const openCreate = () => {
     setMessage(null);
@@ -267,6 +312,55 @@ export function AdminProductsClient({
           {message}
         </div>
       ) : null}
+      <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 shadow-sm lg:grid-cols-4">
+        <label className="grid gap-2 text-sm font-semibold text-stone-800 lg:col-span-2">
+          Search products
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, slug, category" className="h-10 rounded-lg border border-stone-200 px-3 font-normal" />
+        </label>
+        <ProductFilter label="Category" value={categoryFilter} onChange={setCategoryFilter}>
+          <option value="all">All categories</option>
+          {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+        </ProductFilter>
+        <ProductFilter label="Status" value={statusFilter} onChange={setStatusFilter}>
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="coming_soon">Availability to be announced</option>
+        </ProductFilter>
+        <ProductFilter label="Pricing" value={pricingFilter} onChange={setPricingFilter}>
+          <option value="all">All pricing</option>
+          <option value="fixed">Fixed price</option>
+          <option value="quote_required">Check availability</option>
+        </ProductFilter>
+        <ProductFilter label="Orderable" value={orderableFilter} onChange={setOrderableFilter}>
+          <option value="all">All products</option>
+          <option value="orderable">Orderable online</option>
+          <option value="not-orderable">Not orderable</option>
+        </ProductFilter>
+        <ProductFilter label="Media" value={mediaFilter} onChange={setMediaFilter}>
+          <option value="all">All media states</option>
+          <option value="missing">Missing images/media</option>
+        </ProductFilter>
+        <ProductFilter label="Stock" value={stockFilter} onChange={setStockFilter}>
+          <option value="all">All stock levels</option>
+          <option value="low">Low stock (5 or less)</option>
+        </ProductFilter>
+        <ProductFilter label="Sort" value={sort} onChange={setSort}>
+          <option value="newest">Newest</option>
+          <option value="name">Name</option>
+          <option value="price">Price</option>
+          <option value="stock">Stock</option>
+        </ProductFilter>
+        <div className="flex items-end justify-end gap-2 lg:col-span-4">
+          <button type="button" onClick={resetFilters} className="h-10 rounded-full border border-green-800 px-4 text-xs font-bold text-green-900">Clear filters</button>
+          <span className="text-sm font-semibold text-stone-600">{filteredItems.length} shown</span>
+        </div>
+      </div>
+      {filteredItems.length === 0 ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+          No products match your filters. Clear filters or adjust your search.
+        </div>
+      ) : null}
       <div className="mb-4 flex justify-end">
         <button
           type="button"
@@ -286,7 +380,7 @@ export function AdminProductsClient({
           "Status",
           "Actions",
         ]}
-        rows={items.map((product) => [
+        rows={filteredItems.map((product) => [
           <span key="name" className="font-bold text-green-950">
             {product.name}
           </span>,
@@ -759,3 +853,14 @@ function ProductCheckbox({
 
 
 
+
+function ProductFilter({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-2 text-sm font-semibold text-stone-800">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-lg border border-stone-200 bg-white px-3 font-normal">
+        {children}
+      </select>
+    </label>
+  );
+}

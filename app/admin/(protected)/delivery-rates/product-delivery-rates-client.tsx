@@ -5,9 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { saveProductDeliveryRateAction } from "@/app/admin/(protected)/delivery-rates/actions";
 import { AdminHeader, AdminTable, StatusBadge } from "@/src/components/admin";
 import {
-  findMatchingProductDeliveryRate,
   formatDeliveryMethod,
-  supportsDeliveryMethod,
   type DeliveryProductForCalculation,
   type MatchingRateSource,
 } from "@/src/lib/delivery-calculator";
@@ -30,16 +28,18 @@ const emptyRate = (product?: Product): ProductDeliveryRate => ({
   sortOrder: 100,
 });
 
-type ProductWithId = Product & { id: string };
+export type ProductWithId = Product & { id: string };
 
 type FilterState = {
   productId: string;
   state: string;
   city: string;
   deliveryMethod: "all" | DeliveryMethod;
+  active: "all" | "active" | "inactive";
+  search: string;
 };
 
-type CoverageFilter = {
+export type CoverageFilter = {
   state: string;
   city: string;
   deliveryMethod: DeliveryMethod;
@@ -49,10 +49,16 @@ export function AdminProductDeliveryRatesClient({
   initialRates,
   products,
   initialProductId,
+  initialState,
+  initialCity,
+  initialDeliveryMethod,
 }: {
   initialRates: ProductDeliveryRate[];
   products: Product[];
   initialProductId?: string;
+  initialState?: string;
+  initialCity?: string;
+  initialDeliveryMethod?: string;
 }) {
   const selectableProducts = useMemo(
     () => products.filter((product): product is ProductWithId => Boolean(product.id)),
@@ -61,20 +67,32 @@ export function AdminProductDeliveryRatesClient({
   const defaultProductFilter = initialProductId && selectableProducts.some((product) => product.id === initialProductId)
     ? initialProductId
     : "all";
+  const initialProduct = defaultProductFilter === "all"
+    ? selectableProducts[0]
+    : selectableProducts.find((product) => product.id === defaultProductFilter) ?? selectableProducts[0];
+  const requestedDeliveryMethod = initialDeliveryMethod === "pickup_point" || initialDeliveryMethod === "farm_pickup" || initialDeliveryMethod === "home_delivery"
+    ? initialDeliveryMethod
+    : undefined;
+  const initialDraft: ProductDeliveryRate | null = initialProductId && initialProduct
+    ? {
+        ...emptyRate(initialProduct),
+        productId: initialProduct.id,
+        state: initialState || "Oyo",
+        city: initialCity || "All",
+        deliveryMethod: requestedDeliveryMethod ?? "home_delivery",
+      }
+    : null;
 
   const [rates, setRates] = useState(initialRates);
-  const [editing, setEditing] = useState<ProductDeliveryRate | null>(null);
-  const [form, setForm] = useState<ProductDeliveryRate>(emptyRate(selectableProducts[0]));
+  const [editing, setEditing] = useState<ProductDeliveryRate | null>(initialDraft);
+  const [form, setForm] = useState<ProductDeliveryRate>(initialDraft ?? emptyRate(selectableProducts[0]));
   const [filters, setFilters] = useState<FilterState>({
     productId: defaultProductFilter,
     state: "all",
     city: "all",
     deliveryMethod: "all",
-  });
-  const [coverageFilter, setCoverageFilter] = useState<CoverageFilter>({
-    state: "Lagos",
-    city: "Lagos Mainland",
-    deliveryMethod: "home_delivery",
+    active: "all",
+    search: "",
   });
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -87,39 +105,30 @@ export function AdminProductDeliveryRatesClient({
   const filterCities = filters.state === "all"
     ? mergeUniqueSorted([...nigeriaLocationsCityNames(), ...rates.map((rate) => rate.city)])
     : mergeUniqueSorted([...getNigeriaCities(filters.state), ...rates.filter((rate) => rate.state === filters.state).map((rate) => rate.city)]);
-  const coverageCities = mergeUniqueSorted([...getNigeriaCities(coverageFilter.state), ...rates.filter((rate) => rate.state === coverageFilter.state).map((rate) => rate.city)]);
+
   const formCities = mergeUniqueSorted([...getNigeriaCities(form.state), ...rates.filter((rate) => rate.state === form.state).map((rate) => rate.city)]);
 
   const filteredRates = rates.filter((rate) => {
+    const query = filters.search.trim().toLowerCase();
+    if (query && ![rate.productName ?? "", rate.productSlug ?? "", rate.state, rate.city].join(" ").toLowerCase().includes(query)) return false;
     if (filters.productId !== "all" && rate.productId !== filters.productId) return false;
     if (filters.state !== "all" && rate.state !== filters.state) return false;
     if (filters.city !== "all" && rate.city !== filters.city) return false;
     if (filters.deliveryMethod !== "all" && rate.deliveryMethod !== filters.deliveryMethod) return false;
+    if (filters.active === "active" && !rate.isActive) return false;
+    if (filters.active === "inactive" && rate.isActive) return false;
     return true;
   });
 
-  const activeOrderableProducts = selectableProducts.filter(isOrderableProduct);
-  const coverageRows = activeOrderableProducts.map((product) => {
-    const deliveryProduct = toDeliveryProduct(product);
-    const supportsMethod = supportsDeliveryMethod(deliveryProduct, coverageFilter.deliveryMethod);
-    const match = supportsMethod
-      ? findMatchingProductDeliveryRate({
-          rates,
-          productId: product.id,
-          state: coverageFilter.state,
-          city: coverageFilter.city,
-          deliveryMethod: coverageFilter.deliveryMethod,
-        })
-      : { rate: null, source: "missing" as MatchingRateSource };
-    const sourceLabel = supportsMethod ? sourceToLabel(match.source) : "Missing";
-    const status = !supportsMethod
-      ? "Method unsupported"
-      : match.rate
-        ? "Ready"
-        : "Missing rate";
-
-    return { product, supportsMethod, match, sourceLabel, status };
+  const resetFilters = () => setFilters({
+    productId: defaultProductFilter,
+    state: "all",
+    city: "all",
+    deliveryMethod: "all",
+    active: "all",
+    search: "",
   });
+
 
   const selectedProduct = filters.productId === "all" ? null : productById.get(filters.productId) ?? null;
   const selectedProductHasCommonDestinationWarning = selectedProduct
@@ -197,7 +206,11 @@ export function AdminProductDeliveryRatesClient({
           <p className="mt-2 rounded-lg bg-amber-50 p-3 text-amber-900">You are viewing rates for this product only. Other cart items also need rates before checkout can calculate delivery.</p>
         ) : null}
       </div>
-      <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 shadow-sm lg:grid-cols-5">
+      <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 shadow-sm lg:grid-cols-6">
+        <label className="grid gap-2 text-sm font-semibold text-stone-800 lg:col-span-2">
+          Search
+          <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Product, slug, state, city" className="h-11 rounded-lg border border-stone-200 px-3 font-normal" />
+        </label>
         <FilterSelect label="Product" value={filters.productId} onChange={(productId) => setFilters({ ...filters, productId })}>
           <option value="all">All products</option>
           {selectableProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
@@ -216,7 +229,14 @@ export function AdminProductDeliveryRatesClient({
           <option value="pickup_point">Pickup Point</option>
           <option value="farm_pickup">Farm Pickup</option>
         </FilterSelect>
-        <div className="flex flex-wrap items-end justify-end gap-2">
+        <FilterSelect label="Status" value={filters.active} onChange={(active) => setFilters({ ...filters, active: active as FilterState["active"] })}>
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </FilterSelect>
+        <div className="flex flex-wrap items-end justify-end gap-2 lg:col-span-6">
+          <button type="button" onClick={resetFilters} className="h-11 rounded-full border border-green-800 px-4 text-xs font-bold text-green-950">Clear filters</button>
+          <span className="text-sm font-semibold text-stone-600">{filteredRates.length} shown</span>
           <button type="button" onClick={() => openCreate()} className="h-11 rounded-full bg-green-800 px-5 text-sm font-bold text-white">
             Add Rate
           </button>
@@ -232,31 +252,22 @@ export function AdminProductDeliveryRatesClient({
           {selectedProduct?.name} has no active Lagos/Home Delivery All-city fallback yet.
         </div>
       ) : null}
+      {filteredRates.length === 0 ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+          No delivery rates match your filters. Clear filters or adjust your search.
+        </div>
+      ) : null}
       <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
         <p><strong>Package Size</strong> is the amount covered by one delivery package. Example: 1 Bag, 1 Basket, 1 Crate, or 20 kg.</p>
         <p><strong>First Package Fee</strong> is the delivery cost for the first package of this product to this location.</p>
         <p><strong>Extra Package Fee</strong> is what to add for each additional package after the first.</p>
         <p>Checkout uses the highest first-package fee once, then adds extra package fees for other products and larger quantities. This keeps delivery fair without overcharging customers.</p>
       </div>
-      <CoverageChecker
-        rows={coverageRows}
-        states={states}
-        cities={coverageCities}
-        filter={coverageFilter}
-        onFilterChange={setCoverageFilter}
-        onAddRate={(product) => openCreate({
-          productId: product.id,
-          state: coverageFilter.state,
-          city: coverageFilter.city,
-          deliveryMethod: coverageFilter.deliveryMethod,
-        })}
-        onAddFallback={(product) => openCreate({
-          productId: product.id,
-          state: coverageFilter.state,
-          city: "All",
-          deliveryMethod: coverageFilter.deliveryMethod,
-        })}
-      />
+      <div className="mb-4 rounded-lg border border-green-100 bg-white p-4 text-sm leading-6 text-stone-700 shadow-sm">
+        <p className="font-bold text-green-950">Need to check launch coverage?</p>
+        <p>Use the dedicated Delivery Coverage page to test every orderable product against a destination and delivery method.</p>
+        <Link href="/admin/delivery-coverage" className="mt-3 inline-flex h-10 items-center rounded-full bg-green-800 px-4 text-sm font-bold text-white">Check Delivery Coverage</Link>
+      </div>
       <AdminTable
         headers={["Product", "Location", "Method", "Package", "First fee", "Extra fee", "ETA", "Status", "Actions"]}
         rows={filteredRates.map((rate) => [
@@ -331,7 +342,7 @@ export function AdminProductDeliveryRatesClient({
   );
 }
 
-function CoverageChecker({
+export function CoverageChecker({
   rows,
   states,
   cities,
@@ -411,7 +422,7 @@ function CoverageChecker({
   );
 }
 
-function isOrderableProduct(product: ProductWithId) {
+export function isOrderableProduct(product: ProductWithId) {
   return (
     product.status === "active" &&
     product.pricingMode !== "quote_required" &&
@@ -420,7 +431,7 @@ function isOrderableProduct(product: ProductWithId) {
   );
 }
 
-function toDeliveryProduct(product: ProductWithId): DeliveryProductForCalculation {
+export function toDeliveryProduct(product: ProductWithId): DeliveryProductForCalculation {
   return {
     productId: product.id,
     name: product.name,
@@ -440,7 +451,7 @@ function nigeriaLocationsCityNames() {
   return nigeriaStateNames.flatMap((state) => getNigeriaCities(state));
 }
 
-function sourceToLabel(source: MatchingRateSource) {
+export function sourceToLabel(source: MatchingRateSource) {
   return {
     exact: "Exact city",
     all_city_fallback: "All-city fallback",
@@ -467,3 +478,6 @@ function RateInput({ label, value, onChange, type = "text", min, required = true
     </label>
   );
 }
+
+
+

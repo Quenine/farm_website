@@ -284,12 +284,12 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
           )}
         </section>
         <div className="grid gap-5 md:grid-cols-2">
-          <CheckoutInput name="customerName" label="Full name" placeholder="Adebayo Noble" value={fields.customerName} error={fieldErrors.customerName?.[0]} onChange={(value) => updateField("customerName", value)} />
-          <CheckoutInput name="customerPhone" label="Phone number" placeholder="0803 000 0000" value={fields.customerPhone} error={fieldErrors.customerPhone?.[0]} onChange={(value) => updateField("customerPhone", value)} />
-          <CheckoutInput name="customerEmail" label="Email" placeholder="orders@example.com" type="email" value={fields.customerEmail} error={fieldErrors.customerEmail?.[0]} onChange={(value) => updateField("customerEmail", value)} />
+          <CheckoutInput name="customerName" label="Full Name" placeholder="Adebayo Noble" value={fields.customerName} error={fieldErrors.customerName?.[0]} onChange={(value) => updateField("customerName", value)} />
+          <CheckoutInput name="customerPhone" label="Phone Number" placeholder="0803 000 0000" value={fields.customerPhone} error={fieldErrors.customerPhone?.[0]} onChange={(value) => updateField("customerPhone", value)} />
+          <CheckoutInput name="customerEmail" label="Email Address" placeholder="orders@example.com" type="email" value={fields.customerEmail} error={fieldErrors.customerEmail?.[0]} onChange={(value) => updateField("customerEmail", value)} />
           <CheckoutInput name="deliveryDate" label={selectedDeliveryMethod === "farm_pickup" ? "Pickup date" : "Delivery date"} type="date" min={new Date().toISOString().slice(0, 10)} value={fields.deliveryDate} error={fieldErrors.deliveryDate?.[0]} onChange={(value) => updateField("deliveryDate", value)} />
         </div>
-        <CheckoutInput name="deliveryAddress" label={selectedDeliveryMethod === "farm_pickup" ? "Pickup note/address (optional)" : "Delivery address"} placeholder={selectedDeliveryMethod === "farm_pickup" ? "Pickup arrangement or fulfilment detail" : "House number, street, landmark"} value={fields.deliveryAddress} required={selectedDeliveryMethod !== "farm_pickup"} error={fieldErrors.deliveryAddress?.[0]} onChange={(value) => updateField("deliveryAddress", value)} />
+        <CheckoutInput name="deliveryAddress" label={selectedDeliveryMethod === "home_delivery" ? "Delivery Address" : "Pickup or delivery note"} placeholder={selectedDeliveryMethod === "farm_pickup" ? "Pickup arrangement or fulfilment detail" : "House number, street, landmark"} value={fields.deliveryAddress} required={selectedDeliveryMethod === "home_delivery"} error={fieldErrors.deliveryAddress?.[0]} onChange={(value) => updateField("deliveryAddress", value)} />
         <label className="grid gap-2 text-sm font-semibold text-stone-800">
           Delivery note
           <textarea name="deliveryNote" value={fields.deliveryNote} onChange={(event) => updateField("deliveryNote", event.target.value)} placeholder="Gate color, preferred call time, pickup detail, or handling instruction" rows={4} className="rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm font-normal text-stone-900 shadow-sm" />
@@ -306,7 +306,7 @@ export function CheckoutForm({ rates }: { rates: ProductDeliveryRate[] }) {
           {calculation.supported ? (
             <p>
               Delivery fee: <strong>{new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(calculation.deliveryFee)}</strong>
-              {calculation.estimatedDeliveryTime ? <> Â· Estimated time: {calculation.estimatedDeliveryTime}</> : null}
+              {calculation.estimatedDeliveryTime ? <> - Estimated time: {calculation.estimatedDeliveryTime}</> : null}
             </p>
           ) : (
             <div className="grid gap-3">
@@ -350,12 +350,33 @@ function CheckoutInput({
   required?: boolean;
   onChange: (value: string) => void;
 }) {
+  const errorId = `${name}-error`;
   return (
     <label className="grid gap-2 text-sm font-semibold text-stone-800">
-      {label}
-      <input required={required} name={name} type={type} min={min} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="h-12 rounded-lg border border-stone-200 bg-white px-4 text-sm font-normal text-stone-900 shadow-sm" />
-      {error ? <span className="text-xs text-red-700">{error}</span> : null}
+      <RequiredLabel text={label} required={required} />
+      <input
+        required={required}
+        aria-required={required}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        name={name}
+        type={type}
+        min={min}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-12 rounded-lg border border-stone-200 bg-white px-4 text-sm font-normal text-stone-900 shadow-sm focus:border-green-700 focus:outline-none focus:ring-2 focus:ring-green-700/20"
+      />
+      {error ? <span id={errorId} className="text-xs font-semibold text-red-700">{error}</span> : null}
     </label>
+  );
+}
+
+function RequiredLabel({ text, required = true }: { text: string; required?: boolean }) {
+  return (
+    <span>
+      {text}{required ? <span className="text-red-700"> *</span> : null}
+    </span>
   );
 }
 

@@ -1,9 +1,9 @@
-﻿/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { siteConfig } from "@/src/config/site";
 import { logoutAdmin } from "@/app/admin/logout/actions";
-import { adminNav } from "@/src/lib/business-data";
+import { AdminNavLinks } from "@/src/components/admin-nav-links";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
@@ -23,18 +23,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <span className="mt-1 block text-xs text-green-100">Owner admin</span>
             </span>
           </Link>
-          <nav className="mt-5 grid gap-1">
-            {adminNav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-semibold text-green-50 transition hover:bg-white/10"
-              >
-                <item.icon size={18} />
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <AdminNavLinks />
           <form action={logoutAdmin} className="mt-6 border-t border-white/15 pt-5">
             <button
               type="submit"
@@ -165,6 +154,8 @@ export function AdminTable({
     </div>
   );
 }
+
+
 
 
 

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import { confirmDeliveryFeeAction, updateOrderStatusAction } from "@/app/admin/(protected)/orders/actions";
@@ -21,23 +21,44 @@ const statuses = [
   "cancelled",
 ] as const;
 type EditableStatus = (typeof statuses)[number];
-type Filter = "all" | EditableStatus;
+type StatusFilter = "all" | EditableStatus;
 
 export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] }) {
   const [items, setItems] = useState(initialOrders);
   const [selected, setSelected] = useState<Order | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [search, setSearch] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [deliveryMethodFilter, setDeliveryMethodFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [deliveryFeeInput, setDeliveryFeeInput] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const filtered = useMemo(
-    () =>
-      filter === "all"
-        ? items
-        : items.filter((order) => order.orderStatus === filter),
-    [filter, items],
-  );
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return items
+      .filter((order) => {
+        if (query && ![order.reference, order.customerName, order.customerPhone, order.customerEmail].join(" ").toLowerCase().includes(query)) return false;
+        if (statusFilter !== "all" && order.orderStatus !== statusFilter) return false;
+        if (paymentFilter !== "all" && order.paymentStatus !== paymentFilter) return false;
+        if (deliveryMethodFilter !== "all" && order.deliveryMethod !== deliveryMethodFilter) return false;
+        if (dateFrom && new Date(order.createdAt) < new Date(`${dateFrom}T00:00:00`)) return false;
+        if (dateTo && new Date(order.createdAt) > new Date(`${dateTo}T23:59:59`)) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [dateFrom, dateTo, deliveryMethodFilter, items, paymentFilter, search, statusFilter]);
+
+  const resetFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setPaymentFilter("all");
+    setDeliveryMethodFilter("all");
+    setDateFrom("");
+    setDateTo("");
+  };
 
   const updateStatus = (order: Order, status: EditableStatus) => {
     setMessage(null);
@@ -93,23 +114,45 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
           {message}
         </div>
       ) : null}
-      <div className="mb-4 flex justify-end">
-        <label className="flex items-center gap-3 text-sm font-semibold text-stone-700">
-          Filter status
-          <select
-            value={filter}
-            onChange={(event) => setFilter(event.target.value as Filter)}
-            className="h-10 rounded-lg border border-stone-200 bg-white px-3"
-          >
-            <option value="all">All</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {formatOrderStatus(status)}
-              </option>
-            ))}
-          </select>
+      <div className="mb-4 grid gap-3 rounded-lg bg-white p-4 shadow-sm lg:grid-cols-4">
+        <label className="grid gap-2 text-sm font-semibold text-stone-800 lg:col-span-2">
+          Search orders
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Reference, customer, phone, email" className="h-10 rounded-lg border border-stone-200 px-3 font-normal" />
         </label>
+        <OrderFilter label="Payment" value={paymentFilter} onChange={setPaymentFilter}>
+          <option value="all">All payments</option>
+          <option value="pending">Pending</option>
+          <option value="paid">Paid</option>
+          <option value="failed">Failed</option>
+        </OrderFilter>
+        <OrderFilter label="Order status" value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)}>
+          <option value="all">All statuses</option>
+          {statuses.map((status) => <option key={status} value={status}>{formatOrderStatus(status)}</option>)}
+        </OrderFilter>
+        <OrderFilter label="Delivery method" value={deliveryMethodFilter} onChange={setDeliveryMethodFilter}>
+          <option value="all">All methods</option>
+          <option value="home_delivery">Home Delivery</option>
+          <option value="pickup_point">Pickup Point</option>
+          <option value="farm_pickup">Farm Pickup</option>
+        </OrderFilter>
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          From
+          <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-10 rounded-lg border border-stone-200 px-3 font-normal" />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          To
+          <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-10 rounded-lg border border-stone-200 px-3 font-normal" />
+        </label>
+        <div className="flex items-end justify-end gap-2">
+          <button type="button" onClick={resetFilters} className="h-10 rounded-full border border-green-800 px-4 text-xs font-bold text-green-900">Clear filters</button>
+          <span className="text-sm font-semibold text-stone-600">{filtered.length} shown</span>
+        </div>
       </div>
+      {filtered.length === 0 ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+          No orders match your filters. Clear filters or adjust your search.
+        </div>
+      ) : null}
       <AdminTable
         headers={[
           "Order",
@@ -129,7 +172,7 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
           </span>,
           order.customerName,
           order.customerPhone,
-          `${formatDeliveryMethod(order.deliveryMethod)} · ${order.deliveryCity ?? ""}${order.deliveryState ? `, ${order.deliveryState}` : ""}`,
+          `${formatDeliveryMethod(order.deliveryMethod)} - ${order.deliveryCity ?? ""}${order.deliveryState ? `, ${order.deliveryState}` : ""}`,
           formatNaira(order.deliveryFee),
           formatNaira(order.totalAmount),
           <StatusBadge
@@ -289,7 +332,7 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
                             {item.productName}
                           </p>
                           <p className="text-stone-500">
-                            {item.quantity} {item.unit} ×{" "}
+                            {item.quantity} {item.unit} Ãƒâ€”{" "}
                             {formatNaira(item.unitPrice)}
                           </p>
                         </div>
@@ -351,6 +394,16 @@ export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] })
   );
 }
 
+function OrderFilter({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-2 text-sm font-semibold text-stone-800">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-lg border border-stone-200 bg-white px-3 font-normal">
+        {children}
+      </select>
+    </label>
+  );
+}
 function formatDeliveryMethod(method: Order["deliveryMethod"]) {
   const labels = {
     home_delivery: "Home Delivery",
@@ -367,5 +420,4 @@ function Detail({ label, value }: { label: string; value: string }) {
     </p>
   );
 }
-
 

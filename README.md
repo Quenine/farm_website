@@ -81,7 +81,7 @@ For catalogue/rate alignment, run these scripts in each farm's own Supabase proj
 3. `database/backfill-universal-rates-for-all-orderable-products.sql`
 4. `database/verify-all-products-orderable-and-rated.sql`
 
-Run them separately for Noble Farms and Shields Farms if both farms should stay aligned. The legacy price seed applies confirmed legacy prices, uses clear placeholder prices where prices were missing, and avoids â‚¦0 checkout products. Admin should review placeholder prices before public launch.
+Run them separately for Noble Farms and Shields Farms if both farms should stay aligned. The legacy price seed applies confirmed legacy prices, uses clear placeholder prices where prices were missing, and avoids Ã¢â€šÂ¦0 checkout products. Admin should review placeholder prices before public launch.
 
 The universal delivery backfill creates product delivery rates for every active fixed-price orderable product using city = `All` for every Nigerian state plus FCT:
 
