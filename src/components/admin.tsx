@@ -4,8 +4,10 @@ import { LogOut } from "lucide-react";
 import { siteConfig } from "@/src/config/site";
 import { logoutAdmin } from "@/app/admin/logout/actions";
 import { AdminNavLinks } from "@/src/components/admin-nav-links";
+import { getContentFeatures } from "@/src/lib/content-features";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  const contentFeatures = getContentFeatures();
   return (
     <div className="min-h-screen bg-stone-100">
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[260px_1fr]">
@@ -23,7 +25,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <span className="mt-1 block text-xs text-green-100">Owner admin</span>
             </span>
           </Link>
-          <AdminNavLinks />
+          <AdminNavLinks features={contentFeatures} />
           <form action={logoutAdmin} className="mt-6 border-t border-white/15 pt-5">
             <button
               type="submit"

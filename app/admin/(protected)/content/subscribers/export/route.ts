@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { contentPublicConfig } from "@/src/config/site";
 import { requireAdmin } from "@/src/lib/admin-auth";
-import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   await requireAdmin();
   if (!contentPublicConfig.subscriptionsEnabled) return new NextResponse("Subscribers disabled.", { status: 404 });
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const { data, error } = await supabase.from("content_subscribers").select("email,status,subscription_topic,source_path,consented_at,unsubscribed_at").order("created_at", { ascending: false }).limit(5000);
   if (error) return new NextResponse("Unable to export subscribers.", { status: 500 });
   const rows = [["email","status","subscription_topic","source_path","consented_at","unsubscribed_at"], ...((data ?? []) as Array<Record<string, unknown>>).map((row)=>[row.email,row.status,row.subscription_topic,row.source_path,row.consented_at,row.unsubscribed_at])];

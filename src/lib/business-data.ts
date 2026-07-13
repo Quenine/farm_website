@@ -1,21 +1,5 @@
-import {
-  BarChart3,
-  Boxes,
-  CircleGauge,
-  ClipboardList,
-  FileText,
-  Handshake,
-  ListChecks,
-  MapPin,
-  MapPinned,
-  Megaphone,
-  PackageCheck,
-  Settings,
-} from "lucide-react";
-import { contentPublicConfig } from "@/src/config/site";
 import { formatNaira } from "@/src/lib/format";
 import type {
-  AdminNavItem,
   DeliverySettings,
   DeliveryZone,
   PreviewOrder,
@@ -314,20 +298,6 @@ export const orders: PreviewOrder[] = [
   },
 ];
 
-export const adminNav: AdminNavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: BarChart3 },
-  { href: "/admin/products", label: "Products", icon: PackageCheck },
-  { href: "/admin/orders", label: "Orders", icon: ClipboardList },
-  { href: "/admin/inventory", label: "Inventory", icon: Boxes },
-  { href: "/admin/delivery-rates", label: "Delivery Rates", icon: MapPin },
-  { href: "/admin/delivery-coverage", label: "Delivery Coverage", icon: MapPinned },
-  ...(contentPublicConfig.hubEnabled ? [{ href: "/admin/content", label: "Content", icon: FileText }] : []),
-  ...(contentPublicConfig.affiliateEnabled ? [{ href: "/admin/affiliate", label: "Affiliate", icon: Handshake }] : []),
-  { href: "/admin/marketing/campaigns", label: "Marketing", icon: Megaphone },
-  { href: "/admin/launch-checklist", label: "Launch Checklist", icon: ListChecks },
-  { href: "/admin/diagnostics", label: "Diagnostics", icon: CircleGauge },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
-];
 
 export { formatNaira };
 

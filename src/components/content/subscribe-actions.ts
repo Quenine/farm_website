@@ -3,7 +3,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
 import { contentPublicConfig } from "@/src/config/site";
-import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 import { hasAdminSupabaseConfig } from "@/src/lib/supabase/config";
 
 const buckets = new Map<string, number[]>();
@@ -49,7 +49,7 @@ export async function subscribeToContentUpdates(_previous: SubscribeState, formD
   const email = parsed.data.email.toLowerCase();
   if (limited(email)) return { ok: false, message: "Please wait a few minutes before trying again." };
 
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const payload = {
     email,
     status: "active",

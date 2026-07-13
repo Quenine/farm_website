@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { contentConfig } from "@/src/lib/content-config";
-import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 import { hasAdminSupabaseConfig } from "@/src/lib/supabase/config";
 import type { Product } from "@/src/types";
 
@@ -286,12 +286,13 @@ export function mapPost(row: RawPost): ContentPost {
 
 export const getContentIndexData = cache(async (filters: ContentListFilters = {}): Promise<ContentListResult> => {
   if (!contentConfig.hubEnabled || !hasAdminSupabaseConfig()) return contentDisabledResult();
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const page = Math.max(1, Number(filters.page ?? 1));
   let query = supabase
     .from("content_posts")
     .select(postSelect, { count: "exact" })
     .eq("status", "published")
+    .not("published_at", "is", null)
     .lte("published_at", new Date().toISOString())
     .order("is_featured", { ascending: false })
     .order("published_at", { ascending: false })
@@ -324,12 +325,13 @@ export const getContentIndexData = cache(async (filters: ContentListFilters = {}
 
 export async function getPublishedPostBySlug(slug: string) {
   if (!contentConfig.hubEnabled || !hasAdminSupabaseConfig()) return null;
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const { data, error } = await supabase
     .from("content_posts")
     .select(postSelect)
     .eq("slug", slug)
     .eq("status", "published")
+    .not("published_at", "is", null)
     .lte("published_at", new Date().toISOString())
     .maybeSingle();
   if (shouldHideSupabaseError(error)) return null;
@@ -339,7 +341,7 @@ export async function getPublishedPostBySlug(slug: string) {
 
 export async function getActiveAffiliateOffer(slug: string) {
   if (!contentConfig.affiliateEnabled || !hasAdminSupabaseConfig()) return null;
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const { data, error } = await supabase
     .from("affiliate_offers")
     .select("id, title, slug, destination_url, is_active, affiliate_partners ( id, name, slug, website_url, is_active )")
@@ -357,7 +359,7 @@ export async function getContentAdminSummary() {
   if (!contentConfig.hubEnabled || !hasAdminSupabaseConfig()) {
     return { configured: false, posts: 0, drafts: 0, review: 0, published: 0, videos: 0, comparisons: 0, affiliatePosts: 0, affiliateClicks: 0, productClicks: 0, activeSubscribers: 0, contentAssistedPaidOrders: 0, contentAssistedPaidRevenue: 0 };
   }
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const [posts, affiliateClicks, productClicks, subscribers, orders] = await Promise.all([
     supabase.from("content_posts").select("status, content_format, contains_affiliate_content"),
     supabase.from("affiliate_clicks").select("id", { count: "exact", head: true }),

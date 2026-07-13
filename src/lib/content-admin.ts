@@ -2,7 +2,7 @@ import "server-only";
 
 import { contentPublicConfig } from "@/src/config/site";
 import { requireAdmin } from "@/src/lib/admin-auth";
-import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 import { hasAdminSupabaseConfig } from "@/src/lib/supabase/config";
 import { formatNaira } from "@/src/lib/format";
 
@@ -68,7 +68,7 @@ function likeFilter(query: unknown, entity: AdminEntity, search: string) {
 
 async function countByColumn(table: string, column: string, ids: string[]) {
   if (ids.length === 0) return new Map<string, number>();
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const { data, error } = await supabase.from(table).select(column).in(column, ids);
   if (error) {
     console.error("[Content Admin Count Failed]", { table, column, code: error.code, message: error.message });
@@ -135,7 +135,7 @@ function adminLoadMessage(entity: AdminEntity, message: string) {
 
 export async function loadAdminEntity(entity: AdminEntity, filters: Record<string, string | undefined> = {}) {
   await ensureContentAdmin(entity);
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const page = Math.max(1, Number(filters.page ?? 1));
   const pageSize = 25;
   let query = supabase
@@ -189,7 +189,7 @@ export async function loadAdminEntity(entity: AdminEntity, filters: Record<strin
 export async function loadAdminOptions() {
   await requireAdmin();
   if (!hasAdminSupabaseConfig()) return { authors: [], categories: [], tags: [], sources: [], products: [], partners: [], offers: [], posts: [] };
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const [authors, categories, tags, sources, products, partners, offers, posts] = await Promise.all([
     contentPublicConfig.hubEnabled ? supabase.from("content_authors").select("id,name,slug,is_active").order("name") : Promise.resolve({ data: [] }),
     contentPublicConfig.hubEnabled ? supabase.from("content_categories").select("id,name,slug,is_active").order("sort_order").order("name") : Promise.resolve({ data: [] }),
@@ -214,7 +214,7 @@ export async function loadAdminOptions() {
 
 export async function loadPostForEdit(id: string) {
   await ensureContentAdmin("posts");
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const { data, error } = await supabase
     .from("content_posts")
     .select("*, content_post_tags(tag_id), content_post_sources(source_id), content_post_products(product_id,sort_order,custom_context), content_post_affiliate_offers(offer_id,sort_order,best_for,editorial_verdict,pros,cons), content_videos(*)")
@@ -226,7 +226,7 @@ export async function loadPostForEdit(id: string) {
 
 export async function loadContentDashboard() {
   await ensureContentAdmin("posts");
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const [posts, affiliateClicks, productClicks, subscribers, paidOrders] = await Promise.all([
     supabase.from("content_posts").select("id,status,content_format,contains_affiliate_content"),
     supabase.from("affiliate_clicks").select("id", { count: "exact", head: true }),
@@ -258,7 +258,7 @@ export async function loadContentDashboard() {
 
 export async function loadAffiliateDashboard() {
   await ensureContentAdmin("partners");
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const [partners, offers, clicks, topOffers, topPosts] = await Promise.all([
     supabase.from("affiliate_partners").select("id,is_active"),
     supabase.from("affiliate_offers").select("id,is_active"),
@@ -292,7 +292,7 @@ export async function loadAffiliateDashboard() {
 
 export async function loadCommerceReport() {
   await ensureContentAdmin("posts");
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   const [clicks, orders, relationships] = await Promise.all([
     supabase.from("content_product_clicks").select("post_id,product_id,clicked_at,content_posts(title,slug),products(name,slug)").order("clicked_at", { ascending: false }).limit(500),
     supabase.from("orders").select("id,order_reference,total_amount,payment_status,created_at,content_attribution").not("content_attribution", "is", null).order("created_at", { ascending: false }).limit(100),
@@ -341,7 +341,7 @@ export async function loadContentOperationalDiagnostics() {
     ordersContentAttributionAvailable: false,
   };
   if (!hasAdminSupabaseConfig()) return checks;
-  const supabase = createAdminSupabaseClient();
+  const supabase = createContentAdminSupabaseClient();
   try {
     const [authors, categories, partners, products, ordersColumn] = await Promise.all([
       supabase.from("content_authors").select("id,name,slug,is_active,credentials_or_experience,avatar_url,avatar_alt,social_links", { count: "exact", head: true }),

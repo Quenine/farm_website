@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { contentPublicConfig } from "@/src/config/site";
 import { getPublishedPostBySlug } from "@/src/lib/content";
 import { getPublicProductBySlug } from "@/src/lib/products";
-import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 import { hasAdminSupabaseConfig } from "@/src/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const consent = request.nextUrl.searchParams.get("consent") === "1";
   if (consent && hasAdminSupabaseConfig()) {
     try {
-      const supabase = createAdminSupabaseClient();
+      const supabase = createContentAdminSupabaseClient();
       await supabase.from("content_product_clicks").insert({ post_id: post.id, product_id: product.id, destination_path: destination, consent_recorded: true });
     } catch {
       // Internal product redirects should never fail because reporting failed.

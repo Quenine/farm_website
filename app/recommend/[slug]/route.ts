@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { contentPublicConfig } from "@/src/config/site";
 import { getActiveAffiliateOffer, getPublishedPostBySlug, validHttpUrl } from "@/src/lib/content";
-import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 import { hasAdminSupabaseConfig } from "@/src/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const consent = request.nextUrl.searchParams.get("consent") === "1";
   if (consent && hasAdminSupabaseConfig()) {
     try {
-      const supabase = createAdminSupabaseClient();
+      const supabase = createContentAdminSupabaseClient();
       await supabase.from("affiliate_clicks").insert({ offer_id: offer.id, post_id: post?.id ?? null, referrer_path: post ? `/blog/${post.slug}` : request.headers.get("referer"), consent_recorded: true, campaign_context: null });
     } catch {
       // Redirects must continue even if optional click logging fails.

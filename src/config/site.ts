@@ -1,3 +1,4 @@
+import { envFlag } from "@/src/lib/content-features";
 import {
   assertValidSiteUrl,
   getSiteHostname,
@@ -11,9 +12,9 @@ function publicEnv(name: string, fallback: string) {
 }
 
 function publicBool(name: string, fallback: boolean) {
-  const value = process.env[name]?.trim().toLowerCase();
-  if (!value) return fallback;
-  return ["1", "true", "yes", "on"].includes(value);
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") return fallback;
+  return envFlag(value);
 }
 
 function phoneDigits(value: string) {

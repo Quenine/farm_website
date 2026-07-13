@@ -5,7 +5,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureContentAdmin, type AdminEntity } from "@/src/lib/content-admin";
-import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 
 export type AdminMutationState = { success: true; message: string; id?: string } | { success: false; message: string; fieldErrors?: Record<string, string[]> };
 
@@ -136,7 +136,7 @@ export async function saveAdminEntityAction(entity: keyof typeof schemas, payloa
     await ensureContentAdmin(entity as AdminEntity);
     const parsed = schemas[entity].safeParse(flattenPayload(payload));
     if (!parsed.success) return { success: false, message: "Please correct the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
-    const supabase = createAdminSupabaseClient();
+    const supabase = createContentAdminSupabaseClient();
     const table = entityTables[entity as AdminEntity];
     if (!table) throw new Error("Unsupported entity.");
     const id = (parsed.data as { id?: string | null }).id;
@@ -158,7 +158,7 @@ export async function toggleAdminEntityAction(entity: keyof typeof schemas, id: 
     const parsedId = z.string().uuid().parse(id);
     const table = entityTables[entity as AdminEntity];
     if (!table) throw new Error("Unsupported entity.");
-    const supabase = createAdminSupabaseClient();
+    const supabase = createContentAdminSupabaseClient();
     const { error } = await supabase.from(table).update({ is_active: active }).eq("id", parsedId);
     if (error) throw new Error(error.message);
     revalidateContentAdmin();
@@ -206,7 +206,7 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
     await ensureContentAdmin("posts");
     const parsed = postSchema.safeParse(payload);
     if (!parsed.success) return { success: false, message: "Please correct the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
-    const supabase = createAdminSupabaseClient();
+    const supabase = createContentAdminSupabaseClient();
     const value = parsed.data;
     const status = value.action === "publish" ? "published" : value.action === "review" ? "review" : value.action === "archive" ? "archived" : value.action === "unpublish" ? "draft" : value.status;
     const postPayload = {

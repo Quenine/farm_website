@@ -47,21 +47,6 @@ export function PublicHeader() {
               Blog
             </Link>
           ) : null}
-          {contentPublicConfig.hubEnabled ? (
-            <Link href="/resources" className="hover:text-green-800">
-              Resources
-            </Link>
-          ) : null}
-          {contentPublicConfig.hubEnabled ? (
-            <Link href="/videos" className="hover:text-green-800">
-              Videos
-            </Link>
-          ) : null}
-          {contentPublicConfig.toolsEnabled ? (
-            <Link href="/tools" className="hover:text-green-800">
-              Tools
-            </Link>
-          ) : null}
           <Link href="/about" className="hover:text-green-800">
             About
           </Link>
@@ -69,7 +54,7 @@ export function PublicHeader() {
             Contact
           </Link>
           <Link href="/track-order" className="hover:text-green-800">
-            Track order
+            Track Order
           </Link>
         </nav>
         <CartLink />
@@ -78,10 +63,9 @@ export function PublicHeader() {
         <Link href="/shop" className="shrink-0 hover:text-green-800">Shop</Link>
         <Link href="/business-supply" className="shrink-0 hover:text-green-800">Business Supply</Link>
         {contentPublicConfig.hubEnabled ? <Link href="/blog" className="shrink-0 hover:text-green-800">Blog</Link> : null}
-        {contentPublicConfig.hubEnabled ? <Link href="/resources" className="shrink-0 hover:text-green-800">Resources</Link> : null}
-        {contentPublicConfig.hubEnabled ? <Link href="/videos" className="shrink-0 hover:text-green-800">Videos</Link> : null}
-        {contentPublicConfig.toolsEnabled ? <Link href="/tools" className="shrink-0 hover:text-green-800">Tools</Link> : null}
-        <Link href="/track-order" className="shrink-0 hover:text-green-800">Track order</Link>
+<Link href="/about" className="shrink-0 hover:text-green-800">About</Link>
+        <Link href="/contact" className="shrink-0 hover:text-green-800">Contact</Link>
+        <Link href="/track-order" className="shrink-0 hover:text-green-800">Track Order</Link>
       </nav>
     </header>
   );

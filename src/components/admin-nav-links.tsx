@@ -2,19 +2,52 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { adminNav } from "@/src/lib/business-data";
+import {
+  BarChart3,
+  Boxes,
+  CircleGauge,
+  ClipboardList,
+  FileText,
+  Handshake,
+  ListChecks,
+  MapPin,
+  MapPinned,
+  Megaphone,
+  PackageCheck,
+  Settings,
+} from "lucide-react";
+import type { ContentFeatures } from "@/src/lib/content-features";
+import type { AdminNavItem } from "@/src/types";
+
+function buildAdminNav(features: ContentFeatures): AdminNavItem[] {
+  return [
+    { href: "/admin", label: "Dashboard", icon: BarChart3 },
+    { href: "/admin/products", label: "Products", icon: PackageCheck },
+    { href: "/admin/orders", label: "Orders", icon: ClipboardList },
+    { href: "/admin/inventory", label: "Inventory", icon: Boxes },
+    { href: "/admin/delivery-rates", label: "Delivery Rates", icon: MapPin },
+    { href: "/admin/delivery-coverage", label: "Delivery Coverage", icon: MapPinned },
+    ...(features.contentHubEnabled ? [{ href: "/admin/content", label: "Content", icon: FileText }] : []),
+    ...(features.affiliateContentEnabled ? [{ href: "/admin/affiliate", label: "Affiliate", icon: Handshake }] : []),
+    { href: "/admin/marketing/campaigns", label: "Marketing", icon: Megaphone },
+    { href: "/admin/launch-checklist", label: "Launch Checklist", icon: ListChecks },
+    { href: "/admin/diagnostics", label: "Diagnostics", icon: CircleGauge },
+    { href: "/admin/settings", label: "Settings", icon: Settings },
+  ];
+}
 
 function isActiveRoute(pathname: string, href: string) {
   if (href === "/admin") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AdminNavLinks() {
+export function AdminNavLinks({ features }: { features: ContentFeatures }) {
   const pathname = usePathname();
+  const nav = buildAdminNav(features);
 
   return (
     <nav className="mt-5 grid gap-1">
-      {adminNav.map((item) => {
+      {nav.map((item) => {
         const active = isActiveRoute(pathname, item.href);
         return (
           <Link

@@ -2,11 +2,12 @@ import "server-only";
 
 import type { Metadata } from "next";
 import { contentPublicConfig, siteConfig } from "@/src/config/site";
+import { envFlag } from "@/src/lib/content-features";
 
 function serverBool(name: string, fallback: boolean) {
-  const value = process.env[name]?.trim().toLowerCase();
-  if (!value) return fallback;
-  return ["1", "true", "yes", "on"].includes(value);
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") return fallback;
+  return envFlag(value);
 }
 
 export const contentConfig = {
