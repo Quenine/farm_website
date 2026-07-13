@@ -42,6 +42,26 @@ export function PublicHeader() {
           <Link href="/business-supply" className="hover:text-green-800">
             Business Supply
           </Link>
+          {contentPublicConfig.hubEnabled ? (
+            <Link href="/blog" className="hover:text-green-800">
+              Blog
+            </Link>
+          ) : null}
+          {contentPublicConfig.hubEnabled ? (
+            <Link href="/resources" className="hover:text-green-800">
+              Resources
+            </Link>
+          ) : null}
+          {contentPublicConfig.hubEnabled ? (
+            <Link href="/videos" className="hover:text-green-800">
+              Videos
+            </Link>
+          ) : null}
+          {contentPublicConfig.toolsEnabled ? (
+            <Link href="/tools" className="hover:text-green-800">
+              Tools
+            </Link>
+          ) : null}
           <Link href="/about" className="hover:text-green-800">
             About
           </Link>

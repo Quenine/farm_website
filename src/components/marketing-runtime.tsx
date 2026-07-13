@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   captureAttributionFromLocation,
   CONSENT_STORAGE_KEY,
@@ -14,30 +14,39 @@ function defaultDraft(): ConsentPreferences {
   return { essential: true, analytics: false, marketing: false, updatedAt: new Date().toISOString() };
 }
 
-function initialPreferences() {
-  return getConsentPreferences();
-}
+type ConsentView = "banner" | "modal" | "hidden";
 
 export function MarketingRuntime() {
-  const [preferences, setPreferences] = useState<ConsentPreferences | null>(() => initialPreferences());
-  const [showBanner, setShowBanner] = useState(() => !initialPreferences());
-  const [managing, setManaging] = useState(false);
-  const [draft, setDraft] = useState<ConsentPreferences>(() => initialPreferences() ?? defaultDraft());
+  const [hydrated, setHydrated] = useState(false);
+  const [preferences, setPreferences] = useState<ConsentPreferences | null>(null);
+  const [view, setView] = useState<ConsentView>("hidden");
+  const [draft, setDraft] = useState<ConsentPreferences>(() => defaultDraft());
+  const manageButtonRef = useRef<HTMLButtonElement | null>(null);
+  const saveButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    captureAttributionFromLocation();
-    trackPageView();
-
-    const openPreferences = () => {
-      const latest = getConsentPreferences();
-      setDraft(latest ?? defaultDraft());
-      setManaging(true);
-      setShowBanner(true);
-    };
-    const onConsentChanged = () => {
+    window.queueMicrotask(() => {
       const latest = getConsentPreferences();
       setPreferences(latest);
-      if (latest?.analytics || latest?.marketing) trackPageView();
+      setDraft(latest ?? defaultDraft());
+      setView(latest ? "hidden" : "banner");
+      setHydrated(true);
+      captureAttributionFromLocation();
+      trackPageView();
+    });
+
+    const openPreferences = () => {
+      const stored = getConsentPreferences();
+      const next = stored ?? defaultDraft();
+      setPreferences(stored);
+      setDraft(next);
+      setView("modal");
+      window.setTimeout(() => saveButtonRef.current?.focus(), 0);
+    };
+    const onConsentChanged = () => {
+      const stored = getConsentPreferences();
+      setPreferences(stored);
+      if (stored?.analytics || stored?.marketing) trackPageView();
     };
     window.addEventListener("farm-open-cookie-preferences", openPreferences);
     window.addEventListener("farm-consent-changed", onConsentChanged);
@@ -47,22 +56,34 @@ export function MarketingRuntime() {
     };
   }, []);
 
-  const save = (analytics: boolean, marketing: boolean) => {
+  useEffect(() => {
+    if (view !== "modal") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (preferences) setView("hidden");
+      else setView("banner");
+      window.setTimeout(() => manageButtonRef.current?.focus(), 0);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [preferences, view]);
+
+  const persist = (analytics: boolean, marketing: boolean) => {
     const next = saveConsentPreferences({ analytics, marketing });
     setPreferences(next);
     setDraft(next);
-    setShowBanner(false);
-    setManaging(false);
+    setView("hidden");
     if (analytics || marketing) trackPageView();
   };
 
-  if (!showBanner && preferences) return null;
+  if (!hydrated || view === "hidden") return null;
+  const managing = view === "modal";
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-green-900/10 bg-[#fbf7ed] p-4 shadow-2xl">
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-green-900/10 bg-[#fbf7ed] p-4 shadow-2xl" role="dialog" aria-modal={managing} aria-labelledby="privacy-preferences-title">
       <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-[1fr_auto] md:items-end">
         <div>
-          <p className="text-sm font-bold text-green-950">Privacy preferences</p>
+          <p id="privacy-preferences-title" className="text-sm font-bold text-green-950">Privacy preferences</p>
           <p className="mt-1 text-sm leading-6 text-stone-700">
             Essential cookies keep cart, checkout and security working. Analytics and marketing tracking are optional and only load after consent.
           </p>
@@ -82,12 +103,12 @@ export function MarketingRuntime() {
         </div>
         <div className="flex flex-wrap gap-2 md:justify-end">
           {managing ? (
-            <button type="button" onClick={() => save(draft.analytics, draft.marketing)} className="h-10 rounded-full bg-green-800 px-4 text-sm font-bold text-white">Save preferences</button>
+            <button ref={saveButtonRef} type="button" onClick={() => persist(draft.analytics, draft.marketing)} className="h-10 rounded-full bg-green-800 px-4 text-sm font-bold text-white">Save Preferences</button>
           ) : (
-            <button type="button" onClick={() => setManaging(true)} className="h-10 rounded-full border border-green-800 px-4 text-sm font-bold text-green-950">Manage Preferences</button>
+            <button ref={manageButtonRef} type="button" onClick={() => setView("modal")} className="h-10 rounded-full border border-green-800 px-4 text-sm font-bold text-green-950">Manage Preferences</button>
           )}
-          <button type="button" onClick={() => save(false, false)} className="h-10 rounded-full border border-green-800 px-4 text-sm font-bold text-green-950">Reject Non-Essential</button>
-          <button type="button" onClick={() => save(true, true)} className="h-10 rounded-full bg-green-800 px-4 text-sm font-bold text-white">Accept All</button>
+          <button type="button" onClick={() => persist(false, false)} className="h-10 rounded-full border border-green-800 px-4 text-sm font-bold text-green-950">Reject Non-Essential</button>
+          <button type="button" onClick={() => persist(true, true)} className="h-10 rounded-full bg-green-800 px-4 text-sm font-bold text-white">Accept All</button>
         </div>
       </div>
     </div>

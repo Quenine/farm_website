@@ -23,13 +23,13 @@ const tables: Record<AdminEntity, string> = {
 };
 
 const selectColumns: Record<AdminEntity, string> = {
-  authors: "id,name,slug,role_title,bio,avatar_url,avatar_alt,credentials_or_experience,is_active,updated_at,content_posts(count)",
-  categories: "id,name,slug,description,seo_title,seo_description,sort_order,is_active,updated_at,content_posts(count)",
-  tags: "id,name,slug,description,is_active,updated_at,content_post_tags(count)",
-  sources: "id,title,publisher,url,source_type,publication_date,accessed_at,is_primary_source,internal_note,is_active,updated_at,content_post_sources(count)",
+  authors: "id,name,slug,role_title,bio,avatar_url,avatar_alt,credentials_or_experience,is_active,updated_at",
+  categories: "id,name,slug,description,seo_title,seo_description,sort_order,is_active,updated_at",
+  tags: "id,name,slug,description,is_active,updated_at",
+  sources: "id,title,publisher,url,source_type,publication_date,accessed_at,is_primary_source,internal_note,is_active,updated_at",
   posts: "id,title,slug,excerpt,status,content_format,post_type,audience_scope,contains_affiliate_content,is_featured,published_at,updated_at,content_categories(name,slug),content_authors(name,slug)",
-  partners: "id,name,slug,website_url,affiliate_network,default_disclosure,internal_notes,is_active,updated_at,affiliate_offers(count)",
-  offers: "id,partner_id,title,slug,short_description,destination_url,image_url,image_alt,button_label,display_price,currency,price_last_checked_at,available_regions,recommendation_basis,is_featured,is_active,internal_commission_note,updated_at,affiliate_partners(name,slug),affiliate_clicks(count),content_post_affiliate_offers(count)",
+  partners: "id,name,slug,website_url,affiliate_network,default_disclosure,internal_notes,is_active,updated_at",
+  offers: "id,partner_id,title,slug,short_description,destination_url,image_url,image_alt,button_label,display_price,currency,price_last_checked_at,available_regions,recommendation_basis,is_featured,is_active,internal_commission_note,updated_at,affiliate_partners(name,slug)",
   videos: "id,post_id,platform,external_video_id,embed_url,watch_url,title,description,thumbnail_url,thumbnail_alt,duration_seconds,upload_date,transcript_markdown,chapters,is_active,updated_at,content_posts(title,slug)",
   subscribers: "id,email,status,source_path,subscription_topic,consented_at,unsubscribed_at,created_at,updated_at",
 };
@@ -64,6 +64,73 @@ function likeFilter(query: unknown, entity: AdminEntity, search: string) {
     subscribers: ["email", "source_path", "subscription_topic"],
   };
   return q.or(columns[entity].map((column) => `${column}.ilike.%${safe}%`).join(","));
+}
+
+async function countByColumn(table: string, column: string, ids: string[]) {
+  if (ids.length === 0) return new Map<string, number>();
+  const supabase = createAdminSupabaseClient();
+  const { data, error } = await supabase.from(table).select(column).in(column, ids);
+  if (error) {
+    console.error("[Content Admin Count Failed]", { table, column, code: error.code, message: error.message });
+    return new Map<string, number>();
+  }
+  const counts = new Map<string, number>();
+  for (const row of (data ?? []) as unknown as Array<Record<string, unknown>>) {
+    const id = String(row[column] ?? "");
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+async function withSafeCounts(entity: AdminEntity, records: AdminRecord[]): Promise<AdminRecord[]> {
+  const ids = records.map((record) => String(record.id ?? "")).filter(Boolean);
+  if (ids.length === 0) return records;
+  if (entity === "authors") {
+    const counts = await countByColumn("content_posts", "author_id", ids);
+    return records.map((record) => ({ ...record, post_count: counts.get(String(record.id)) ?? 0 }));
+  }
+  if (entity === "categories") {
+    const counts = await countByColumn("content_posts", "category_id", ids);
+    return records.map((record) => ({ ...record, post_count: counts.get(String(record.id)) ?? 0 }));
+  }
+  if (entity === "tags") {
+    const counts = await countByColumn("content_post_tags", "tag_id", ids);
+    return records.map((record) => ({ ...record, post_count: counts.get(String(record.id)) ?? 0 }));
+  }
+  if (entity === "sources") {
+    const counts = await countByColumn("content_post_sources", "source_id", ids);
+    return records.map((record) => ({ ...record, post_count: counts.get(String(record.id)) ?? 0 }));
+  }
+  if (entity === "partners") {
+    const counts = await countByColumn("affiliate_offers", "partner_id", ids);
+    return records.map((record) => ({ ...record, offer_count: counts.get(String(record.id)) ?? 0 }));
+  }
+  if (entity === "offers") {
+    const [clicks, posts] = await Promise.all([
+      countByColumn("affiliate_clicks", "offer_id", ids),
+      countByColumn("content_post_affiliate_offers", "offer_id", ids),
+    ]);
+    return records.map((record) => ({ ...record, click_count: clicks.get(String(record.id)) ?? 0, post_count: posts.get(String(record.id)) ?? 0 }));
+  }
+  return records;
+}
+
+function adminLoadMessage(entity: AdminEntity, message: string) {
+  const label: Record<AdminEntity, string> = {
+    authors: "Authors",
+    categories: "Categories",
+    tags: "Tags",
+    sources: "Sources",
+    posts: "Posts",
+    partners: "Affiliate partners",
+    offers: "Affiliate offers",
+    videos: "Videos",
+    subscribers: "Subscribers",
+  };
+  if (/column|schema cache|relationship|table|does not exist/i.test(message)) {
+    return "The " + label[entity] + " page could not load because the content database migration appears incomplete. Run database/step-content-affiliate-publisher.sql and database/verify-content-admin-operational.sql.";
+  }
+  return "The " + label[entity] + " page could not be loaded. Check the Content diagnostics on /admin/content.";
 }
 
 export async function loadAdminEntity(entity: AdminEntity, filters: Record<string, string | undefined> = {}) {
@@ -111,8 +178,12 @@ export async function loadAdminEntity(entity: AdminEntity, filters: Record<strin
   }
 
   const { data, error, count } = await query;
-  if (error) throw new Error(error.message);
-  return { records: (data ?? []) as unknown as AdminRecord[], count: count ?? 0, page, pageSize };
+  if (error) {
+    console.error("[Content Admin Load Failed]", { entity, code: error.code, message: error.message });
+    return { records: [] as AdminRecord[], count: 0, page, pageSize, error: adminLoadMessage(entity, error.message) };
+  }
+  const records = await withSafeCounts(entity, (data ?? []) as unknown as AdminRecord[]);
+  return { records, count: count ?? 0, page, pageSize };
 }
 
 export async function loadAdminOptions() {
@@ -163,6 +234,10 @@ export async function loadContentDashboard() {
     contentPublicConfig.subscriptionsEnabled ? supabase.from("content_subscribers").select("id", { count: "exact", head: true }).eq("status", "active") : Promise.resolve({ count: 0 }),
     supabase.from("orders").select("id,total_amount,payment_status,content_attribution").eq("payment_status", "paid").not("content_attribution", "is", null).limit(500),
   ]);
+  if (posts.error) {
+    console.error("[Content Dashboard Load Failed]", { code: posts.error.code, message: posts.error.message });
+    return { posts: 0, drafts: 0, review: 0, published: 0, videos: 0, comparisons: 0, affiliatePosts: 0, affiliateClicks: 0, productClicks: 0, activeSubscribers: 0, contentAssistedPaidOrders: 0, contentAssistedPaidRevenue: 0 };
+  }
   const rows = (posts.data ?? []) as Array<{ status: string; content_format: string; contains_affiliate_content: boolean }>;
   const orders = (paidOrders.data ?? []) as Array<{ total_amount: number | string }>;
   return {
@@ -248,3 +323,43 @@ export async function loadCommerceReport() {
     relationships: relationships.data ?? [],
   };
 }
+
+
+export async function loadContentOperationalDiagnostics() {
+  await requireAdmin();
+  const checks = {
+    contentHubEnabled: contentPublicConfig.hubEnabled,
+    affiliateContentEnabled: contentPublicConfig.affiliateEnabled,
+    contentToolsEnabled: contentPublicConfig.toolsEnabled,
+    contentSubscriptionsEnabled: contentPublicConfig.subscriptionsEnabled,
+    hasAdminConfig: hasAdminSupabaseConfig(),
+    contentTablesAvailable: false,
+    affiliateTablesAvailable: false,
+    requiredColumnsAvailable: false,
+    taxonomySeeded: false,
+    productsTableAvailable: false,
+    ordersContentAttributionAvailable: false,
+  };
+  if (!hasAdminSupabaseConfig()) return checks;
+  const supabase = createAdminSupabaseClient();
+  try {
+    const [authors, categories, partners, products, ordersColumn] = await Promise.all([
+      supabase.from("content_authors").select("id,name,slug,is_active,credentials_or_experience,avatar_url,avatar_alt,social_links", { count: "exact", head: true }),
+      supabase.from("content_categories").select("id,name,slug,is_active,sort_order,seo_title,seo_description", { count: "exact", head: true }),
+      supabase.from("affiliate_partners").select("id,name,slug,is_active,affiliate_network,default_disclosure,internal_notes", { count: "exact", head: true }),
+      supabase.from("products").select("id", { count: "exact", head: true }),
+      supabase.from("orders").select("content_attribution", { count: "exact", head: true }),
+    ]);
+    checks.contentTablesAvailable = !authors.error && !categories.error;
+    checks.affiliateTablesAvailable = !partners.error;
+    checks.requiredColumnsAvailable = !authors.error && !categories.error && !partners.error;
+    checks.productsTableAvailable = !products.error;
+    checks.ordersContentAttributionAvailable = !ordersColumn.error;
+    const taxonomy = await supabase.from("content_categories").select("id", { count: "exact", head: true }).eq("is_active", true);
+    checks.taxonomySeeded = (taxonomy.count ?? 0) > 0;
+  } catch (error) {
+    console.error("[Content Diagnostics Failed]", { message: error instanceof Error ? error.message : "Unknown error" });
+  }
+  return checks;
+}
+

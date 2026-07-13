@@ -16,6 +16,7 @@ type Props = {
   searchPlaceholder: string;
   emptyTitle: string;
   emptyBody: string;
+  loadError?: string;
   extraFilters?: React.ReactNode;
 };
 
@@ -35,7 +36,7 @@ function relationCount(value: unknown) {
   return 0;
 }
 
-export function CrudManager({ entity, title, createLabel, records, fields, columns, searchPlaceholder, emptyTitle, emptyBody, extraFilters }: Props) {
+export function CrudManager({ entity, title, createLabel, records, fields, columns, searchPlaceholder, emptyTitle, emptyBody, loadError, extraFilters }: Props) {
   const [items, setItems] = useState(records);
   const [editing, setEditing] = useState<AdminRecord | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -118,6 +119,7 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
         </div>
         {extraFilters}
       </div>
+      {loadError ? <div role="alert" className="rounded-lg bg-amber-50 p-4 text-sm font-bold text-amber-900">{loadError}</div> : null}
       {message ? <div role="status" className="rounded-lg bg-green-50 p-4 text-sm font-bold text-green-900">{message}</div> : null}
       {editing ? <form onSubmit={submit} className="grid gap-4 rounded-lg bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3"><h3 className="text-xl font-bold text-green-950">{editing.id ? "Edit" : "Create"} {title.replace(/s$/, "")}</h3><button type="button" onClick={() => setEditing(null)} className="text-sm font-bold text-stone-600">Cancel</button></div>
