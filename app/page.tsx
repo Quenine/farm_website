@@ -134,7 +134,7 @@ export default async function Home() {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="rounded-lg bg-white/[0.84] p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
-                  <p className="text-2xl font-bold">Broilers</p>
+                  <p className="text-2xl font-bold">Chicken</p>
                   <p className="text-xs font-semibold text-stone-600">
                     4-week and table-size chicken available for scheduled
                     orders.

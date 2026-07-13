@@ -4,7 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { saveAdminEntityAction, toggleAdminEntityAction } from "@/app/admin/(protected)/content/actions";
 import type { AdminEntity, AdminRecord } from "@/src/lib/content-admin";
 
-type Field = { name: string; label: string; type?: "text" | "textarea" | "number" | "url" | "date" | "checkbox" | "select"; required?: boolean; options?: Array<{ label: string; value: string }>; help?: string };
+type Field = { name: string; label: string; type?: "text" | "textarea" | "number" | "url" | "date" | "checkbox" | "select" | "json-text"; required?: boolean; options?: Array<{ label: string; value: string }>; help?: string };
+type Column = { key: string; label: string; valueKey?: string; format?: "text" | "number" | "status" | "date" };
 
 type Props = {
   entity: Extract<AdminEntity, "authors" | "categories" | "tags" | "sources" | "partners" | "offers" | "videos">;
@@ -12,12 +13,12 @@ type Props = {
   createLabel: string;
   records: AdminRecord[];
   fields: Field[];
-  columns: Array<{ key: string; label: string; render?: (record: AdminRecord) => React.ReactNode }>;
+  columns: Column[];
   searchPlaceholder: string;
   emptyTitle: string;
   emptyBody: string;
   loadError?: string;
-  extraFilters?: React.ReactNode;
+  createDisabledReason?: string;
 };
 
 function slugify(value: string) {
@@ -31,13 +32,16 @@ function stringValue(value: unknown) {
   return String(value);
 }
 
-function relationCount(value: unknown) {
-  if (Array.isArray(value)) return Number((value[0] as { count?: number } | undefined)?.count ?? 0);
-  return 0;
+function columnValue(record: AdminRecord, column: Column) {
+  const value = record[column.valueKey ?? column.key];
+  if (column.format === "status") return value === true ? "Active" : value === false ? "Inactive" : stringValue(value);
+  if (column.format === "number") return String(Number.isFinite(Number(value)) ? Number(value) : 0);
+  if (column.format === "date") return typeof value === "string" && value ? new Date(value).toLocaleDateString("en-NG") : "-";
+  return stringValue(value);
 }
 
-export function CrudManager({ entity, title, createLabel, records, fields, columns, searchPlaceholder, emptyTitle, emptyBody, loadError, extraFilters }: Props) {
-  const [items, setItems] = useState(records);
+export function CrudManager({ entity, title, createLabel, records, fields, columns, searchPlaceholder, emptyTitle, emptyBody, loadError, createDisabledReason }: Props) {
+  const [items, setItems] = useState(Array.isArray(records) ? records : []);
   const [editing, setEditing] = useState<AdminRecord | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -55,6 +59,7 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
   }, [activeFilter, items, search]);
 
   const openCreate = () => {
+    if (createDisabledReason) { setMessage(createDisabledReason); return; }
     const draft: AdminRecord = { is_active: true };
     if (entity === "categories") draft.sort_order = 100;
     if (entity === "sources") { draft.source_type = "other"; draft.is_primary_source = false; }
@@ -109,7 +114,7 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
       <div className="rounded-lg bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div><h2 className="text-2xl font-bold text-green-950">{title}</h2><p className="mt-1 text-sm text-stone-600">{filtered.length} of {items.length} records shown.</p></div>
-          <button type="button" onClick={openCreate} className="inline-flex h-11 items-center justify-center rounded-full bg-green-800 px-5 text-sm font-bold text-white">{createLabel}</button>
+          <button type="button" onClick={openCreate} disabled={Boolean(createDisabledReason)} className="inline-flex h-11 items-center justify-center rounded-full bg-green-800 px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{createLabel}</button>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px]">
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={searchPlaceholder} className="h-11 rounded-lg border border-stone-200 px-4 text-sm focus:border-green-700 focus:outline-none focus:ring-2 focus:ring-green-700/20" />
@@ -117,7 +122,6 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
             <option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option>
           </select>
         </div>
-        {extraFilters}
       </div>
       {loadError ? <div role="alert" className="rounded-lg bg-amber-50 p-4 text-sm font-bold text-amber-900">{loadError}</div> : null}
       {message ? <div role="status" className="rounded-lg bg-green-50 p-4 text-sm font-bold text-green-900">{message}</div> : null}
@@ -128,7 +132,7 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
         </div>
         <button disabled={isPending} className="h-11 w-fit rounded-full bg-green-800 px-5 text-sm font-bold text-white disabled:opacity-60">{isPending ? "Saving..." : "Save"}</button>
       </form> : null}
-      {filtered.length ? <div className="overflow-hidden rounded-lg bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-green-950 text-white"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 font-semibold">{column.label}</th>)}<th className="px-4 py-3 font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-stone-100">{filtered.map((record) => <tr key={String(record.id)} className="text-stone-700">{columns.map((column) => <td key={column.key} className="px-4 py-4 align-top">{column.render ? column.render(record) : stringValue(record[column.key])}</td>)}<td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setEditing(record)} className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-800">Edit</button>{"is_active" in record ? <button type="button" onClick={() => toggle(record)} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">{record.is_active ? "Deactivate" : "Activate"}</button> : null}</div></td></tr>)}</tbody></table></div></div> : <div className="rounded-lg bg-white p-8 text-center shadow-sm"><h3 className="text-xl font-bold text-green-950">{emptyTitle}</h3><p className="mt-2 text-sm text-stone-600">{emptyBody}</p><button type="button" onClick={openCreate} className="mt-4 rounded-full bg-green-800 px-5 py-2 text-sm font-bold text-white">{createLabel}</button></div>}
+      {filtered.length ? <div className="overflow-hidden rounded-lg bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-green-950 text-white"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 font-semibold">{column.label}</th>)}<th className="px-4 py-3 font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-stone-100">{filtered.map((record) => <tr key={String(record.id)} className="text-stone-700">{columns.map((column) => <td key={column.key} className="px-4 py-4 align-top">{columnValue(record, column)}</td>)}<td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setEditing(record)} className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-800">Edit</button>{"is_active" in record ? <button type="button" onClick={() => toggle(record)} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">{record.is_active ? "Deactivate" : "Activate"}</button> : null}</div></td></tr>)}</tbody></table></div></div> : <div className="rounded-lg bg-white p-8 text-center shadow-sm"><h3 className="text-xl font-bold text-green-950">{emptyTitle}</h3><p className="mt-2 text-sm text-stone-600">{emptyBody}</p>{createDisabledReason ? null : <button type="button" onClick={openCreate} className="mt-4 rounded-full bg-green-800 px-5 py-2 text-sm font-bold text-white">{createLabel}</button>}</div>}
     </div>
   );
 }
@@ -139,6 +143,3 @@ function FieldInput({ field, value, onChange }: { field: Field; value: unknown; 
   return <label className="grid gap-2 text-sm font-semibold text-stone-800">{field.label}{field.required ? <span className="sr-only">required</span> : null}{field.type === "textarea" ? <textarea name={field.name} value={stringValue(value)} onChange={(event) => onChange(event.target.value)} rows={4} required={field.required} className={`${common} py-3`} /> : field.type === "select" ? <select name={field.name} value={stringValue(value)} onChange={(event) => onChange(event.target.value)} required={field.required} className={`h-11 ${common}`}>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <input name={field.name} type={field.type ?? "text"} value={stringValue(value)} onChange={(event) => onChange(event.target.value)} required={field.required} className={`h-11 ${common}`} />}{field.help ? <span className="text-xs font-normal leading-5 text-stone-500">{field.help}</span> : null}</label>;
 }
 
-export function countOf(record: AdminRecord, key: string) {
-  return relationCount(record[key]);
-}

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { ensureContentAdmin, type AdminEntity } from "@/src/lib/content-admin";
 import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 
-export type AdminMutationState = { success: true; message: string; id?: string } | { success: false; message: string; fieldErrors?: Record<string, string[]> };
+export type AdminMutationState = { ok: true; success: true; message: string; id?: string } | { ok: false; success: false; message: string; fieldErrors?: Record<string, string[]> };
 
 const slugSchema = z.string().trim().min(2).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers and hyphens only.");
 const optionalUrl = z.string().trim().optional().nullable().transform((value) => value || null).refine((value) => !value || /^https?:\/\//i.test(value), "Enter an HTTP or HTTPS URL.");
@@ -135,7 +135,7 @@ export async function saveAdminEntityAction(entity: keyof typeof schemas, payloa
   try {
     await ensureContentAdmin(entity as AdminEntity);
     const parsed = schemas[entity].safeParse(flattenPayload(payload));
-    if (!parsed.success) return { success: false, message: "Please correct the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
+    if (!parsed.success) return { ok: false, success: false, message: "Please correct the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
     const supabase = createContentAdminSupabaseClient();
     const table = entityTables[entity as AdminEntity];
     if (!table) throw new Error("Unsupported entity.");
@@ -146,9 +146,9 @@ export async function saveAdminEntityAction(entity: keyof typeof schemas, payloa
     const { data: saved, error } = await query;
     if (error) throw new Error(error.message);
     revalidateContentAdmin();
-    return { success: true, message: id ? "Saved changes." : "Created successfully.", id: (saved as { id: string }).id };
+    return { ok: true, success: true, message: id ? "Saved changes." : "Created successfully.", id: (saved as { id: string }).id };
   } catch (error) {
-    return { success: false, message: error instanceof Error ? error.message : "Unable to save." };
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to save." };
   }
 }
 
@@ -162,9 +162,9 @@ export async function toggleAdminEntityAction(entity: keyof typeof schemas, id: 
     const { error } = await supabase.from(table).update({ is_active: active }).eq("id", parsedId);
     if (error) throw new Error(error.message);
     revalidateContentAdmin();
-    return { success: true, message: active ? "Activated." : "Deactivated." };
+    return { ok: true, success: true, message: active ? "Activated." : "Deactivated." };
   } catch (error) {
-    return { success: false, message: error instanceof Error ? error.message : "Unable to update status." };
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to update status." };
   }
 }
 
@@ -205,7 +205,7 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
   try {
     await ensureContentAdmin("posts");
     const parsed = postSchema.safeParse(payload);
-    if (!parsed.success) return { success: false, message: "Please correct the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
+    if (!parsed.success) return { ok: false, success: false, message: "Please correct the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
     const supabase = createContentAdminSupabaseClient();
     const value = parsed.data;
     const status = value.action === "publish" ? "published" : value.action === "review" ? "review" : value.action === "archive" ? "archived" : value.action === "unpublish" ? "draft" : value.status;
@@ -258,8 +258,8 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
     if (relationError) throw new Error(relationError.message);
     revalidateContentAdmin();
     revalidatePath(`/blog/${value.slug}`);
-    return { success: true, message: status === "published" ? "Article published." : "Article saved.", id: postId };
+    return { ok: true, success: true, message: status === "published" ? "Article published." : "Article saved.", id: postId };
   } catch (error) {
-    return { success: false, message: error instanceof Error ? error.message : "Unable to save article." };
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to save article." };
   }
 }

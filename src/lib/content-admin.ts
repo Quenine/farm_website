@@ -5,6 +5,7 @@ import { requireAdmin } from "@/src/lib/admin-auth";
 import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 import { hasAdminSupabaseConfig } from "@/src/lib/supabase/config";
 import { formatNaira } from "@/src/lib/format";
+import { assertSerializableAdminPayload, serializeAdminRecord } from "@/src/lib/admin-serialization";
 
 export type AdminEntity = "authors" | "categories" | "tags" | "sources" | "posts" | "partners" | "offers" | "videos" | "subscribers";
 
@@ -82,6 +83,33 @@ async function countByColumn(table: string, column: string, ids: string[]) {
   return counts;
 }
 
+function relationOne(value: unknown): AdminRecord | null {
+  if (Array.isArray(value)) return (value[0] as AdminRecord | undefined) ?? null;
+  return value && typeof value === "object" ? (value as AdminRecord) : null;
+}
+
+function flattenDisplayRelations(entity: AdminEntity, record: AdminRecord): AdminRecord {
+  if (entity === "offers") {
+    const partner = relationOne(record.affiliate_partners);
+    const rest = { ...record };
+    delete rest.affiliate_partners;
+    return { ...rest, partner_name: partner?.name ?? null };
+  }
+  if (entity === "videos") {
+    const post = relationOne(record.content_posts);
+    const rest = { ...record };
+    delete rest.content_posts;
+    return { ...rest, post_title: post?.title ?? null };
+  }
+  return record;
+}
+
+function prepareClientRecords(entity: AdminEntity, records: AdminRecord[]) {
+  const serialized = records.map((record) => serializeAdminRecord(flattenDisplayRelations(entity, record)));
+  if (process.env.NODE_ENV !== "production") assertSerializableAdminPayload(serialized, entity + ".records");
+  return serialized as AdminRecord[];
+}
+
 async function withSafeCounts(entity: AdminEntity, records: AdminRecord[]): Promise<AdminRecord[]> {
   const ids = records.map((record) => String(record.id ?? "")).filter(Boolean);
   if (ids.length === 0) return records;
@@ -115,7 +143,23 @@ async function withSafeCounts(entity: AdminEntity, records: AdminRecord[]): Prom
   return records;
 }
 
+function diagnosticCode(entity: AdminEntity, stage: "LOAD" | "SERIALIZE") {
+  const prefix: Record<AdminEntity, string> = {
+    authors: "CONTENT-AUTHORS",
+    categories: "CONTENT-CATEGORIES",
+    tags: "CONTENT-TAGS",
+    sources: "CONTENT-SOURCES",
+    posts: "CONTENT-POSTS",
+    partners: "AFFILIATE-PARTNERS",
+    offers: "AFFILIATE-OFFERS",
+    videos: "CONTENT-VIDEOS",
+    subscribers: "CONTENT-SUBSCRIBERS",
+  };
+  return `${prefix[entity]}-${stage}-001`;
+}
+
 function adminLoadMessage(entity: AdminEntity, message: string) {
+  const code = diagnosticCode(entity, "LOAD");
   const label: Record<AdminEntity, string> = {
     authors: "Authors",
     categories: "Categories",
@@ -128,9 +172,9 @@ function adminLoadMessage(entity: AdminEntity, message: string) {
     subscribers: "Subscribers",
   };
   if (/column|schema cache|relationship|table|does not exist/i.test(message)) {
-    return "The " + label[entity] + " page could not load because the content database migration appears incomplete. Run database/step-content-affiliate-publisher.sql and database/verify-content-admin-operational.sql.";
+    return "The " + label[entity] + " page could not load because the content database migration appears incomplete. Diagnostic ID: " + code + ". Run database/step-content-affiliate-publisher.sql and database/verify-content-admin-operational.sql.";
   }
-  return "The " + label[entity] + " page could not be loaded. Check the Content diagnostics on /admin/content.";
+  return "The " + label[entity] + " page could not be loaded. Diagnostic ID: " + code + ". Check Content diagnostics.";
 }
 
 export async function loadAdminEntity(entity: AdminEntity, filters: Record<string, string | undefined> = {}) {
@@ -179,11 +223,16 @@ export async function loadAdminEntity(entity: AdminEntity, filters: Record<strin
 
   const { data, error, count } = await query;
   if (error) {
-    console.error("[Content Admin Load Failed]", { entity, code: error.code, message: error.message });
+    console.error("[Content Admin Load Failed]", { route: `/admin/${entity === "partners" || entity === "offers" ? "affiliate" : "content"}/${entity}`, stage: "load", entity, diagnosticId: diagnosticCode(entity, "LOAD"), code: error.code, message: error.message });
     return { records: [] as AdminRecord[], count: 0, page, pageSize, error: adminLoadMessage(entity, error.message) };
   }
   const records = await withSafeCounts(entity, (data ?? []) as unknown as AdminRecord[]);
-  return { records, count: count ?? 0, page, pageSize };
+  try {
+    return { records: prepareClientRecords(entity, records), count: count ?? 0, page, pageSize };
+  } catch (serializationError) {
+    console.error("[Content Admin Serialize Failed]", { route: `/admin/${entity === "partners" || entity === "offers" ? "affiliate" : "content"}/${entity}`, stage: "serialize", entity, diagnosticId: diagnosticCode(entity, "SERIALIZE"), message: serializationError instanceof Error ? serializationError.message : "Unknown serialization error" });
+    return { records: [] as AdminRecord[], count: 0, page, pageSize, error: "The " + entity + " list could not be prepared for display. Diagnostic ID: " + diagnosticCode(entity, "SERIALIZE") + "." };
+  }
 }
 
 export async function loadAdminOptions() {
