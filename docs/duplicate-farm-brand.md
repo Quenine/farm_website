@@ -179,3 +179,33 @@ Then place one test order, confirm the full workflow, back up the project, clear
 Environment example files are reference templates only. Vercel environment variables control production builds for each deployment. After changing any `NEXT_PUBLIC_*` value in Vercel, rebuild and redeploy so the browser bundle and generated metadata use the new value.
 
 `NEXT_PUBLIC_SITE_URL` is the canonical URL source of truth. Production deployments must set it to that brand's active URL and must never rely on another brand's fallback URL. The app derives the public domain from `NEXT_PUBLIC_SITE_URL`; `NEXT_PUBLIC_SITE_DOMAIN` is retained only as a compatibility note and should match the URL hostname.
+
+## Content Publisher Separation
+
+Shields Farms can enable the content and affiliate publisher flags. Noble Farms should keep them disabled unless the business intentionally changes Noble into a publisher.
+
+Use a separate Supabase project per farm. Content tables, subscribers, affiliate partners, affiliate offers, clicks, content attribution and orders must not be shared between brands.
+
+Shields temporary-domain QA values:
+
+```env
+NEXT_PUBLIC_CONTENT_HUB_ENABLED=true
+NEXT_PUBLIC_AFFILIATE_CONTENT_ENABLED=true
+NEXT_PUBLIC_CONTENT_TOOLS_ENABLED=true
+NEXT_PUBLIC_CONTENT_SUBSCRIPTIONS_ENABLED=true
+CONTENT_INDEXING_ENABLED=false
+NEXT_PUBLIC_CONTENT_PRIMARY_MARKET="Nigeria and Africa"
+NEXT_PUBLIC_CONTENT_SECONDARY_MARKET="Global agribusiness, poultry, farming, farm equipment, food production and small-business audiences"
+```
+
+Noble commerce-only values:
+
+```env
+NEXT_PUBLIC_CONTENT_HUB_ENABLED=false
+NEXT_PUBLIC_AFFILIATE_CONTENT_ENABLED=false
+NEXT_PUBLIC_CONTENT_TOOLS_ENABLED=false
+NEXT_PUBLIC_CONTENT_SUBSCRIPTIONS_ENABLED=false
+CONTENT_INDEXING_ENABLED=false
+```
+
+Run `database/step-content-affiliate-publisher.sql` and `database/seed-shields-content-taxonomy.sql` only in the Shields Farms Supabase project. Keep `CONTENT_INDEXING_ENABLED=false` until the permanent Shields domain is connected and reviewed.

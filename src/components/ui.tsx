@@ -5,7 +5,7 @@ import { CartLink } from "@/src/components/cart/cart-link";
 import { CookiePreferencesLink } from "@/src/components/marketing-runtime";
 import { AddToCartButton } from "@/src/components/product/add-to-cart-button";
 import { ProductMediaThumbnail } from "@/src/components/product/product-media";
-import { siteConfig, siteContact } from "@/src/config/site";
+import { contentPublicConfig, siteConfig, siteContact } from "@/src/config/site";
 import { formatNaira } from "@/src/lib/format";
 import {
   isProductOrderable,
@@ -79,6 +79,11 @@ export function Footer() {
           <p className="font-semibold">Support</p>
           <div className="mt-2 grid gap-1 text-sm leading-6 text-green-100">
             <Link href="/business-supply" className="hover:text-white">Business Supply</Link>
+            {contentPublicConfig.hubEnabled ? <Link href="/blog" className="hover:text-white">Blog</Link> : null}
+            {contentPublicConfig.hubEnabled ? <Link href="/resources" className="hover:text-white">Resources</Link> : null}
+            {contentPublicConfig.toolsEnabled ? <Link href="/tools" className="hover:text-white">Tools</Link> : null}
+            {contentPublicConfig.affiliateEnabled ? <Link href="/affiliate-disclosure" className="hover:text-white">Affiliate Disclosure</Link> : null}
+            {contentPublicConfig.hubEnabled ? <Link href="/editorial-policy" className="hover:text-white">Editorial Policy</Link> : null}
             <Link href="/delivery" className="hover:text-white">Delivery information</Link>
             <Link href="/refund-policy" className="hover:text-white">Refund & cancellation</Link>
             <Link href="/privacy-policy" className="hover:text-white">Privacy policy</Link>

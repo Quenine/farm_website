@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CartProvider } from "@/src/components/cart/cart-provider";
 import { MarketingRuntime } from "@/src/components/marketing-runtime";
 import { siteConfig } from "@/src/config/site";
+import { rssDiscoveryEnabled } from "@/src/lib/content-config";
 import { getSiteUrl } from "@/src/lib/site-url";
 import "./globals.css";
 
@@ -28,6 +29,7 @@ export const metadata: Metadata = {
     description,
     images: [siteConfig.logoPath],
   },
+  ...(rssDiscoveryEnabled() ? { alternates: { types: { "application/rss+xml": "/blog/feed.xml" } } } : {}),
   twitter: {
     card: "summary",
     title: siteName,

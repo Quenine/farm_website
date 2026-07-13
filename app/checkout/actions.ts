@@ -1,7 +1,8 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { z } from "zod";
-import { siteConfig } from "@/src/config/site";
+import { contentPublicConfig, siteConfig } from "@/src/config/site";
 import { createOrder } from "@/src/lib/orders";
 import {
   initializeOrderPayment,
@@ -115,6 +116,26 @@ function paymentErrorMessage(error: unknown) {
   return "Your order was saved, but payment could not be started. You can retry from the order tracking page.";
 }
 
+function contentAttributionFromCookie(raw: string | undefined) {
+  if (!contentPublicConfig.hubEnabled || !raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const postSlug = typeof parsed.postSlug === "string" ? parsed.postSlug.slice(0, 160) : "";
+    const productSlug = typeof parsed.productSlug === "string" ? parsed.productSlug.slice(0, 160) : "";
+    if (!postSlug || !productSlug) return null;
+    return {
+      source: "content_product_click",
+      postId: typeof parsed.postId === "string" ? parsed.postId : undefined,
+      postSlug,
+      productId: typeof parsed.productId === "string" ? parsed.productId : undefined,
+      productSlug,
+      seenAt: typeof parsed.seenAt === "string" ? parsed.seenAt.slice(0, 80) : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function logPaymentInitializationFailure(error: unknown) {
   if (error instanceof PaystackRequestError) {
     console.error("[Paystack Checkout Init Failed]", {
@@ -137,7 +158,9 @@ export async function createOrderAction(
   }
 
   try {
-    const order = await createOrder(parsed.data);
+    const cookieStore = await cookies();
+    const contentAttribution = contentAttributionFromCookie(cookieStore.get("farm_content_referral")?.value);
+    const order = await createOrder({ ...parsed.data, contentAttribution });
     try {
       const payment = await initializeOrderPayment(order.orderId);
       return {

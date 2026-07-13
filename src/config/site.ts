@@ -51,6 +51,15 @@ export const marketingConfig = {
   businessSupplyEnabled: publicBool("NEXT_PUBLIC_BUSINESS_SUPPLY_ENABLED", true),
 };
 
+export const contentPublicConfig = {
+  hubEnabled: publicBool("NEXT_PUBLIC_CONTENT_HUB_ENABLED", false),
+  affiliateEnabled: publicBool("NEXT_PUBLIC_AFFILIATE_CONTENT_ENABLED", false),
+  toolsEnabled: publicBool("NEXT_PUBLIC_CONTENT_TOOLS_ENABLED", false),
+  subscriptionsEnabled: publicBool("NEXT_PUBLIC_CONTENT_SUBSCRIPTIONS_ENABLED", false),
+  primaryMarket: publicEnv("NEXT_PUBLIC_CONTENT_PRIMARY_MARKET", "Nigeria and Africa"),
+  secondaryMarket: publicEnv("NEXT_PUBLIC_CONTENT_SECONDARY_MARKET", "Global"),
+};
+
 export const siteContact = {
   phoneHref: `tel:${siteConfig.phone}`,
   emailHref: `mailto:${siteConfig.email}`,
@@ -66,3 +75,4 @@ export const siteHostname = getSiteHostname;
 export function whatsappUrl(message: string) {
   return `${siteContact.whatsappHref}?text=${encodeURIComponent(message)}`;
 }
+

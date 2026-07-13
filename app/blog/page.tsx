@@ -1,0 +1,78 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Search, X } from "lucide-react";
+import { ContentSubscribeForm } from "@/src/components/content/subscribe-form";
+import { PageShell, SectionHeader } from "@/src/components/ui";
+import { contentPublicConfig, siteConfig } from "@/src/config/site";
+import { contentMetadata } from "@/src/lib/content-config";
+import { getContentIndexData, type ContentListFilters } from "@/src/lib/content";
+
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata() {
+  return contentMetadata({ title: `${siteConfig.name} Agribusiness Blog`, description: `Practical farming, poultry, crop production, tools, and agribusiness guides for ${contentPublicConfig.primaryMarket}.`, path: "/blog" });
+}
+
+function filterLink(label: string, href: string, active?: boolean) {
+  return <Link href={href} className={`rounded-full px-4 py-2 text-sm font-bold ${active ? "bg-green-800 text-white" : "bg-white text-green-900 ring-1 ring-green-900/10"}`}>{label}</Link>;
+}
+
+export default async function BlogPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  if (!contentPublicConfig.hubEnabled) notFound();
+  const params = await searchParams;
+  const filters: ContentListFilters = {
+    q: typeof params.q === "string" ? params.q : undefined,
+    category: typeof params.category === "string" ? params.category : undefined,
+    tag: typeof params.tag === "string" ? params.tag : undefined,
+    format: typeof params.format === "string" ? params.format : undefined,
+    audience: typeof params.audience === "string" ? params.audience : undefined,
+    page: typeof params.page === "string" ? Number(params.page) : 1,
+  };
+  const data = await getContentIndexData(filters);
+  const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
+
+  return (
+    <PageShell>
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <SectionHeader eyebrow="Agribusiness content" title="Practical farm guides, resources, and buying research" body={`Built for ${contentPublicConfig.primaryMarket}, with useful context for ${contentPublicConfig.secondaryMarket}.`} />
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link href="/resources" className="rounded-full bg-green-800 px-5 py-3 text-sm font-bold text-white">Resources</Link>
+          <Link href="/videos" className="rounded-full border border-green-800 px-5 py-3 text-sm font-bold text-green-950">Videos</Link>
+          <Link href="/tools" className="rounded-full border border-green-800 px-5 py-3 text-sm font-bold text-green-950">Tools</Link>
+          <Link href="/shop" className="rounded-full border border-green-800 px-5 py-3 text-sm font-bold text-green-950">Shop {siteConfig.name}</Link>
+        </div>
+        <form className="mt-8 grid gap-3 rounded-lg bg-white p-4 shadow-sm md:grid-cols-[1fr_180px_180px_120px]">
+          <label className="relative">
+            <span className="sr-only">Search content</span>
+            <Search className="absolute left-3 top-3.5 text-stone-400" size={18} />
+            <input name="q" defaultValue={filters.q ?? ""} placeholder="Search guides, products, topics" className="h-12 w-full rounded-lg border border-stone-200 pl-10 pr-3 text-sm" />
+          </label>
+          <select name="format" defaultValue={filters.format ?? ""} className="h-12 rounded-lg border border-stone-200 px-3 text-sm"><option value="">All formats</option><option value="article">Articles</option><option value="video_companion">Videos</option><option value="comparison">Comparisons</option><option value="resource_guide">Resources</option><option value="case_study">Case studies</option></select>
+          <select name="audience" defaultValue={filters.audience ?? ""} className="h-12 rounded-lg border border-stone-200 px-3 text-sm"><option value="">All audiences</option><option value="nigeria">Nigeria</option><option value="africa">Africa</option><option value="global">Global</option></select>
+          <button className="h-12 rounded-full bg-green-800 px-4 text-sm font-bold text-white">Filter</button>
+        </form>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {filterLink("All", "/blog", !filters.category && !filters.tag)}
+          {data.categories.map((category) => filterLink(category.name, `/blog?category=${category.slug}`, filters.category === category.slug))}
+          {(filters.q || filters.category || filters.tag || filters.format || filters.audience) ? <Link href="/blog" className="inline-flex items-center gap-2 rounded-full bg-stone-200 px-4 py-2 text-sm font-bold text-stone-800"><X size={16} /> Clear filters</Link> : null}
+        </div>
+        <p className="mt-6 text-sm font-semibold text-stone-600">{data.total} result{data.total === 1 ? "" : "s"}</p>
+        {data.featured.length ? <div className="mt-6 grid gap-4 lg:grid-cols-3">{data.featured.map((post) => <PostCard key={post.id} post={post} featured />)}</div> : null}
+        {data.posts.length ? <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">{data.posts.map((post) => <PostCard key={post.id} post={post} />)}</div> : <div className="mt-8 rounded-lg bg-white p-8 text-center shadow-sm"><h2 className="text-2xl font-bold text-green-950">No published content yet</h2><p className="mt-2 text-stone-600">The content engine is ready for real articles, videos, resources, and tools after editorial review.</p></div>}
+        {totalPages > 1 ? <div className="mt-8 flex gap-3">{data.page > 1 ? <Link href={`/blog?page=${data.page - 1}`} className="rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950">Previous</Link> : null}{data.page < totalPages ? <Link href={`/blog?page=${data.page + 1}`} className="rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950">Next</Link> : null}</div> : null}
+        <div className="mt-10"><ContentSubscribeForm sourcePath="/blog" /></div>
+      </section>
+    </PageShell>
+  );
+}
+
+function PostCard({ post, featured = false }: { post: Awaited<ReturnType<typeof getContentIndexData>>["posts"][number]; featured?: boolean }) {
+  return (
+    <article className="rounded-lg bg-white p-5 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">{featured ? "Featured" : post.content_format.replaceAll("_", " ")}</p>
+      <h2 className="mt-2 text-xl font-bold text-green-950"><Link href={`/blog/${post.slug}`}>{post.title}</Link></h2>
+      <p className="mt-2 text-sm leading-6 text-stone-700">{post.excerpt}</p>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-green-800">{post.category ? <Link href={`/blog/category/${post.category.slug}`}>{post.category.name}</Link> : null}{post.tags.slice(0, 3).map((tag) => <Link key={tag.id} href={`/blog/tag/${tag.slug}`}>#{tag.name}</Link>)}</div>
+    </article>
+  );
+}

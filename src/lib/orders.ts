@@ -87,6 +87,7 @@ export type CreateOrderInput = {
   items: Array<{ productId: string; quantity: number }>;
   firstTouchAttribution?: SafeAttribution | null;
   lastTouchAttribution?: SafeAttribution | null;
+  contentAttribution?: Record<string, unknown> | null;
 };
 
 const orderColumns = `
@@ -248,6 +249,17 @@ function safeAttribution(input: unknown): SafeAttribution | null {
   }
   return Object.keys(output).length > 0 ? output : null;
 }
+function safeContentAttribution(input: unknown) {
+  if (!input || typeof input !== "object") return null;
+  const source = input as Record<string, unknown>;
+  const output: Record<string, string> = {};
+  for (const key of ["source", "postId", "postSlug", "productId", "productSlug", "seenAt"]) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) output[key] = value.trim().slice(0, 180);
+  }
+  return Object.keys(output).length > 0 ? output : null;
+}
+
 function orderReference() {
   const date = todayInLagos().replaceAll("-", "");
   return `NF-${date}-${randomBytes(2).toString("hex").toUpperCase()}`;
@@ -384,6 +396,7 @@ export async function createOrder(input: CreateOrderInput) {
         order_status: "pending_payment",
         first_touch_attribution: safeAttribution(input.firstTouchAttribution),
         last_touch_attribution: safeAttribution(input.lastTouchAttribution),
+        ...(input.contentAttribution ? { content_attribution: safeContentAttribution(input.contentAttribution) } : {}),
       })
       .select("id, order_reference")
       .single();

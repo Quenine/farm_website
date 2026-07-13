@@ -204,7 +204,8 @@ After deployment, verify:
 ## Marketing readiness
 
 The app includes consent-based analytics readiness, campaign attribution, tracked campaign links, QR-code SVG generation, and a Business Supply page. Next phase: Shields Farms organic marketing launch, including campaign creatives, printed and digital flyers, WhatsApp content, food-business outreach and tracked QR campaigns.
-`r`n## Intentionally not implemented
+
+## Intentionally not implemented
 
 - Mobile application
 - Customer accounts or customer authentication
@@ -212,4 +213,30 @@ The app includes consent-based analytics readiness, campaign attribution, tracke
 - Automated refunds and chargeback handling
 - Product image upload/storage workflow
 - Deployment execution, registrar DNS changes, or Paystack live-mode activation
+
+## Shields Content Publisher
+
+Shields Farms is the initial agribusiness content and affiliate publisher. Noble Farms remains commerce-only by default.
+
+Content flags:
+
+```env
+NEXT_PUBLIC_CONTENT_HUB_ENABLED=false
+NEXT_PUBLIC_AFFILIATE_CONTENT_ENABLED=false
+NEXT_PUBLIC_CONTENT_TOOLS_ENABLED=false
+NEXT_PUBLIC_CONTENT_SUBSCRIPTIONS_ENABLED=false
+CONTENT_INDEXING_ENABLED=false
+NEXT_PUBLIC_CONTENT_PRIMARY_MARKET="Nigeria and Africa"
+NEXT_PUBLIC_CONTENT_SECONDARY_MARKET="Global"
+INDEXNOW_ENABLED=false
+INDEXNOW_KEY=
+```
+
+For Shields QA, enable the public content flags but keep `CONTENT_INDEXING_ENABLED=false` on `shieldfarms.vercel.app`. Run Shields-only SQL in this order:
+
+1. `database/step-content-affiliate-publisher.sql`
+2. `database/seed-shields-content-taxonomy.sql`
+3. `database/verify-content-affiliate-publisher.sql`
+
+See `docs/content-affiliate-publisher.md`, `docs/agribusiness-content-strategy.md`, and `docs/permanent-domain-content-launch.md`. Do not share production order tables or duplicate Shields articles across farms.
 
