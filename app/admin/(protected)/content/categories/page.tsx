@@ -1,9 +1,14 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/src/components/admin";
+import { AdminSubnav } from "@/src/components/content-admin/admin-subnav";
+import { CrudManager, countOf } from "@/src/components/content-admin/crud-manager";
 import { contentPublicConfig } from "@/src/config/site";
+import { loadAdminEntity } from "@/src/lib/content-admin";
 
-export default function ContentPlaceholderPage() {
+export const dynamic = "force-dynamic";
+
+export default async function CategoriesPage() {
   if (!contentPublicConfig.hubEnabled) notFound();
-  return <div><AdminHeader title="Content workflow" body="The protected content engine is enabled. Use the database migration before creating posts, authors, categories, tags, sources, videos, related products, and affiliate offer relationships." /><div className="rounded-lg bg-white p-5 text-sm leading-6 text-stone-700 shadow-sm"><p>Publishing must be explicit. Do not publish without title, slug, excerpt, meaningful Markdown, author, category, required alt text, valid sources, and disclosure when affiliate offers are attached.</p><p className="mt-3 font-semibold text-green-950">Editor helpers support tokens: [[affiliate:offer-slug]], [[product:product-slug]], [[comparison:post-offers]], [[video:post-video]], [[sources]], [[newsletter]], [[callout:business-supply]], [[tool:poultry-feed-requirement]], [[tool:egg-sales-margin]].</p></div></div>;
+  const data = await loadAdminEntity("categories");
+  return <div><AdminHeader title="Categories" body="Manage content categories, SEO labels and sort order." /><AdminSubnav /><CrudManager entity="categories" title="Categories" createLabel="Create Category" records={data.records} searchPlaceholder="Search categories" emptyTitle="No categories yet" emptyBody="Run the Shields taxonomy seed or create your first category." fields={[{name:"name",label:"Name *",required:true},{name:"slug",label:"Slug *",required:true},{name:"description",label:"Description",type:"textarea"},{name:"seo_title",label:"SEO title"},{name:"seo_description",label:"SEO description",type:"textarea"},{name:"sort_order",label:"Sort order",type:"number"},{name:"is_active",label:"Active",type:"checkbox"}]} columns={[{key:"name",label:"Category"},{key:"slug",label:"Slug"},{key:"sort_order",label:"Sort"},{key:"content_posts",label:"Posts",render:(record)=>countOf(record,"content_posts")},{key:"is_active",label:"Status",render:(record)=>record.is_active ? "Active" : "Inactive"}]} /></div>;
 }
-

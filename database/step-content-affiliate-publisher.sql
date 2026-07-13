@@ -111,6 +111,7 @@ create table if not exists public.content_sources (
   accessed_at timestamptz,
   is_primary_source boolean not null default false,
   internal_note text,
+  is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint content_sources_url_check check (url ~* '^https?://')
@@ -140,6 +141,7 @@ create table if not exists public.content_videos (
   upload_date date,
   transcript_markdown text,
   chapters jsonb,
+  is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint content_videos_url_check check ((embed_url is null or embed_url ~* '^https?://') and (watch_url is null or watch_url ~* '^https?://')),
@@ -236,6 +238,8 @@ create table if not exists public.content_subscribers (
   updated_at timestamptz not null default now()
 );
 
+alter table public.content_sources add column if not exists is_active boolean not null default true;
+alter table public.content_videos add column if not exists is_active boolean not null default true;
 alter table public.orders add column if not exists content_attribution jsonb;
 
 create index if not exists content_posts_status_published_idx on public.content_posts(status, published_at desc);
@@ -245,7 +249,9 @@ create index if not exists content_posts_search_idx on public.content_posts usin
 create index if not exists content_categories_active_idx on public.content_categories(is_active, sort_order);
 create index if not exists content_tags_active_idx on public.content_tags(is_active, name);
 create index if not exists content_sources_type_idx on public.content_sources(source_type);
+create index if not exists content_sources_active_idx on public.content_sources(is_active, source_type);
 create index if not exists content_videos_post_idx on public.content_videos(post_id);
+create index if not exists content_videos_active_idx on public.content_videos(is_active, platform);
 create index if not exists content_post_products_product_idx on public.content_post_products(product_id);
 create index if not exists affiliate_partners_active_idx on public.affiliate_partners(is_active);
 create index if not exists affiliate_offers_partner_active_idx on public.affiliate_offers(partner_id, is_active);

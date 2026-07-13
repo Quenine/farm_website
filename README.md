@@ -232,7 +232,7 @@ INDEXNOW_ENABLED=false
 INDEXNOW_KEY=
 ```
 
-For Shields QA, enable the public content flags but keep `CONTENT_INDEXING_ENABLED=false` on `shieldfarms.vercel.app`. Run Shields-only SQL in this order:
+For Shields QA, enable the public content flags but keep `CONTENT_INDEXING_ENABLED=false` on `shieldsfarms.store`. Run Shields-only SQL in this order:
 
 1. `database/step-content-affiliate-publisher.sql`
 2. `database/seed-shields-content-taxonomy.sql`

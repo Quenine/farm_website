@@ -1,8 +1,16 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/src/components/admin";
+import { AdminSubnav } from "@/src/components/content-admin/admin-subnav";
+import { CrudManager, countOf } from "@/src/components/content-admin/crud-manager";
 import { contentPublicConfig } from "@/src/config/site";
+import { loadAdminEntity, loadAdminOptions } from "@/src/lib/content-admin";
 
-export default function AffiliatePlaceholderPage() {
+export const dynamic = "force-dynamic";
+
+export default async function OffersPage() {
   if (!contentPublicConfig.affiliateEnabled) notFound();
-  return <div><AdminHeader title="Affiliate setup" body="Create active partners and merchant-supplied offer links after the Shields content migration is applied." /><div className="rounded-lg bg-white p-5 text-sm leading-6 text-stone-700 shadow-sm"><p>Destination URLs are stored server-side and resolved through /recommend/[slug]. The redirect never accepts arbitrary destination URLs from users.</p></div></div>;
+  const [data, options] = await Promise.all([loadAdminEntity("offers"), loadAdminOptions()]);
+  const partners = [{ value: "", label: "Choose partner" }, ...options.partners.map((partner) => ({ value: String(partner.id), label: String(partner.name) }))];
+  const basis = [{value:"editorial_research",label:"Editorial research"},{value:"merchant_information",label:"Merchant information"},{value:"personally_tested",label:"Personally tested"}];
+  return <div><AdminHeader title="Affiliate Offers" body="Manage merchant-supplied affiliate links and editorial recommendation metadata." /><AdminSubnav type="affiliate" /><CrudManager entity="offers" title="Offers" createLabel="Create Offer" records={data.records} searchPlaceholder="Search offers" emptyTitle="No offers yet" emptyBody="Create offers after adding affiliate partners." fields={[{name:"partner_id",label:"Partner *",type:"select",required:true,options:partners},{name:"title",label:"Title *",required:true},{name:"slug",label:"Slug *",required:true},{name:"destination_url",label:"Destination affiliate URL *",type:"url",required:true,help:"Only HTTP/HTTPS URLs are accepted."},{name:"short_description",label:"Short description *",type:"textarea",required:true},{name:"image_url",label:"Image URL",type:"url"},{name:"image_alt",label:"Image alt text"},{name:"button_label",label:"Button label"},{name:"display_price",label:"Optional display price"},{name:"currency",label:"Currency"},{name:"price_last_checked_at",label:"Price last checked",type:"date"},{name:"available_regions",label:"Available regions",help:"Comma-separated."},{name:"recommendation_basis",label:"Recommendation basis *",type:"select",required:true,options:basis,help:"Personally tested only when genuinely used/tested. Editorial research for documented comparison. Merchant information when relying on merchant/manufacturer info."},{name:"is_featured",label:"Featured",type:"checkbox"},{name:"internal_commission_note",label:"Internal commission note",type:"textarea",help:"Admin-only. Never public."},{name:"is_active",label:"Active",type:"checkbox"}]} columns={[{key:"title",label:"Offer"},{key:"affiliate_partners",label:"Partner",render:(record)=>Array.isArray(record.affiliate_partners) ? (record.affiliate_partners[0] as {name?:string})?.name : (record.affiliate_partners as {name?:string}|undefined)?.name},{key:"recommendation_basis",label:"Basis"},{key:"affiliate_clicks",label:"Clicks",render:(record)=>countOf(record,"affiliate_clicks")},{key:"content_post_affiliate_offers",label:"Posts",render:(record)=>countOf(record,"content_post_affiliate_offers")},{key:"is_active",label:"Status",render:(record)=>record.is_active ? "Active" : "Inactive"}]} /></div>;
 }

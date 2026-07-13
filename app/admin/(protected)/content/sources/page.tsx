@@ -1,9 +1,15 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/src/components/admin";
+import { AdminSubnav } from "@/src/components/content-admin/admin-subnav";
+import { CrudManager, countOf } from "@/src/components/content-admin/crud-manager";
 import { contentPublicConfig } from "@/src/config/site";
+import { loadAdminEntity } from "@/src/lib/content-admin";
 
-export default function ContentPlaceholderPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SourcesPage() {
   if (!contentPublicConfig.hubEnabled) notFound();
-  return <div><AdminHeader title="Content workflow" body="The protected content engine is enabled. Use the database migration before creating posts, authors, categories, tags, sources, videos, related products, and affiliate offer relationships." /><div className="rounded-lg bg-white p-5 text-sm leading-6 text-stone-700 shadow-sm"><p>Publishing must be explicit. Do not publish without title, slug, excerpt, meaningful Markdown, author, category, required alt text, valid sources, and disclosure when affiliate offers are attached.</p><p className="mt-3 font-semibold text-green-950">Editor helpers support tokens: [[affiliate:offer-slug]], [[product:product-slug]], [[comparison:post-offers]], [[video:post-video]], [[sources]], [[newsletter]], [[callout:business-supply]], [[tool:poultry-feed-requirement]], [[tool:egg-sales-margin]].</p></div></div>;
+  const data = await loadAdminEntity("sources");
+  const sourceTypes = ["government","academic","manufacturer","industry_body","merchant","original_interview","original_field_observation","news","other"].map((value) => ({ value, label: value.replaceAll("_", " ") }));
+  return <div><AdminHeader title="Sources" body="Manage citations, primary sources and internal source notes. Internal notes never appear publicly." /><AdminSubnav /><CrudManager entity="sources" title="Sources" createLabel="Create Source" records={data.records} searchPlaceholder="Search sources" emptyTitle="No sources yet" emptyBody="Create sources to support articles and recommendations." fields={[{name:"title",label:"Title *",required:true},{name:"publisher",label:"Publisher"},{name:"url",label:"URL *",type:"url",required:true},{name:"source_type",label:"Source type *",type:"select",required:true,options:sourceTypes},{name:"publication_date",label:"Publication date",type:"date"},{name:"accessed_at",label:"Accessed date",type:"date"},{name:"is_primary_source",label:"Primary source",type:"checkbox"},{name:"internal_note",label:"Internal note",type:"textarea"},{name:"is_active",label:"Active",type:"checkbox"}]} columns={[{key:"title",label:"Source"},{key:"publisher",label:"Publisher"},{key:"source_type",label:"Type"},{key:"content_post_sources",label:"Used by posts",render:(record)=>countOf(record,"content_post_sources")},{key:"is_active",label:"Status",render:(record)=>record.is_active ? "Active" : "Inactive"}]} /></div>;
 }
-

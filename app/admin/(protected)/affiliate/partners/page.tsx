@@ -1,8 +1,14 @@
 import { notFound } from "next/navigation";
 import { AdminHeader } from "@/src/components/admin";
+import { AdminSubnav } from "@/src/components/content-admin/admin-subnav";
+import { CrudManager, countOf } from "@/src/components/content-admin/crud-manager";
 import { contentPublicConfig } from "@/src/config/site";
+import { loadAdminEntity } from "@/src/lib/content-admin";
 
-export default function AffiliatePlaceholderPage() {
+export const dynamic = "force-dynamic";
+
+export default async function PartnersPage() {
   if (!contentPublicConfig.affiliateEnabled) notFound();
-  return <div><AdminHeader title="Affiliate setup" body="Create active partners and merchant-supplied offer links after the Shields content migration is applied." /><div className="rounded-lg bg-white p-5 text-sm leading-6 text-stone-700 shadow-sm"><p>Destination URLs are stored server-side and resolved through /recommend/[slug]. The redirect never accepts arbitrary destination URLs from users.</p></div></div>;
+  const data = await loadAdminEntity("partners");
+  return <div><AdminHeader title="Affiliate Partners" body="Manage external merchant partners. This is publisher-side only, not a member programme." /><AdminSubnav type="affiliate" /><CrudManager entity="partners" title="Partners" createLabel="Create Partner" records={data.records} searchPlaceholder="Search partners" emptyTitle="No partners yet" emptyBody="Create a partner before adding merchant-supplied affiliate offers." fields={[{name:"name",label:"Name *",required:true},{name:"slug",label:"Slug *",required:true},{name:"website_url",label:"Website URL *",type:"url",required:true},{name:"affiliate_network",label:"Affiliate network"},{name:"default_disclosure",label:"Default disclosure",type:"textarea"},{name:"internal_notes",label:"Internal notes",type:"textarea",help:"Admin-only. Never public."},{name:"is_active",label:"Active",type:"checkbox"}]} columns={[{key:"name",label:"Partner"},{key:"website_url",label:"Website"},{key:"affiliate_network",label:"Network"},{key:"affiliate_offers",label:"Offers",render:(record)=>countOf(record,"affiliate_offers")},{key:"is_active",label:"Status",render:(record)=>record.is_active ? "Active" : "Inactive"}]} /></div>;
 }

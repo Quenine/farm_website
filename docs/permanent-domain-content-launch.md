@@ -1,6 +1,6 @@
 # Permanent Domain Content Launch
 
-The temporary Shields Farms URL `https://shieldfarms.vercel.app` is for development and QA. Do not build search authority on that hostname.
+Shields Farms now owns the permanent domain `https://shieldsfarms.store`. Keep `CONTENT_INDEXING_ENABLED=false` during this completion and QA pass until reviewed content is ready.
 
 ## Before Enabling Indexing
 

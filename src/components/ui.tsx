@@ -39,6 +39,9 @@ export function PublicHeader() {
           <Link href="/shop" className="hover:text-green-800">
             Shop
           </Link>
+          <Link href="/business-supply" className="hover:text-green-800">
+            Business Supply
+          </Link>
           <Link href="/about" className="hover:text-green-800">
             About
           </Link>
@@ -51,6 +54,15 @@ export function PublicHeader() {
         </nav>
         <CartLink />
       </div>
+      <nav className="mx-auto flex max-w-7xl gap-4 overflow-x-auto px-4 pb-3 text-sm font-semibold text-stone-700 md:hidden" aria-label="Mobile public navigation">
+        <Link href="/shop" className="shrink-0 hover:text-green-800">Shop</Link>
+        <Link href="/business-supply" className="shrink-0 hover:text-green-800">Business Supply</Link>
+        {contentPublicConfig.hubEnabled ? <Link href="/blog" className="shrink-0 hover:text-green-800">Blog</Link> : null}
+        {contentPublicConfig.hubEnabled ? <Link href="/resources" className="shrink-0 hover:text-green-800">Resources</Link> : null}
+        {contentPublicConfig.hubEnabled ? <Link href="/videos" className="shrink-0 hover:text-green-800">Videos</Link> : null}
+        {contentPublicConfig.toolsEnabled ? <Link href="/tools" className="shrink-0 hover:text-green-800">Tools</Link> : null}
+        <Link href="/track-order" className="shrink-0 hover:text-green-800">Track order</Link>
+      </nav>
     </header>
   );
 }

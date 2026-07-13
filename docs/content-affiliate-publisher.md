@@ -35,7 +35,7 @@ NEXT_PUBLIC_CONTENT_SUBSCRIPTIONS_ENABLED=true
 CONTENT_INDEXING_ENABLED=false
 ```
 
-`CONTENT_INDEXING_ENABLED` is server-side. Keep it false on `shieldfarms.vercel.app`. While false, content pages use `noindex,nofollow`, content URLs stay out of the sitemap, RSS is directly testable but not advertised, and IndexNow remains off.
+`CONTENT_INDEXING_ENABLED` is server-side. Keep it false on `shieldsfarms.store`. While false, content pages use `noindex,nofollow`, content URLs stay out of the sitemap, RSS is directly testable but not advertised, and IndexNow remains off.
 
 ## SQL Run Order
 
