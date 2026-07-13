@@ -174,3 +174,8 @@ Expected result:
 - Transactional tables are zero before public launch.
 
 Then place one test order, confirm the full workflow, back up the project, clear test transactional records, and manually confirm stock quantities.
+## Canonical URL Configuration
+
+Environment example files are reference templates only. Vercel environment variables control production builds for each deployment. After changing any `NEXT_PUBLIC_*` value in Vercel, rebuild and redeploy so the browser bundle and generated metadata use the new value.
+
+`NEXT_PUBLIC_SITE_URL` is the canonical URL source of truth. Production deployments must set it to that brand's active URL and must never rely on another brand's fallback URL. The app derives the public domain from `NEXT_PUBLIC_SITE_URL`; `NEXT_PUBLIC_SITE_DOMAIN` is retained only as a compatibility note and should match the URL hostname.

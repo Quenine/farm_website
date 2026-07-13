@@ -38,7 +38,7 @@ export function CartPageClient() {
     0,
   );
 
-  const shareCartMessage = `${siteConfig.name} cart enquiry: ${items.map((item) => `${item.product.name} x ${item.quantity}`).join(", ")}. ${typeof window !== "undefined" ? window.location.origin : siteConfig.url}/cart`;
+  const shareCartMessage = `${siteConfig.name} cart enquiry: ${items.map((item) => `${item.product.name} x ${item.quantity}`).join(", ")}. ${siteConfig.url.replace(/\/$/, "")}/cart`;
   const shareCart = () => {
     trackShare("whatsapp");
     trackLead("cart_whatsapp_share");
@@ -143,5 +143,6 @@ export function CartPageClient() {
     </div>
   );
 }
+
 
 

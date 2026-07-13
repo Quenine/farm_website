@@ -3,23 +3,15 @@
 import { useMemo } from "react";
 import { siteConfig } from "@/src/config/site";
 
-function configuredHostname() {
-  try {
-    return new URL(siteConfig.url).hostname;
-  } catch {
-    return null;
-  }
-}
-
 function localHostname(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".local");
 }
 
 export function MarketingUrlPanel() {
   const status = useMemo(() => {
-    const configured = configuredHostname();
+    const configured = siteConfig.domain || null;
     const current = typeof window === "undefined" ? "" : window.location.hostname;
-    const configuredUrlValid = Boolean(configured);
+    const configuredUrlValid = Boolean(configured && siteConfig.url);
     const localPreview = current ? localHostname(current) : false;
     const mismatch = Boolean(configured && current && configured !== current && !localPreview && process.env.NODE_ENV === "production");
     return { configured, current, configuredUrlValid, localPreview, mismatch };
@@ -40,13 +32,20 @@ export function MarketingUrlPanel() {
       {!status.configuredUrlValid ? (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 font-semibold text-red-800">NEXT_PUBLIC_SITE_URL is empty or invalid. Review it before creating printable campaign links or QR codes.</p>
       ) : null}
+      {siteConfig.domainEnvMismatch ? (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 font-semibold text-amber-900">NEXT_PUBLIC_SITE_DOMAIN does not match the hostname derived from NEXT_PUBLIC_SITE_URL. Campaign links use the canonical URL hostname.</p>
+      ) : null}
       {status.localPreview ? (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 font-semibold text-amber-900">Local preview: generated links currently use the configured development URL. Production QR codes should be generated after deploying with the production site URL.</p>
       ) : null}
       {status.mismatch ? (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 font-semibold text-red-800">The current deployment hostname does not match the configured marketing URL. Review NEXT_PUBLIC_SITE_URL before printing or sharing campaign QR codes.</p>
       ) : null}
-      {status.current ? <p className="mt-3 text-xs font-semibold text-stone-500">Current browser hostname: {status.current}. Configured hostname: {status.configured ?? "invalid"}.</p> : null}
+      <div className="mt-3 grid gap-1 text-xs font-semibold text-stone-500">
+        <p>URL source: {siteConfig.urlSource === "development_fallback" ? "local development fallback" : "explicit environment configuration"}.</p>
+        {status.current ? <p>Current browser hostname: {status.current}. Configured hostname: {status.configured ?? "invalid"}.</p> : null}
+        {siteConfig.configuredDomain ? <p>Legacy NEXT_PUBLIC_SITE_DOMAIN value: {siteConfig.configuredDomain}.</p> : null}
+      </div>
     </div>
   );
 }

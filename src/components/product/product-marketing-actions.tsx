@@ -8,7 +8,7 @@ import type { Product } from "@/src/types";
 
 export function ProductMarketingActions({ product }: { product: Product }) {
   const item = useMemo(() => productToAnalyticsItem(product, 1), [product]);
-  const pageUrl = typeof window !== "undefined" ? window.location.href : `${siteConfig.url}/shop/${product.slug}`;
+  const pageUrl = `${siteConfig.url.replace(/\/$/, "")}/shop/${product.slug}`;
   const shareMessage = `${siteConfig.name}: ${product.name} - ${pageUrl}`;
   const bulkMessage = `Hello ${siteConfig.name}, I want to ask about bulk supply for ${product.name}. ${pageUrl}`;
 
@@ -41,4 +41,5 @@ export function ProductMarketingActions({ product }: { product: Product }) {
     </div>
   );
 }
+
 

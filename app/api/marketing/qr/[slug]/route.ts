@@ -32,7 +32,8 @@ function svgCode(value: string) {
 export async function GET(_request: NextRequest, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params;
   const campaign = await getActiveCampaignBySlug(slug);
-  const url = `${getSiteUrl().replace(/\/$/, "")}/go/${campaign?.slug ?? slug}`;
+  if (!campaign) return new Response("Campaign not found.", { status: 404 });
+  const url = `${getSiteUrl().replace(/\/$/, "")}/go/${campaign.slug}`;
   return new Response(svgCode(url), {
     headers: {
       "content-type": "image/svg+xml; charset=utf-8",
@@ -40,4 +41,5 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ sl
     },
   });
 }
+
 
