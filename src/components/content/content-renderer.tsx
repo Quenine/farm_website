@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,7 +17,7 @@ function MarkdownChunk({ value }: { value: string }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeSanitize]}
-      allowedElements={["p", "strong", "em", "a", "ul", "ol", "li", "blockquote", "code", "pre", "h2", "h3", "h4", "table", "thead", "tbody", "tr", "th", "td", "hr", "br"]}
+      allowedElements={["p", "strong", "em", "a", "ul", "ol", "li", "blockquote", "code", "pre", "h2", "h3", "h4", "table", "thead", "tbody", "tr", "th", "td", "hr", "br", "img"]}
       urlTransform={(url) => {
         const trimmed = url.trim();
         if (/^(https?:|mailto:|tel:|\/)/i.test(trimmed)) return trimmed;
@@ -28,6 +29,16 @@ function MarkdownChunk({ value }: { value: string }) {
             {children}
           </a>
         ),
+        img: ({ src, alt, title }) => {
+          const imageSrc = typeof src === "string" && /^(https?:|\/)/i.test(src.trim()) ? src.trim() : "";
+          if (!imageSrc) return null;
+          return (
+            <figure className="my-8">
+              <img src={imageSrc} alt={alt || ""} loading="lazy" decoding="async" className="max-h-[620px] w-full rounded-lg object-contain" />
+              {title ? <figcaption className="mt-2 text-center text-sm text-stone-500">{title}</figcaption> : null}
+            </figure>
+          );
+        },
         h2: ({ children }) => <h2 className="mt-10 text-2xl font-bold text-green-950">{children}</h2>,
         h3: ({ children }) => <h3 className="mt-8 text-xl font-bold text-green-950">{children}</h3>,
         p: ({ children }) => <p className="leading-8 text-stone-700">{children}</p>,

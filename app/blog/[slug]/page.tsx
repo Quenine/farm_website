@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Share2 } from "lucide-react";
+import { ArticleShare } from "@/src/components/content/article-share";
 import { AffiliateDisclosure, ArticleMeta, SafeContentMarkdown, WhatsAppContentCta } from "@/src/components/content/content-renderer";
 import { ContentSubscribeForm } from "@/src/components/content/subscribe-form";
 import { PageShell } from "@/src/components/ui";
@@ -56,7 +56,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
         </div>
         <div className="mt-8"><SafeContentMarkdown post={post} /></div>
         {post.author ? <section className="mt-10 rounded-lg bg-white p-5 shadow-sm"><h2 className="text-xl font-bold text-green-950">About the author</h2><p className="mt-2 font-bold text-stone-900">{post.author.name}</p>{post.author.credentials_or_experience || post.author.bio ? <p className="mt-2 text-sm leading-6 text-stone-700">{post.author.credentials_or_experience ?? post.author.bio}</p> : null}</section> : null}
-        <div className="mt-8 flex flex-wrap gap-3"><WhatsAppContentCta title={post.title} /><button className="inline-flex items-center gap-2 rounded-full border border-green-800 px-5 py-3 text-sm font-bold text-green-950"><Share2 size={16} /> Share</button><Link href="/shop" className="rounded-full bg-green-800 px-5 py-3 text-sm font-bold text-white">Shop {siteConfig.name}</Link></div>
+        <div className="mt-8 flex flex-wrap gap-3"><WhatsAppContentCta title={post.title} /><ArticleShare title={post.title} text={post.excerpt} slug={post.slug} canonicalUrl={`${siteConfig.url.replace(/\/$/, "")}/blog/${post.slug}`} /><Link href="/shop" className="rounded-full bg-green-800 px-5 py-3 text-sm font-bold text-white">Shop {siteConfig.name}</Link></div>
         <div className="mt-10"><ContentSubscribeForm sourcePath={`/blog/${post.slug}`} /></div>
       </article>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />

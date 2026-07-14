@@ -81,7 +81,7 @@ check("Review validation requires excerpt", actions.includes("Excerpt is require
 check("Review validation requires meaningful body", actions.includes("Add meaningful article content before sending to review or publication."));
 check("Review validation requires author", actions.includes("Author is required before review or publication."));
 check("Review validation requires category", actions.includes("Category is required before review or publication."));
-check("Publish validation requires publication date", actions.includes("Publication date is required before publishing."));
+check("Publish uses server publication time", actions.includes("existing?.published_at ?? new Date().toISOString()"));
 check("Publish validation requires image alt text", actions.includes("Featured image alt text is required when a featured image exists."));
 check("Affiliate publish validation requires disclosure", actions.includes("Affiliate disclosure is required when affiliate recommendations are attached or embedded."));
 check("Affiliate publish validation requires methodology", actions.includes("Recommendation methodology is required when affiliate recommendations are attached or embedded."));
@@ -99,4 +99,4 @@ check("Post editor has publish-specific pending label", postEditor.includes("Pub
 check("Post editor shows draft title requirement", postEditor.includes("Required to save a draft."));
 check("Post editor explains later excerpt requirement", postEditor.includes("Required before review or publication."));
 check("Post editor explains body can be incomplete for drafts", postEditor.includes("Drafts may be incomplete. Meaningful content is required before review."));
-check("Post editor supports editable generated slug guidance", postEditor.includes("Generated from the title. Use lowercase letters, numbers, and hyphens."));
+check("Post editor supports editable generated slug guidance", postEditor.includes("Generated from the title until manually edited. Use lowercase letters, numbers, and hyphens."));

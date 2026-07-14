@@ -7,7 +7,9 @@ import { z } from "zod";
 import { ensureContentAdmin, type AdminEntity } from "@/src/lib/content-admin";
 import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 
-export type AdminMutationState = { ok: true; success: true; message: string; id?: string; fieldErrors: Record<string, string[]> } | { ok: false; success: false; message: string; fieldErrors: Record<string, string[]> };
+export type SavedPostSummary = { id: string; slug: string; status: string; publishedAt: string | null; updatedAt: string };
+export type AdminMutationState = { ok: true; success: true; message: string; id?: string; post?: SavedPostSummary; fieldErrors: Record<string, string[]> } | { ok: false; success: false; message: string; fieldErrors: Record<string, string[]> };
+export type ContentImageUploadResult = { success: true; url: string; path: string } | { success: false; message: string; fieldErrors?: Record<string, string[]> };
 
 const slugSchema = z.string().trim().min(2).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers and hyphens only.");
 const optionalUrl = z.string().trim().optional().nullable().transform((value) => value || null).refine((value) => !value || /^https?:\/\//i.test(value), "Enter an HTTP or HTTPS URL.");
@@ -122,13 +124,30 @@ function flattenPayload(payload: Record<string, unknown>) {
 }
 
 function revalidateContentAdmin() {
+  revalidatePath("/admin");
   revalidatePath("/admin/content");
+  revalidatePath("/admin/content/posts");
   revalidatePath("/admin/affiliate");
   revalidatePath("/blog");
   revalidatePath("/resources");
   revalidatePath("/videos");
   revalidatePath("/tools");
+  revalidatePath("/blog/feed.xml");
   revalidatePath("/sitemap.xml");
+}
+
+async function revalidateContentMutation(input: { supabase: ReturnType<typeof createContentAdminSupabaseClient>; oldSlug?: string | null; newSlug?: string | null }) {
+  revalidateContentAdmin();
+  const paths = new Set(["/blog", "/resources", "/videos", "/blog/feed.xml", "/sitemap.xml"]);
+  if (input.newSlug) paths.add(`/blog/${input.newSlug}`);
+  if (input.oldSlug && input.oldSlug !== input.newSlug) paths.add(`/blog/${input.oldSlug}`);
+  const [categories, tags] = await Promise.all([
+    input.supabase.from("content_categories").select("slug").eq("is_active", true),
+    input.supabase.from("content_tags").select("slug").eq("is_active", true),
+  ]);
+  for (const category of categories.data ?? []) paths.add(`/blog/category/${category.slug}`);
+  for (const tag of tags.data ?? []) paths.add(`/blog/tag/${tag.slug}`);
+  for (const path of paths) revalidatePath(path);
 }
 
 export async function saveAdminEntityAction(entity: keyof typeof schemas, payload: Record<string, unknown>): Promise<AdminMutationState> {
@@ -200,7 +219,7 @@ function uuidList(value: unknown) {
 }
 
 function slugFromTitle(value: string) {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 function validateSlug(value: string) {
@@ -219,6 +238,22 @@ async function uniqueSlug(supabase: ReturnType<typeof createContentAdminSupabase
 
 function addError(errors: FieldErrors, key: string, message: string) {
   errors[key] = [...(errors[key] ?? []), message];
+}
+
+function addMarkdownImageErrors(errors: FieldErrors, markdown: string) {
+  const imagePattern = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g;
+  let match: RegExpExecArray | null;
+  let index = 0;
+  while ((match = imagePattern.exec(markdown)) !== null) {
+    index += 1;
+    const alt = match[1]?.trim() ?? "";
+    const src = match[2]?.trim() ?? "";
+    if (!alt) addError(errors, "content_markdown", `Inline image ${index} requires descriptive alt text.`);
+    if (!/^(https?:\/\/|\/)/i.test(src)) addError(errors, "content_markdown", `Inline image ${index} uses an unsafe or unsupported URL.`);
+    if (/^(javascript:|data:)/i.test(src)) addError(errors, "content_markdown", `Inline image ${index} uses an unsafe URL scheme.`);
+  }
+  const malformedCount = (markdown.match(/!\[/g) ?? []).length;
+  if (malformedCount > index) addError(errors, "content_markdown", "One or more inline images appear malformed. Use ![alt text](https://example.com/image.jpg). ");
 }
 
 function relationLinks(payload: Record<string, unknown>) {
@@ -258,13 +293,13 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
   const title = stringField(payload, "title");
   const excerpt = stringField(payload, "excerpt");
   const content_markdown = typeof payload.content_markdown === "string" ? payload.content_markdown : "";
-  const rawSlug = stringField(payload, "slug").toLowerCase();
+  const rawSlug = slugFromTitle(stringField(payload, "slug"));
   let slug = rawSlug || slugFromTitle(title);
   const author_id = optionalUuid(payload.author_id);
   const category_id = optionalUuid(payload.category_id);
   const featured_image_url = stringField(payload, "featured_image_url") || null;
   const featured_image_alt = stringField(payload, "featured_image_alt") || null;
-  const published_at = stringField(payload, "published_at") || null;
+  const clientPublishedAt = stringField(payload, "published_at") || null;
   const contains_affiliate_content = boolField(payload, "contains_affiliate_content");
   const custom_affiliate_disclosure = stringField(payload, "custom_affiliate_disclosure") || null;
   const recommendation_methodology = stringField(payload, "recommendation_methodology") || null;
@@ -284,10 +319,10 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
     if (content_markdown.trim().length < 120) addError(errors, "content_markdown", "Add meaningful article content before sending to review or publication.");
     if (!author_id) addError(errors, "author_id", "Author is required before review or publication.");
     if (!category_id) addError(errors, "category_id", "Category is required before review or publication.");
+    addMarkdownImageErrors(errors, content_markdown);
   }
 
   if (action === "publish") {
-    if (!published_at || Number.isNaN(Date.parse(published_at))) addError(errors, "published_at", "Publication date is required before publishing.");
     const hasAffiliateRecommendations = contains_affiliate_content || links.offerLinks.length > 0 || /\[\[(comparison|affiliate|recommend):/i.test(content_markdown);
     if (hasAffiliateRecommendations && !custom_affiliate_disclosure) {
       addError(errors, "custom_affiliate_disclosure", "Affiliate disclosure is required when affiliate recommendations are attached or embedded.");
@@ -299,16 +334,20 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
 
   if (Object.keys(errors).length > 0) return { ok: false as const, errors };
 
-  slug = await uniqueSlug(supabase, slug, id);
+  let existing: { slug: string; status: string; published_at: string | null } | null = null;
   if (id) {
-    const existing = await supabase.from("content_posts").select("slug,status").eq("id", id).single();
-    if (existing.error) throw new Error(existing.error.message);
-    if (existing.data?.status === "published" && existing.data.slug !== slug) {
-      return { ok: false as const, errors: { slug: ["Published slugs should not change silently. Unpublish first if a slug change is required."] } };
-    }
+    const existingResult = await supabase.from("content_posts").select("slug,status,published_at").eq("id", id).single();
+    if (existingResult.error) throw new Error(existingResult.error.message);
+    existing = existingResult.data as { slug: string; status: string; published_at: string | null };
   }
 
-  const status = action === "publish" ? "published" : action === "review" ? "review" : action === "archive" ? "archived" : "draft";
+  slug = await uniqueSlug(supabase, slug, id);
+  if (existing?.status === "published" && existing.slug !== slug) {
+    return { ok: false as const, errors: { slug: ["Changing a published slug may break the old public URL. Unpublish first if a slug change is required."] } };
+  }
+
+  const status = action === "publish" ? "published" : action === "review" ? "review" : action === "archive" ? "archived" : action === "unpublish" ? "draft" : existing?.status === "published" ? "published" : "draft";
+  const published_at = status === "published" ? (existing?.published_at ?? new Date().toISOString()) : clientPublishedAt;
   return { ok: true as const, value: {
     id,
     action,
@@ -333,7 +372,7 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
     seo_title: stringField(payload, "seo_title") || null,
     seo_description: stringField(payload, "seo_description") || null,
     external_canonical_url,
-    published_at: status === "published" ? published_at : published_at || null,
+    published_at,
     tag_ids: links.tagIds,
     source_ids: links.sourceIds,
     product_links: links.productLinks,
@@ -373,10 +412,14 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
       published_at: value.published_at,
       reviewed_at: value.status === "review" || value.status === "published" ? new Date().toISOString() : null,
     };
-    const query = value.id ? supabase.from("content_posts").update(postPayload).eq("id", value.id).select("id,slug").single() : supabase.from("content_posts").insert(postPayload).select("id,slug").single();
+    const oldSlugResult = value.id ? await supabase.from("content_posts").select("slug,status,published_at").eq("id", value.id).single() : null;
+    if (oldSlugResult?.error) throw new Error(oldSlugResult.error.message);
+    const oldSlug = (oldSlugResult?.data as { slug?: string } | null)?.slug ?? null;
+    const query = value.id ? supabase.from("content_posts").update(postPayload).eq("id", value.id).select("id,slug,status,published_at,updated_at").single() : supabase.from("content_posts").insert(postPayload).select("id,slug,status,published_at,updated_at").single();
     const { data, error } = await query;
     if (error) throw new Error(error.message);
-    const postId = (data as { id: string }).id;
+    const savedPost = data as { id: string; slug: string; status: string; published_at: string | null; updated_at: string };
+    const postId = savedPost.id;
     await Promise.all([
       supabase.from("content_post_tags").delete().eq("post_id", postId),
       supabase.from("content_post_sources").delete().eq("post_id", postId),
@@ -391,8 +434,7 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
     const relationResults = await Promise.all(inserts);
     const relationError = relationResults.find((result) => result.error)?.error;
     if (relationError) throw new Error(relationError.message);
-    revalidateContentAdmin();
-    revalidatePath(`/blog/${value.slug}`);
+    await revalidateContentMutation({ supabase, oldSlug, newSlug: savedPost.slug });
     const messages: Record<PostAction, string> = {
       draft: "Draft saved.",
       continue: "Draft saved. You can continue editing.",
@@ -401,8 +443,32 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
       unpublish: "Draft saved.",
       archive: "Article archived.",
     };
-    return { ok: true, success: true, message: messages[value.action], id: postId, fieldErrors: {} };
+    return { ok: true, success: true, message: messages[value.action], id: postId, post: { id: savedPost.id, slug: savedPost.slug, status: savedPost.status, publishedAt: savedPost.published_at, updatedAt: savedPost.updated_at }, fieldErrors: {} };
   } catch (error) {
     return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to save article.", fieldErrors: {} };
+  }
+}
+
+
+const contentImageTypes: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const contentImageMaxBytes = 5 * 1024 * 1024;
+
+export async function uploadContentImageAction(formData: FormData): Promise<ContentImageUploadResult> {
+  try {
+    await ensureContentAdmin("posts");
+    const file = formData.get("file");
+    if (!(file instanceof File)) return { success: false, message: "Choose an image to upload.", fieldErrors: { file: ["Choose an image to upload."] } };
+    const extension = contentImageTypes[file.type];
+    if (!extension) return { success: false, message: "Upload a JPEG, PNG, or WebP image. SVG files are not allowed.", fieldErrors: { file: ["Upload a JPEG, PNG, or WebP image. SVG files are not allowed."] } };
+    if (file.size <= 0 || file.size > contentImageMaxBytes) return { success: false, message: "Image must be 5MB or smaller.", fieldErrors: { file: ["Image must be 5MB or smaller."] } };
+    const supabase = createContentAdminSupabaseClient();
+    const safeName = file.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 80) || "content-image";
+    const storagePath = `content/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeName}.${extension}`;
+    const { error } = await supabase.storage.from("content-media").upload(storagePath, file, { contentType: file.type, cacheControl: "31536000", upsert: false });
+    if (error) throw new Error(error.message);
+    const { data } = supabase.storage.from("content-media").getPublicUrl(storagePath);
+    return { success: true, url: data.publicUrl, path: storagePath };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Unable to upload image." };
   }
 }
