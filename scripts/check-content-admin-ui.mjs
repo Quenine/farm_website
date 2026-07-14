@@ -71,5 +71,32 @@ for (const page of crudPages) {
 const actions = fs.readFileSync("app/admin/(protected)/content/actions.ts", "utf8");
 check("CRUD actions module is marked use server", actions.startsWith("\"use server\";"));
 assertSerializable({ ok: false, success: false, message: "Please correct the highlighted fields.", fieldErrors: { name: ["Required"] } }, "failedActionResult");
-assertSerializable({ ok: true, success: true, message: "Created successfully.", id: "00000000-0000-4000-8000-000000000000" }, "successfulActionResult");
+assertSerializable({ ok: true, success: true, message: "Created successfully.", id: "00000000-0000-4000-8000-000000000000", fieldErrors: {} }, "successfulActionResult");
 pass("Action return types are plain serializable objects");
+
+check("Post action no longer uses one shared postSchema", !actions.includes("const postSchema = z.object"));
+check("Post action has action-specific validator", actions.includes("async function validatePostPayload"));
+check("Draft validation only requires a title", actions.includes("Title is required to save a draft."));
+check("Review validation requires excerpt", actions.includes("Excerpt is required before review or publication."));
+check("Review validation requires meaningful body", actions.includes("Add meaningful article content before sending to review or publication."));
+check("Review validation requires author", actions.includes("Author is required before review or publication."));
+check("Review validation requires category", actions.includes("Category is required before review or publication."));
+check("Publish validation requires publication date", actions.includes("Publication date is required before publishing."));
+check("Publish validation requires image alt text", actions.includes("Featured image alt text is required when a featured image exists."));
+check("Affiliate publish validation requires disclosure", actions.includes("Affiliate disclosure is required when affiliate recommendations are attached or embedded."));
+check("Affiliate publish validation requires methodology", actions.includes("Recommendation methodology is required when affiliate recommendations are attached or embedded."));
+check("Draft save auto-generates unique slug", actions.includes("async function uniqueSlug") && actions.includes("slugFromTitle"));
+check("Post action returns fieldErrors on failure", actions.includes("fieldErrors: parsed.errors"));
+
+const postEditor = fs.readFileSync("src/components/content-admin/post-admin.tsx", "utf8");
+check("Post editor displays field errors", postEditor.includes("fieldErrors") && postEditor.includes("FieldHelp"));
+check("Post editor marks invalid fields accessibly", postEditor.includes("aria-invalid") && postEditor.includes("aria-describedby"));
+check("Post editor focuses the first invalid field", postEditor.includes("focusField") && postEditor.includes("scrollIntoView"));
+check("Post editor preserves unsaved changes", postEditor.includes("beforeunload") && postEditor.includes("Unsaved changes"));
+check("Post editor has draft-specific pending label", postEditor.includes("Saving draft..."));
+check("Post editor has review-specific pending label", postEditor.includes("Sending to review..."));
+check("Post editor has publish-specific pending label", postEditor.includes("Publishing..."));
+check("Post editor shows draft title requirement", postEditor.includes("Required to save a draft."));
+check("Post editor explains later excerpt requirement", postEditor.includes("Required before review or publication."));
+check("Post editor explains body can be incomplete for drafts", postEditor.includes("Drafts may be incomplete. Meaningful content is required before review."));
+check("Post editor supports editable generated slug guidance", postEditor.includes("Generated from the title. Use lowercase letters, numbers, and hyphens."));

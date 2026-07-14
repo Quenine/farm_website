@@ -7,7 +7,7 @@ import { z } from "zod";
 import { ensureContentAdmin, type AdminEntity } from "@/src/lib/content-admin";
 import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 
-export type AdminMutationState = { ok: true; success: true; message: string; id?: string } | { ok: false; success: false; message: string; fieldErrors?: Record<string, string[]> };
+export type AdminMutationState = { ok: true; success: true; message: string; id?: string; fieldErrors: Record<string, string[]> } | { ok: false; success: false; message: string; fieldErrors: Record<string, string[]> };
 
 const slugSchema = z.string().trim().min(2).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers and hyphens only.");
 const optionalUrl = z.string().trim().optional().nullable().transform((value) => value || null).refine((value) => !value || /^https?:\/\//i.test(value), "Enter an HTTP or HTTPS URL.");
@@ -146,9 +146,9 @@ export async function saveAdminEntityAction(entity: keyof typeof schemas, payloa
     const { data: saved, error } = await query;
     if (error) throw new Error(error.message);
     revalidateContentAdmin();
-    return { ok: true, success: true, message: id ? "Saved changes." : "Created successfully.", id: (saved as { id: string }).id };
+    return { ok: true, success: true, message: id ? "Saved changes." : "Created successfully.", id: (saved as { id: string }).id, fieldErrors: {} };
   } catch (error) {
-    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to save." };
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to save.", fieldErrors: {} };
   }
 }
 
@@ -162,53 +162,192 @@ export async function toggleAdminEntityAction(entity: keyof typeof schemas, id: 
     const { error } = await supabase.from(table).update({ is_active: active }).eq("id", parsedId);
     if (error) throw new Error(error.message);
     revalidateContentAdmin();
-    return { ok: true, success: true, message: active ? "Activated." : "Deactivated." };
+    return { ok: true, success: true, message: active ? "Activated." : "Deactivated.", fieldErrors: {} };
   } catch (error) {
-    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to update status." };
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to update status.", fieldErrors: {} };
   }
 }
 
-const postSchema = z.object({
-  id: z.string().uuid().optional().nullable(),
-  title: z.string().trim().min(1, "Title is required for publish.").max(220),
-  slug: slugSchema,
-  excerpt: z.string().trim().min(1, "Excerpt is required for publish.").max(1000),
-  answer_summary: z.string().trim().max(2000).optional().nullable().transform((value) => value || null),
-  key_takeaways: z.string().trim().optional().nullable().transform((value) => value ? value.split("\n").map((item) => item.trim()).filter(Boolean) : null),
-  content_markdown: z.string().trim().min(1, "Markdown content is required for publish."),
-  featured_image_url: optionalUrl,
-  featured_image_alt: z.string().trim().max(180).optional().nullable().transform((value) => value || null),
-  category_id: z.string().uuid("Choose a category."),
-  author_id: z.string().uuid("Choose an author."),
-  status: z.enum(["draft","review","published","archived"]),
-  content_format: z.enum(["article","video_companion","comparison","resource_guide","case_study","farm_field_note"]),
-  post_type: z.enum(["guide","tutorial","buying_guide","review","comparison","case_study","market_insight","farm_update"]),
-  audience_scope: z.enum(["nigeria","africa","global"]),
-  is_featured: bool,
-  contains_affiliate_content: bool,
-  custom_affiliate_disclosure: z.string().trim().max(1000).optional().nullable().transform((value) => value || null),
-  recommendation_methodology: z.string().trim().max(2000).optional().nullable().transform((value) => value || null),
-  seo_title: z.string().trim().max(180).optional().nullable().transform((value) => value || null),
-  seo_description: z.string().trim().max(300).optional().nullable().transform((value) => value || null),
-  external_canonical_url: optionalUrl,
-  published_at: optionalDate,
-  tag_ids: z.array(z.string().uuid()).default([]),
-  source_ids: z.array(z.string().uuid()).default([]),
-  product_links: z.array(z.object({ product_id: z.string().uuid(), sort_order: z.coerce.number().int().default(100), custom_context: z.string().trim().max(500).optional().nullable().transform((value) => value || null) })).default([]),
-  offer_links: z.array(z.object({ offer_id: z.string().uuid(), sort_order: z.coerce.number().int().default(100), best_for: z.string().trim().max(220).optional().nullable().transform((value) => value || null), editorial_verdict: z.string().trim().max(1000).optional().nullable().transform((value) => value || null), pros: z.string().trim().optional().nullable().transform((value) => value ? value.split("\n").map((item) => item.trim()).filter(Boolean) : null), cons: z.string().trim().optional().nullable().transform((value) => value ? value.split("\n").map((item) => item.trim()).filter(Boolean) : null) })).default([]),
-  action: z.enum(["draft","continue","review","publish","unpublish","archive"]).default("draft"),
-}).refine((value) => !value.featured_image_url || Boolean(value.featured_image_alt), { path: ["featured_image_alt"], message: "Featured image alt text is required." })
-  .refine((value) => value.action !== "publish" || value.content_markdown.length >= 120, { path: ["content_markdown"], message: "Published content needs at least 120 characters." })
-  .refine((value) => value.action !== "publish" || !value.contains_affiliate_content || Boolean(value.custom_affiliate_disclosure || value.recommendation_methodology), { path: ["custom_affiliate_disclosure"], message: "Affiliate posts need disclosure or methodology notes before publishing." });
+type PostAction = "draft" | "continue" | "review" | "publish" | "unpublish" | "archive";
+type FieldErrors = Record<string, string[]>;
+
+const postActions = ["draft", "continue", "review", "publish", "unpublish", "archive"] as const;
+const contentFormats = ["article", "video_companion", "comparison", "resource_guide", "case_study", "farm_field_note"] as const;
+const postTypes = ["guide", "tutorial", "buying_guide", "review", "comparison", "case_study", "market_insight", "farm_update"] as const;
+const audienceScopes = ["nigeria", "africa", "global"] as const;
+
+function stringField(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function boolField(payload: Record<string, unknown>, key: string) {
+  return payload[key] === true;
+}
+
+function enumField<T extends readonly string[]>(payload: Record<string, unknown>, key: string, values: T, fallback: T[number]) {
+  const value = stringField(payload, key);
+  return (values as readonly string[]).includes(value) ? value as T[number] : fallback;
+}
+
+function optionalUuid(value: unknown) {
+  const parsed = z.string().uuid().safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+function uuidList(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => optionalUuid(item)).filter(Boolean) as string[] : [];
+}
+
+function slugFromTitle(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function validateSlug(value: string) {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+
+async function uniqueSlug(supabase: ReturnType<typeof createContentAdminSupabaseClient>, base: string, existingId: string | null) {
+  for (let index = 0; index < 50; index += 1) {
+    const candidate = index === 0 ? base : `${base}-${index + 1}`;
+    const { data, error } = await supabase.from("content_posts").select("id").eq("slug", candidate).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data || data.id === existingId) return candidate;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
+
+function addError(errors: FieldErrors, key: string, message: string) {
+  errors[key] = [...(errors[key] ?? []), message];
+}
+
+function relationLinks(payload: Record<string, unknown>) {
+  const rawProducts = Array.isArray(payload.product_links) ? payload.product_links : [];
+  const rawOffers = Array.isArray(payload.offer_links) ? payload.offer_links : [];
+  return {
+    tagIds: uuidList(payload.tag_ids),
+    sourceIds: uuidList(payload.source_ids),
+    productLinks: rawProducts.map((item) => {
+      const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const product_id = optionalUuid(row.product_id);
+      return product_id ? {
+        product_id,
+        sort_order: Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 100,
+        custom_context: typeof row.custom_context === "string" && row.custom_context.trim() ? row.custom_context.trim() : null,
+      } : null;
+    }).filter(Boolean) as Array<{ product_id: string; sort_order: number; custom_context: string | null }>,
+    offerLinks: rawOffers.map((item, index) => {
+      const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const offer_id = optionalUuid(row.offer_id);
+      return offer_id ? {
+        offer_id,
+        sort_order: Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : index + 1,
+        best_for: typeof row.best_for === "string" && row.best_for.trim() ? row.best_for.trim() : null,
+        editorial_verdict: typeof row.editorial_verdict === "string" && row.editorial_verdict.trim() ? row.editorial_verdict.trim() : null,
+        pros: Array.isArray(row.pros) ? row.pros.filter((value): value is string => typeof value === "string") : null,
+        cons: Array.isArray(row.cons) ? row.cons.filter((value): value is string => typeof value === "string") : null,
+      } : null;
+    }).filter(Boolean) as Array<{ offer_id: string; sort_order: number; best_for: string | null; editorial_verdict: string | null; pros: string[] | null; cons: string[] | null }>,
+  };
+}
+
+async function validatePostPayload(payload: Record<string, unknown>, supabase: ReturnType<typeof createContentAdminSupabaseClient>) {
+  const errors: FieldErrors = {};
+  const action = enumField(payload, "action", postActions, "draft") as PostAction;
+  const id = optionalUuid(payload.id);
+  const title = stringField(payload, "title");
+  const excerpt = stringField(payload, "excerpt");
+  const content_markdown = typeof payload.content_markdown === "string" ? payload.content_markdown : "";
+  const rawSlug = stringField(payload, "slug").toLowerCase();
+  let slug = rawSlug || slugFromTitle(title);
+  const author_id = optionalUuid(payload.author_id);
+  const category_id = optionalUuid(payload.category_id);
+  const featured_image_url = stringField(payload, "featured_image_url") || null;
+  const featured_image_alt = stringField(payload, "featured_image_alt") || null;
+  const published_at = stringField(payload, "published_at") || null;
+  const contains_affiliate_content = boolField(payload, "contains_affiliate_content");
+  const custom_affiliate_disclosure = stringField(payload, "custom_affiliate_disclosure") || null;
+  const recommendation_methodology = stringField(payload, "recommendation_methodology") || null;
+  const external_canonical_url = stringField(payload, "external_canonical_url") || null;
+  const links = relationLinks(payload);
+
+  if (!title) addError(errors, "title", "Title is required to save a draft.");
+  if (!slug) addError(errors, "slug", "Enter a title so a slug can be generated.");
+  else if (!validateSlug(slug)) addError(errors, "slug", "Use lowercase letters, numbers, and hyphens only.");
+  if (featured_image_url && !/^https?:\/\//i.test(featured_image_url)) addError(errors, "featured_image_url", "Enter an HTTP or HTTPS URL.");
+  if (featured_image_url && !featured_image_alt) addError(errors, "featured_image_alt", "Featured image alt text is required when a featured image exists.");
+  if (external_canonical_url && !/^https?:\/\//i.test(external_canonical_url)) addError(errors, "external_canonical_url", "Enter an HTTP or HTTPS URL.");
+
+  const needsReviewFields = action === "review" || action === "publish";
+  if (needsReviewFields) {
+    if (!excerpt) addError(errors, "excerpt", "Excerpt is required before review or publication.");
+    if (content_markdown.trim().length < 120) addError(errors, "content_markdown", "Add meaningful article content before sending to review or publication.");
+    if (!author_id) addError(errors, "author_id", "Author is required before review or publication.");
+    if (!category_id) addError(errors, "category_id", "Category is required before review or publication.");
+  }
+
+  if (action === "publish") {
+    if (!published_at || Number.isNaN(Date.parse(published_at))) addError(errors, "published_at", "Publication date is required before publishing.");
+    const hasAffiliateRecommendations = contains_affiliate_content || links.offerLinks.length > 0 || /\[\[(comparison|affiliate|recommend):/i.test(content_markdown);
+    if (hasAffiliateRecommendations && !custom_affiliate_disclosure) {
+      addError(errors, "custom_affiliate_disclosure", "Affiliate disclosure is required when affiliate recommendations are attached or embedded.");
+    }
+    if (hasAffiliateRecommendations && !recommendation_methodology) {
+      addError(errors, "recommendation_methodology", "Recommendation methodology is required when affiliate recommendations are attached or embedded.");
+    }
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false as const, errors };
+
+  slug = await uniqueSlug(supabase, slug, id);
+  if (id) {
+    const existing = await supabase.from("content_posts").select("slug,status").eq("id", id).single();
+    if (existing.error) throw new Error(existing.error.message);
+    if (existing.data?.status === "published" && existing.data.slug !== slug) {
+      return { ok: false as const, errors: { slug: ["Published slugs should not change silently. Unpublish first if a slug change is required."] } };
+    }
+  }
+
+  const status = action === "publish" ? "published" : action === "review" ? "review" : action === "archive" ? "archived" : "draft";
+  return { ok: true as const, value: {
+    id,
+    action,
+    status,
+    slug,
+    title,
+    excerpt,
+    content_markdown,
+    answer_summary: stringField(payload, "answer_summary") || null,
+    key_takeaways: stringField(payload, "key_takeaways") ? stringField(payload, "key_takeaways").split("\n").map((item) => item.trim()).filter(Boolean) : null,
+    featured_image_url,
+    featured_image_alt,
+    category_id,
+    author_id,
+    content_format: enumField(payload, "content_format", contentFormats, "article"),
+    post_type: enumField(payload, "post_type", postTypes, "guide"),
+    audience_scope: enumField(payload, "audience_scope", audienceScopes, "nigeria"),
+    is_featured: boolField(payload, "is_featured"),
+    contains_affiliate_content,
+    custom_affiliate_disclosure,
+    recommendation_methodology,
+    seo_title: stringField(payload, "seo_title") || null,
+    seo_description: stringField(payload, "seo_description") || null,
+    external_canonical_url,
+    published_at: status === "published" ? published_at : published_at || null,
+    tag_ids: links.tagIds,
+    source_ids: links.sourceIds,
+    product_links: links.productLinks,
+    offer_links: links.offerLinks,
+  } };
+}
 
 export async function savePostAction(payload: Record<string, unknown>): Promise<AdminMutationState> {
   try {
     await ensureContentAdmin("posts");
-    const parsed = postSchema.safeParse(payload);
-    if (!parsed.success) return { ok: false, success: false, message: "Please correct the highlighted fields.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
     const supabase = createContentAdminSupabaseClient();
-    const value = parsed.data;
-    const status = value.action === "publish" ? "published" : value.action === "review" ? "review" : value.action === "archive" ? "archived" : value.action === "unpublish" ? "draft" : value.status;
+    const parsed = await validatePostPayload(payload, supabase);
+    if (!parsed.ok) return { ok: false, success: false, message: "Please correct the fields listed below.", fieldErrors: parsed.errors };
+    const value = parsed.value;
     const postPayload = {
       title: value.title,
       slug: value.slug,
@@ -220,7 +359,7 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
       featured_image_alt: value.featured_image_alt,
       category_id: value.category_id,
       author_id: value.author_id,
-      status,
+      status: value.status,
       content_format: value.content_format,
       post_type: value.post_type,
       audience_scope: value.audience_scope,
@@ -231,13 +370,9 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
       seo_title: value.seo_title,
       seo_description: value.seo_description,
       external_canonical_url: value.external_canonical_url,
-      published_at: status === "published" ? value.published_at || new Date().toISOString() : value.published_at,
-      reviewed_at: status === "review" || status === "published" ? new Date().toISOString() : null,
+      published_at: value.published_at,
+      reviewed_at: value.status === "review" || value.status === "published" ? new Date().toISOString() : null,
     };
-    const existing = value.id ? await supabase.from("content_posts").select("slug,status").eq("id", value.id).single() : null;
-    if (existing?.data && (existing.data as { status: string; slug: string }).status === "published" && (existing.data as { slug: string }).slug !== value.slug) {
-      throw new Error("Published slugs should not change silently. Unpublish first if a slug change is required.");
-    }
     const query = value.id ? supabase.from("content_posts").update(postPayload).eq("id", value.id).select("id,slug").single() : supabase.from("content_posts").insert(postPayload).select("id,slug").single();
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -258,8 +393,16 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
     if (relationError) throw new Error(relationError.message);
     revalidateContentAdmin();
     revalidatePath(`/blog/${value.slug}`);
-    return { ok: true, success: true, message: status === "published" ? "Article published." : "Article saved.", id: postId };
+    const messages: Record<PostAction, string> = {
+      draft: "Draft saved.",
+      continue: "Draft saved. You can continue editing.",
+      review: "Article sent for review.",
+      publish: "Article published.",
+      unpublish: "Draft saved.",
+      archive: "Article archived.",
+    };
+    return { ok: true, success: true, message: messages[value.action], id: postId, fieldErrors: {} };
   } catch (error) {
-    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to save article." };
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to save article.", fieldErrors: {} };
   }
 }
