@@ -13,6 +13,8 @@ const mediaRoute = file("app/api/admin/content/media/route.ts");
 const crud = file("src/components/content-admin/crud-manager.tsx");
 const diagnostics = file("src/lib/content-admin-diagnostics.ts");
 const migration = file("database/step-content-trash-and-deletion.sql");
+const blogPage = file("app/blog/page.tsx");
+const blogCardImage = file("src/components/content/blog-card-image.tsx");
 const definitions = (await import('../src/lib/content-admin-entities.mjs')).adminEntityDefinitions;
 
 check("Add Affiliate Offer opens a visible picker", editor.includes("setOfferPickerOpen(true)") && editor.includes("Search offers") && editor.includes("Filter by partner"));
@@ -45,6 +47,14 @@ check("Published post trash is blocked", actions.includes('Published posts must 
 check("Content diagnostics include storage and truthful trash checks", diagnostics.includes('content-media bucket available') && diagnostics.includes('trash columns') && diagnostics.includes('Configured, not runtime-tested.'));
 check("Production loader table names contain no select syntax", Object.values(definitions).every((definition) => !definition.table.includes(',') && !/[()]/.test(definition.table)));
 check("Every trash entity selects deletion columns", Object.values(definitions).filter((definition) => definition.trash).every((definition) => definition.select.split(',').includes('deleted_at') && definition.select.split(',').includes('deleted_by')));
+check("Blog cards render featured image fields", blogPage.includes("post.featured_image_url") && blogPage.includes("post.featured_image_alt"));
+check("Blog cards navigate through one stretched article link", blogPage.includes('href={`/blog/${post.slug}`}') && blogPage.includes("absolute inset-0 z-10") && blogPage.includes("aria-label={`Read ${post.title}`}"));
+check("Blog taxonomy links remain independent", blogPage.includes("relative z-20") && blogPage.includes("/blog/category/") && blogPage.includes("/blog/tag/"));
+check("Missing or failed Blog images render branded fallback", blogCardImage.includes("data-blog-image-fallback") && blogCardImage.includes("onError={() => setFailed(true)}"));
+check("Featured Blog posts are removed from regular grid", blogPage.includes("featuredIds") && blogPage.includes("!featuredIds.has(post.id)"));
+check("Blog pagination preserves active filters", ["q", "category", "tag", "format", "audience"].every((key) => blogPage.includes(`query.set("${key}"`)) && blogPage.includes("pageHref(data.page"));
+check("Blog image URLs reject unsafe protocols", blogCardImage.includes('url.protocol === "https:"') && blogCardImage.includes('source.startsWith("/")') && !blogCardImage.includes('protocol === "data:"'));
+check("Blog card grid remains responsive", blogPage.includes("grid-cols-1") && blogPage.includes("md:grid-cols-2") && blogPage.includes("lg:grid-cols-3"));
 
 const baseUrl = process.env.CONTENT_E2E_BASE_URL;
 if (baseUrl) {
