@@ -122,7 +122,7 @@ export default async function Home() {
           </div>
           <HeroSlideshowPanel images={slideshowImages}>
             <div className="w-full max-w-sm">
-              <div className="rounded-lg bg-white/[0.88] p-5 shadow-sm ring-1 ring-white/60 backdrop-blur-md">
+              <div className="rounded-lg bg-white/88 p-5 shadow-sm ring-1 ring-white/60 backdrop-blur-md">
                 <p className="text-sm font-bold text-amber-700">
                   Today at farm gate
                 </p>
@@ -133,14 +133,14 @@ export default async function Home() {
                 </p>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-4">
-                <div className="rounded-lg bg-white/[0.84] p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
+                <div className="rounded-lg bg-white/84 p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
                   <p className="text-2xl font-bold">Chicken</p>
                   <p className="text-xs font-semibold text-stone-600">
                     4-week and table-size chicken available for scheduled
                     orders.
                   </p>
                 </div>
-                <div className="rounded-lg bg-white/[0.84] p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
+                <div className="rounded-lg bg-white/84 p-4 shadow-sm ring-1 ring-white/55 backdrop-blur-md">
                   <p className="text-2xl font-bold">Egg supply</p>
                   <p className="text-xs font-semibold text-stone-600">
                     Crates and half-crates for homes, vendors, bakeries, and
