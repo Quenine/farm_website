@@ -7,8 +7,9 @@ import { loadAdminEntity } from "@/src/lib/content-admin";
 
 export const dynamic = "force-dynamic";
 
-export default async function PostsPage() {
+export default async function PostsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   if (!contentPublicConfig.hubEnabled) notFound();
-  const data = await loadAdminEntity("posts");
+  const filters = await searchParams;
+  const data = await loadAdminEntity("posts", filters);
   return <div><AdminHeader title="Posts" body="Create, review, publish, unpublish and archive agribusiness content." /><AdminSubnav /><PostsList posts={data.records} /></div>;
 }

@@ -9,31 +9,13 @@ import { assertSerializableAdminPayload, serializeAdminRecord } from "@/src/lib/
 
 export type AdminEntity = "authors" | "categories" | "tags" | "sources" | "posts" | "partners" | "offers" | "videos" | "subscribers";
 
+import { adminEntityDefinitions, supportsTrash } from '@/src/lib/content-admin-entities.mjs';
+export { adminEntityDefinitions, supportsTrash };
+
 export type AdminRecord = Record<string, unknown>;
 
-const tables: Record<AdminEntity, string> = {
-  authors: "content_authors,deleted_at,deleted_by",
-  categories: "content_categories,deleted_at,deleted_by",
-  tags: "content_tags,deleted_at,deleted_by",
-  sources: "content_sources,deleted_at,deleted_by",
-  posts: "content_posts,deleted_at,deleted_by",
-  partners: "affiliate_partners,deleted_at,deleted_by",
-  offers: "affiliate_offers,deleted_at,deleted_by",
-  videos: "content_videos,deleted_at,deleted_by",
-  subscribers: "content_subscribers",
-};
-
-const selectColumns: Record<AdminEntity, string> = {
-  authors: "id,name,slug,role_title,bio,avatar_url,avatar_alt,credentials_or_experience,is_active,updated_at",
-  categories: "id,name,slug,description,seo_title,seo_description,sort_order,is_active,updated_at",
-  tags: "id,name,slug,description,is_active,updated_at",
-  sources: "id,title,publisher,url,source_type,publication_date,accessed_at,is_primary_source,internal_note,is_active,updated_at",
-  posts: "id,title,slug,excerpt,status,content_format,post_type,audience_scope,contains_affiliate_content,is_featured,published_at,updated_at,content_categories(name,slug),content_authors(name,slug)",
-  partners: "id,name,slug,website_url,affiliate_network,default_disclosure,internal_notes,is_active,updated_at",
-  offers: "id,partner_id,title,slug,short_description,destination_url,image_url,image_alt,button_label,display_price,currency,price_last_checked_at,available_regions,recommendation_basis,is_featured,is_active,internal_commission_note,updated_at,affiliate_partners(name,slug)",
-  videos: "id,post_id,platform,external_video_id,embed_url,watch_url,title,description,thumbnail_url,thumbnail_alt,duration_seconds,upload_date,transcript_markdown,chapters,is_active,updated_at,content_posts(title,slug)",
-  subscribers: "id,email,status,source_path,subscription_topic,consented_at,unsubscribed_at,created_at,updated_at",
-};
+const tables = Object.fromEntries(Object.entries(adminEntityDefinitions).map(([entity, definition]) => [entity, definition.table])) as Record<AdminEntity, string>;
+const selectColumns = Object.fromEntries(Object.entries(adminEntityDefinitions).map(([entity, definition]) => [entity, definition.select])) as Record<AdminEntity, string>;
 
 function contentFeatureEnabled(entity: AdminEntity) {
   if (entity === "partners" || entity === "offers") return contentPublicConfig.affiliateEnabled;
@@ -180,7 +162,8 @@ function adminLoadMessage(entity: AdminEntity, message: string) {
 export async function loadAdminEntity(entity: AdminEntity, filters: Record<string, string | undefined> = {}) {
   await ensureContentAdmin(entity);
   const supabase = createContentAdminSupabaseClient();
-  const page = Math.max(1, Number(filters.page ?? 1));
+  const requestedPage = Number.parseInt(filters.page ?? '1', 10);
+  const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
   const pageSize = 25;
   let query = supabase
     .from(tables[entity])
@@ -188,6 +171,10 @@ export async function loadAdminEntity(entity: AdminEntity, filters: Record<strin
     .range((page - 1) * pageSize, page * pageSize - 1);
 
   query = likeFilter(query, entity, filters.q ?? "") as typeof query;
+  if (supportsTrash(entity)) {
+    if (filters.trash === 'trash') query = query.not('deleted_at', 'is', null);
+    else if (filters.trash !== 'all') query = query.is('deleted_at', null);
+  }
   if (filters.active && filters.active !== "all" && ["authors", "categories", "tags", "sources", "partners", "offers", "videos"].includes(entity)) query = query.eq("is_active", filters.active === "active");
   if (entity === "posts") {
     if (filters.status && filters.status !== "all") query = query.eq("status", filters.status);
@@ -228,7 +215,8 @@ export async function loadAdminEntity(entity: AdminEntity, filters: Record<strin
   }
   const records = await withSafeCounts(entity, (data ?? []) as unknown as AdminRecord[]);
   try {
-    return { records: prepareClientRecords(entity, records), count: count ?? 0, page, pageSize };
+    const total = count ?? 0;
+    return { records: prepareClientRecords(entity, records), count: total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
   } catch (serializationError) {
     console.error("[Content Admin Serialize Failed]", { route: `/admin/${entity === "partners" || entity === "offers" ? "affiliate" : "content"}/${entity}`, stage: "serialize", entity, diagnosticId: diagnosticCode(entity, "SERIALIZE"), message: serializationError instanceof Error ? serializationError.message : "Unknown serialization error" });
     return { records: [] as AdminRecord[], count: 0, page, pageSize, error: "The " + entity + " list could not be prepared for display. Diagnostic ID: " + diagnosticCode(entity, "SERIALIZE") + "." };

@@ -6,9 +6,10 @@ import { loadAdminEntity } from "@/src/lib/content-admin";
 
 export const dynamic = "force-dynamic";
 
-export default async function SubscribersAdminPage() {
+export default async function SubscribersAdminPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   if (!contentPublicConfig.subscriptionsEnabled) notFound();
-  const data = await loadAdminEntity("subscribers");
+  const filters = await searchParams;
+  const data = await loadAdminEntity("subscribers", filters);
   const active = data.records.filter((row)=>row.status === "active").length;
   const unsubscribed = data.records.filter((row)=>row.status === "unsubscribed").length;
   const suppressed = data.records.filter((row)=>row.status === "suppressed").length;

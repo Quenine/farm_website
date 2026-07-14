@@ -81,7 +81,7 @@ For catalogue/rate alignment, run these scripts in each farm's own Supabase proj
 3. `database/backfill-universal-rates-for-all-orderable-products.sql`
 4. `database/verify-all-products-orderable-and-rated.sql`
 
-Run them separately for Noble Farms and Shields Farms if both farms should stay aligned. The legacy price seed applies confirmed legacy prices, uses clear placeholder prices where prices were missing, and avoids Ã¢â€šÂ¦0 checkout products. Admin should review placeholder prices before public launch.
+Run them separately for Noble Farms and Shields Farms if both farms should stay aligned. The legacy price seed applies confirmed legacy prices, uses clear placeholder prices where prices were missing, and avoids ₦0 checkout products. Admin should review placeholder prices before public launch.
 
 The universal delivery backfill creates product delivery rates for every active fixed-price orderable product using city = `All` for every Nigerian state plus FCT:
 
@@ -211,7 +211,6 @@ The app includes consent-based analytics readiness, campaign attribution, tracke
 - Customer accounts or customer authentication
 - Supabase cart storage
 - Automated refunds and chargeback handling
-- Product image upload/storage workflow
 - Deployment execution, registrar DNS changes, or Paystack live-mode activation
 
 ## Shields Content Publisher
@@ -236,7 +235,9 @@ For Shields QA, enable the public content flags but keep `CONTENT_INDEXING_ENABL
 
 1. `database/step-content-affiliate-publisher.sql`
 2. `database/seed-shields-content-taxonomy.sql`
-3. `database/verify-content-affiliate-publisher.sql`
+3. `database/step-content-trash-and-deletion.sql`
+4. `database/verify-content-affiliate-publisher.sql`
+5. `database/verify-content-admin-operational.sql`
 
 See `docs/content-affiliate-publisher.md`, `docs/agribusiness-content-strategy.md`, and `docs/permanent-domain-content-launch.md`. Do not share production order tables or duplicate Shields articles across farms.
 

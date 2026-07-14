@@ -2,6 +2,7 @@ import fs from "node:fs";
 
 function file(path) { return fs.readFileSync(path, "utf8"); }
 function pass(name) { console.log("PASS " + name); }
+function skipped(name) { console.log("SKIPPED " + name); }
 function check(name, condition) { if (!condition) throw new Error("FAIL " + name); pass(name); }
 
 const editor = file("src/components/content-admin/post-admin.tsx");
@@ -12,6 +13,7 @@ const mediaRoute = file("app/api/admin/content/media/route.ts");
 const crud = file("src/components/content-admin/crud-manager.tsx");
 const diagnostics = file("src/lib/content-admin-diagnostics.ts");
 const migration = file("database/step-content-trash-and-deletion.sql");
+const definitions = (await import('../src/lib/content-admin-entities.mjs')).adminEntityDefinitions;
 
 check("Add Affiliate Offer opens a visible picker", editor.includes("setOfferPickerOpen(true)") && editor.includes("Search offers") && editor.includes("Filter by partner"));
 check("Affiliate picker focuses search", editor.includes("affiliate_offer_search") && editor.includes("focusSearch"));
@@ -35,7 +37,9 @@ check("CRUD manager has trash restore permanent delete UI", crud.includes('Move 
 check("Permanent delete requires typed confirmation", crud.includes('Type DELETE') && actions.includes('confirmation !== "DELETE"'));
 check("Used offer hard delete is blocked", actions.includes('article usage or click history') && actions.includes('affiliate_clicks'));
 check("Published post trash is blocked", actions.includes('Published posts must be unpublished before they can be moved to Trash'));
-check("Content diagnostics include storage and trash readiness", diagnostics.includes('content-media bucket available') && diagnostics.includes('Trash schema ready') && diagnostics.includes('Inline upload endpoint ready'));
+check("Content diagnostics include storage and truthful trash checks", diagnostics.includes('content-media bucket available') && diagnostics.includes('trash columns') && diagnostics.includes('Configured, not runtime-tested.'));
+check("Production loader table names contain no select syntax", Object.values(definitions).every((definition) => !definition.table.includes(',') && !/[()]/.test(definition.table)));
+check("Every trash entity selects deletion columns", Object.values(definitions).filter((definition) => definition.trash).every((definition) => definition.select.split(',').includes('deleted_at') && definition.select.split(',').includes('deleted_by')));
 
 const baseUrl = process.env.CONTENT_E2E_BASE_URL;
 if (baseUrl) {
@@ -45,5 +49,5 @@ if (baseUrl) {
   const robots = await fetch(url + "/robots.txt");
   check("Browser-level robots route responds", robots.ok);
 } else {
-  pass("Browser-level route fetch skipped; set CONTENT_E2E_BASE_URL to test a running authenticated environment");
+  skipped("Browser-level route fetch; set CONTENT_E2E_BASE_URL to test a running authenticated environment");
 }

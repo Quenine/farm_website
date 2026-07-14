@@ -11,6 +11,14 @@ with required_tables(table_name) as (
     ('content_subscribers'), ('orders'), ('products')
 ), required_columns(table_name, column_name) as (
   values
+    ('content_posts','deleted_at'), ('content_posts','deleted_by'),
+    ('content_authors','deleted_at'), ('content_authors','deleted_by'),
+    ('content_categories','deleted_at'), ('content_categories','deleted_by'),
+    ('content_tags','deleted_at'), ('content_tags','deleted_by'),
+    ('content_sources','deleted_at'), ('content_sources','deleted_by'),
+    ('content_videos','deleted_at'), ('content_videos','deleted_by'),
+    ('affiliate_partners','deleted_at'), ('affiliate_partners','deleted_by'),
+    ('affiliate_offers','deleted_at'), ('affiliate_offers','deleted_by'),
     ('content_authors','id'), ('content_authors','name'), ('content_authors','slug'), ('content_authors','role_title'), ('content_authors','bio'), ('content_authors','avatar_url'), ('content_authors','avatar_alt'), ('content_authors','social_links'), ('content_authors','credentials_or_experience'), ('content_authors','is_active'), ('content_authors','updated_at'),
     ('content_categories','id'), ('content_categories','name'), ('content_categories','slug'), ('content_categories','description'), ('content_categories','seo_title'), ('content_categories','seo_description'), ('content_categories','sort_order'), ('content_categories','is_active'),
     ('content_tags','id'), ('content_tags','name'), ('content_tags','slug'), ('content_tags','description'), ('content_tags','is_active'),
@@ -23,6 +31,9 @@ with required_tables(table_name) as (
     ('orders','content_attribution')
 ), required_indexes(index_name) as (
   values
+    ('content_posts_deleted_at_idx'), ('content_authors_deleted_at_idx'), ('content_categories_deleted_at_idx'),
+    ('content_tags_deleted_at_idx'), ('content_sources_deleted_at_idx'), ('content_videos_deleted_at_idx'),
+    ('affiliate_partners_deleted_at_idx'), ('affiliate_offers_deleted_at_idx'),
     ('content_posts_status_published_idx'), ('content_posts_category_idx'), ('content_posts_author_idx'), ('content_posts_search_idx'),
     ('content_categories_active_idx'), ('content_tags_active_idx'), ('content_sources_type_idx'), ('content_sources_active_idx'),
     ('content_videos_post_idx'), ('content_videos_active_idx'), ('content_post_products_product_idx'),
