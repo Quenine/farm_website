@@ -99,4 +99,4 @@ check("Post editor has publish-specific pending label", postEditor.includes("Pub
 check("Post editor shows draft title requirement", postEditor.includes("Required to save a draft."));
 check("Post editor explains later excerpt requirement", postEditor.includes("Required before review or publication."));
 check("Post editor explains body can be incomplete for drafts", postEditor.includes("Drafts may be incomplete. Meaningful content is required before review."));
-check("Post editor supports editable generated slug guidance", postEditor.includes("Generated from the title until manually edited. Use lowercase letters, numbers, and hyphens."));
+check("Post editor supports editable generated slug guidance", postEditor.includes("Generated from the title until manually edited.") && postEditor.includes("letters, numbers, and hyphens."));

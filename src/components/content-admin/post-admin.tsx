@@ -2,58 +2,340 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition, type RefObject } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type RefObject,
+} from "react";
 import { savePostAction } from "@/app/admin/(protected)/content/actions";
 import { siteConfig } from "@/src/config/site";
 import type { AdminRecord } from "@/src/lib/content-admin";
 import { formatNaira } from "@/src/lib/format";
 
-type Options = { authors: AdminRecord[]; categories: AdminRecord[]; tags: AdminRecord[]; sources: AdminRecord[]; products: AdminRecord[]; offers: AdminRecord[] };
-type PostAction = "draft" | "continue" | "review" | "publish" | "unpublish" | "archive" | "trash" | "restore";
-type ProductLink = { product_id: string; sort_order: number; custom_context: string };
-type OfferLink = { offer_id: string; sort_order: number; best_for: string; pros: string; cons: string; editorial_verdict: string };
+type Options = {
+  authors: AdminRecord[];
+  categories: AdminRecord[];
+  tags: AdminRecord[];
+  sources: AdminRecord[];
+  products: AdminRecord[];
+  offers: AdminRecord[];
+};
+type PostAction =
+  | "draft"
+  | "continue"
+  | "review"
+  | "publish"
+  | "unpublish"
+  | "archive"
+  | "trash"
+  | "restore";
+type ProductLink = {
+  product_id: string;
+  sort_order: number;
+  custom_context: string;
+};
+type OfferLink = {
+  offer_id: string;
+  sort_order: number;
+  best_for: string;
+  pros: string;
+  cons: string;
+  editorial_verdict: string;
+};
 
-function slugify(input: string) { return input.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/(^-|-$)/g, ""); }
-function value(record: AdminRecord | null, key: string, fallback = "") { const item = record?.[key]; return item === null || item === undefined ? fallback : String(item); }
-function selectedIds(record: AdminRecord | null, key: string, childKey: string) { return Array.isArray(record?.[key]) ? (record?.[key] as AdminRecord[]).map((item) => String(item[childKey])).filter(Boolean) : []; }
-function selectedOfferLinks(record: AdminRecord | null) { return Array.isArray(record?.content_post_affiliate_offers) ? (record.content_post_affiliate_offers as AdminRecord[]).map((item, index): OfferLink => ({ offer_id: String(item.offer_id), sort_order: Number(item.sort_order ?? index + 1), best_for: String(item.best_for ?? ""), pros: Array.isArray(item.pros) ? (item.pros as unknown[]).map(String).join("\n") : "", cons: Array.isArray(item.cons) ? (item.cons as unknown[]).map(String).join("\n") : "", editorial_verdict: String(item.editorial_verdict ?? "") })) : []; }
-function relationRecord(input: unknown) { return Array.isArray(input) ? input[0] as AdminRecord | undefined : input as AdminRecord | undefined; }
-function offerBasisLabel(input: unknown) { return String(input ?? "not specified").replaceAll("_", " "); }
-function lineList(input: string) { return input.split(/\r?\n/).map((item) => item.trim()).filter(Boolean); }
-function publicArticleUrl(slug: string) { return siteConfig.url.replace(/\/$/, "") + "/blog/" + slug; }
-function relationName(input: unknown) { const row = relationRecord(input); return String(row?.name ?? "-"); }
-function dateLabel(input: unknown) { return typeof input === "string" && input ? new Date(input).toLocaleDateString("en-NG") : "-"; }
+function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+function value(record: AdminRecord | null, key: string, fallback = "") {
+  const item = record?.[key];
+  return item === null || item === undefined ? fallback : String(item);
+}
+function selectedIds(
+  record: AdminRecord | null,
+  key: string,
+  childKey: string,
+) {
+  return Array.isArray(record?.[key])
+    ? (record?.[key] as AdminRecord[])
+        .map((item) => String(item[childKey]))
+        .filter(Boolean)
+    : [];
+}
+function selectedOfferLinks(record: AdminRecord | null) {
+  return Array.isArray(record?.content_post_affiliate_offers)
+    ? (record.content_post_affiliate_offers as AdminRecord[]).map(
+        (item, index): OfferLink => ({
+          offer_id: String(item.offer_id),
+          sort_order: Number(item.sort_order ?? index + 1),
+          best_for: String(item.best_for ?? ""),
+          pros: Array.isArray(item.pros)
+            ? (item.pros as unknown[]).map(String).join("\n")
+            : "",
+          cons: Array.isArray(item.cons)
+            ? (item.cons as unknown[]).map(String).join("\n")
+            : "",
+          editorial_verdict: String(item.editorial_verdict ?? ""),
+        }),
+      )
+    : [];
+}
+function relationRecord(input: unknown) {
+  return Array.isArray(input)
+    ? (input[0] as AdminRecord | undefined)
+    : (input as AdminRecord | undefined);
+}
+function offerBasisLabel(input: unknown) {
+  return String(input ?? "not specified").replaceAll("_", " ");
+}
+function lineList(input: string) {
+  return input
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+function publicArticleUrl(slug: string) {
+  return siteConfig.url.replace(/\/$/, "") + "/blog/" + slug;
+}
+function relationName(input: unknown) {
+  const row = relationRecord(input);
+  return String(row?.name ?? "-");
+}
+function dateLabel(input: unknown) {
+  return typeof input === "string" && input
+    ? new Date(input).toLocaleDateString("en-NG")
+    : "-";
+}
 
 export function PostsList({ posts }: { posts: AdminRecord[] }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [format, setFormat] = useState("all");
-  const filtered = useMemo(() => posts.filter((post) => {
-    const q = search.trim().toLowerCase();
-    if (q && ![post.title, post.slug, post.excerpt].join(" ").toLowerCase().includes(q)) return false;
-    if (status !== "all" && post.status !== status) return false;
-    if (format !== "all" && post.content_format !== format) return false;
-    return true;
-  }), [format, posts, search, status]);
-  return <div className="grid gap-5"><div className="rounded-lg bg-white p-5 shadow-sm"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-bold text-green-950">Posts</h2><p className="mt-1 text-sm text-stone-600">{filtered.length} of {posts.length} articles shown.</p></div><Link href="/admin/content/posts/new" className="rounded-full bg-green-800 px-5 py-3 text-sm font-bold text-white">Create Article</Link></div><div className="mt-4 grid gap-3 md:grid-cols-3"><input value={search} onChange={(event)=>setSearch(event.target.value)} placeholder="Search title, slug, excerpt" className="h-11 rounded-lg border border-stone-200 px-4 text-sm" /><select value={status} onChange={(event)=>setStatus(event.target.value)} className="h-11 rounded-lg border border-stone-200 px-4 text-sm"><option value="all">All statuses</option><option value="draft">Draft</option><option value="review">Review</option><option value="published">Published</option><option value="archived">Archived</option></select><select value={format} onChange={(event)=>setFormat(event.target.value)} className="h-11 rounded-lg border border-stone-200 px-4 text-sm"><option value="all">All formats</option><option value="article">Article</option><option value="video_companion">Video</option><option value="comparison">Comparison</option><option value="resource_guide">Resource</option><option value="case_study">Case study</option><option value="farm_field_note">Field note</option></select></div></div>{filtered.length ? <div className="overflow-hidden rounded-lg bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-green-950 text-white"><tr>{["Title","Status","Category","Author","Format","Audience","Affiliate","Updated","Published","Actions"].map((h)=><th key={h} className="px-4 py-3 font-semibold">{h}</th>)}</tr></thead><tbody className="divide-y divide-stone-100">{filtered.map((post)=><tr key={String(post.id)}><td className="px-4 py-4 font-bold text-green-950">{String(post.title)}</td><td className="px-4 py-4">{String(post.status)}</td><td className="px-4 py-4">{relationName(post.content_categories)}</td><td className="px-4 py-4">{relationName(post.content_authors)}</td><td className="px-4 py-4">{String(post.content_format).replaceAll("_"," ")}</td><td className="px-4 py-4">{String(post.audience_scope)}</td><td className="px-4 py-4">{post.contains_affiliate_content ? "Yes" : "No"}</td><td className="px-4 py-4">{dateLabel(post.updated_at)}</td><td className="px-4 py-4">{dateLabel(post.published_at)}</td><td className="px-4 py-4"><div className="flex flex-wrap gap-2"><Link href={`/admin/content/posts/${post.id}/edit`} className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-800">Edit</Link>{post.status === "published" ? <Link href={`/blog/${post.slug}`} className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700">View</Link> : <Link href={`/admin/content/posts/${post.id}/edit?preview=1`} className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700">Preview</Link>}</div></td></tr>)}</tbody></table></div></div> : <div className="rounded-lg bg-white p-8 text-center shadow-sm"><h3 className="text-xl font-bold text-green-950">No articles yet</h3><p className="mt-2 text-sm text-stone-600">Create a draft article, attach sources, products and affiliate offers, then publish explicitly when ready.</p><Link href="/admin/content/posts/new" className="mt-4 inline-flex rounded-full bg-green-800 px-5 py-2 text-sm font-bold text-white">Create Article</Link></div>}</div>;
+  const filtered = useMemo(
+    () =>
+      posts.filter((post) => {
+        const q = search.trim().toLowerCase();
+        if (
+          q &&
+          ![post.title, post.slug, post.excerpt]
+            .join(" ")
+            .toLowerCase()
+            .includes(q)
+        )
+          return false;
+        if (status !== "all" && post.status !== status) return false;
+        if (format !== "all" && post.content_format !== format) return false;
+        return true;
+      }),
+    [format, posts, search, status],
+  );
+  return (
+    <div className="grid gap-5">
+      <div className="rounded-lg bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-green-950">Posts</h2>
+            <p className="mt-1 text-sm text-stone-600">
+              {filtered.length} of {posts.length} articles shown.
+            </p>
+          </div>
+          <Link
+            href="/admin/content/posts/new"
+            className="rounded-full bg-green-800 px-5 py-3 text-sm font-bold text-white"
+          >
+            Create Article
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search title, slug, excerpt"
+            className="h-11 rounded-lg border border-stone-200 px-4 text-sm"
+          />
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            className="h-11 rounded-lg border border-stone-200 px-4 text-sm"
+          >
+            <option value="all">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="review">Review</option>
+            <option value="published">Published</option>
+            <option value="archived">Archived</option>
+          </select>
+          <select
+            value={format}
+            onChange={(event) => setFormat(event.target.value)}
+            className="h-11 rounded-lg border border-stone-200 px-4 text-sm"
+          >
+            <option value="all">All formats</option>
+            <option value="article">Article</option>
+            <option value="video_companion">Video</option>
+            <option value="comparison">Comparison</option>
+            <option value="resource_guide">Resource</option>
+            <option value="case_study">Case study</option>
+            <option value="farm_field_note">Field note</option>
+          </select>
+        </div>
+      </div>
+      {filtered.length ? (
+        <div className="overflow-hidden rounded-lg bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="bg-green-950 text-white">
+                <tr>
+                  {[
+                    "Title",
+                    "Status",
+                    "Category",
+                    "Author",
+                    "Format",
+                    "Audience",
+                    "Affiliate",
+                    "Updated",
+                    "Published",
+                    "Actions",
+                  ].map((h) => (
+                    <th key={h} className="px-4 py-3 font-semibold">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {filtered.map((post) => (
+                  <tr key={String(post.id)}>
+                    <td className="px-4 py-4 font-bold text-green-950">
+                      {String(post.title)}
+                    </td>
+                    <td className="px-4 py-4">{String(post.status)}</td>
+                    <td className="px-4 py-4">
+                      {relationName(post.content_categories)}
+                    </td>
+                    <td className="px-4 py-4">
+                      {relationName(post.content_authors)}
+                    </td>
+                    <td className="px-4 py-4">
+                      {String(post.content_format).replaceAll("_", " ")}
+                    </td>
+                    <td className="px-4 py-4">{String(post.audience_scope)}</td>
+                    <td className="px-4 py-4">
+                      {post.contains_affiliate_content ? "Yes" : "No"}
+                    </td>
+                    <td className="px-4 py-4">{dateLabel(post.updated_at)}</td>
+                    <td className="px-4 py-4">
+                      {dateLabel(post.published_at)}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={`/admin/content/posts/${post.id}/edit`}
+                          className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-800"
+                        >
+                          Edit
+                        </Link>
+                        {post.status === "published" ? (
+                          <Link
+                            href={`/blog/${post.slug}`}
+                            className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700"
+                          >
+                            View
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/admin/content/posts/${post.id}/edit?preview=1`}
+                            className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700"
+                          >
+                            Preview
+                          </Link>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg bg-white p-8 text-center shadow-sm">
+          <h3 className="text-xl font-bold text-green-950">No articles yet</h3>
+          <p className="mt-2 text-sm text-stone-600">
+            Create a draft article, attach sources, products and affiliate
+            offers, then publish explicitly when ready.
+          </p>
+          <Link
+            href="/admin/content/posts/new"
+            className="mt-4 inline-flex rounded-full bg-green-800 px-5 py-2 text-sm font-bold text-white"
+          >
+            Create Article
+          </Link>
+        </div>
+      )}
+    </div>
+  );
 }
 
-export function PostEditor({ post, options }: { post: AdminRecord | null; options: Options }) {
+export function PostEditor({
+  post,
+  options,
+}: {
+  post: AdminRecord | null;
+  options: Options;
+}) {
   const router = useRouter();
-  const [draft, setDraft] = useState<AdminRecord>(post ?? { status: "draft", content_format: "article", post_type: "guide", audience_scope: "nigeria", is_featured: false, contains_affiliate_content: false, title: "", slug: "", excerpt: "", content_markdown: "" });
-  const [tagIds, setTagIds] = useState(selectedIds(post, "content_post_tags", "tag_id"));
-  const [sourceIds, setSourceIds] = useState(selectedIds(post, "content_post_sources", "source_id"));
-  const [productLinks, setProductLinks] = useState<ProductLink[]>(Array.isArray(post?.content_post_products) ? (post?.content_post_products as AdminRecord[]).map((item, index)=>({ product_id:String(item.product_id), sort_order:Number(item.sort_order ?? index + 1), custom_context:String(item.custom_context ?? "") })) : []);
-  const [offerLinks, setOfferLinks] = useState<OfferLink[]>(selectedOfferLinks(post));
+  const [draft, setDraft] = useState<AdminRecord>(
+    post ?? {
+      status: "draft",
+      content_format: "article",
+      post_type: "guide",
+      audience_scope: "nigeria",
+      is_featured: false,
+      contains_affiliate_content: false,
+      title: "",
+      slug: "",
+      excerpt: "",
+      content_markdown: "",
+    },
+  );
+  const [tagIds, setTagIds] = useState(
+    selectedIds(post, "content_post_tags", "tag_id"),
+  );
+  const [sourceIds, setSourceIds] = useState(
+    selectedIds(post, "content_post_sources", "source_id"),
+  );
+  const [productLinks, setProductLinks] = useState<ProductLink[]>(
+    Array.isArray(post?.content_post_products)
+      ? (post?.content_post_products as AdminRecord[]).map((item, index) => ({
+          product_id: String(item.product_id),
+          sort_order: Number(item.sort_order ?? index + 1),
+          custom_context: String(item.custom_context ?? ""),
+        }))
+      : [],
+  );
+  const [offerLinks, setOfferLinks] = useState<OfferLink[]>(
+    selectedOfferLinks(post),
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [isPending, startTransition] = useTransition();
   const [pendingAction, setPendingAction] = useState<PostAction | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(Boolean(post?.id));
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(
+    Boolean(post?.id),
+  );
   const [copyMessage, setCopyMessage] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
   const [uploadAlt, setUploadAlt] = useState("");
   const [uploadCaption, setUploadCaption] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
@@ -63,11 +345,86 @@ export function PostEditor({ post, options }: { post: AdminRecord | null; option
   const [offerMessage, setOfferMessage] = useState("");
   const [isUploading, startUploadTransition] = useTransition();
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const imageAltRef = useRef<HTMLInputElement | null>(null);
 
-  const set = (key: string, next: unknown) => { setDraft((current) => ({ ...current, [key]: next })); setDirty(true); };
-  const setTitle = (title: string) => { setDraft((current) => ({ ...current, title, ...(!slugManuallyEdited ? { slug: slugify(title) } : {}) })); setDirty(true); };
-  const setSlug = (slug: string) => { setDraft((current) => ({ ...current, slug: slugify(slug) })); setSlugManuallyEdited(true); setDirty(true); };
-  const regenerateSlug = () => { setDraft((current) => ({ ...current, slug: slugify(value(current, "title")) })); setSlugManuallyEdited(false); setDirty(true); };
+  useEffect(() => {
+    return () => {
+      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+    };
+  }, [uploadPreviewUrl]);
+
+  const openImageChooser = () => {
+    const input = imageInputRef.current;
+    if (!input) {
+      setUploadMessage(
+        "The image chooser is unavailable. Refresh the page and try again.",
+      );
+      return;
+    }
+    input.value = "";
+    input.click();
+  };
+
+  const handleChooserLabelKeyDown = (event: React.KeyboardEvent<HTMLLabelElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openImageChooser();
+  };
+
+  const handleImageSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setUploadMessage("Choose a JPEG, PNG, or WebP image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadMessage("The image must be 5 MB or smaller.");
+      return;
+    }
+    setUploadFile(file);
+    setUploadPreviewUrl(URL.createObjectURL(file));
+    setUploadMessage("");
+    setUploadOpen(true);
+    window.requestAnimationFrame(() => imageAltRef.current?.focus());
+  };
+
+  const cancelImageUpload = () => {
+    setUploadFile(null);
+    setUploadPreviewUrl("");
+    setUploadAlt("");
+    setUploadCaption("");
+    setUploadMessage("");
+    setUploadOpen(false);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const set = (key: string, next: unknown) => {
+    setDraft((current) => ({ ...current, [key]: next }));
+    setDirty(true);
+  };
+  const setTitle = (title: string) => {
+    setDraft((current) => ({
+      ...current,
+      title,
+      ...(!slugManuallyEdited ? { slug: slugify(title) } : {}),
+    }));
+    setDirty(true);
+  };
+  const setSlug = (slug: string) => {
+    setDraft((current) => ({ ...current, slug: slugify(slug) }));
+    setSlugManuallyEdited(true);
+    setDirty(true);
+  };
+  const regenerateSlug = () => {
+    setDraft((current) => ({
+      ...current,
+      slug: slugify(value(current, "title")),
+    }));
+    setSlugManuallyEdited(false);
+    setDirty(true);
+  };
   const insert = (token: string) => {
     const current = value(draft, "content_markdown");
     const textarea = bodyRef.current;
@@ -80,60 +437,157 @@ export function PostEditor({ post, options }: { post: AdminRecord | null; option
     const spacerAfter = suffix.startsWith("\n") ? "" : "\n";
     const next = `${prefix}${spacerBefore}${token}${spacerAfter}${suffix}`;
     set("content_markdown", next);
-    window.setTimeout(() => { textarea.focus(); const pos = Math.min(next.length, start + spacerBefore.length + token.length); textarea.setSelectionRange(pos, pos); }, 0);
+    window.setTimeout(() => {
+      textarea.focus();
+      const pos = Math.min(
+        next.length,
+        start + spacerBefore.length + token.length,
+      );
+      textarea.setSelectionRange(pos, pos);
+    }, 0);
   };
-  const setTags = (ids: string[]) => { setTagIds(ids); setDirty(true); };
-  const setSources = (ids: string[]) => { setSourceIds(ids); setDirty(true); };
-  const setOfferLinkItems = (items: OfferLink[]) => { setOfferLinks(items); setDirty(true); };
-  const setProducts = (items: ProductLink[]) => { setProductLinks(items); setDirty(true); };
+  const setTags = (ids: string[]) => {
+    setTagIds(ids);
+    setDirty(true);
+  };
+  const setSources = (ids: string[]) => {
+    setSourceIds(ids);
+    setDirty(true);
+  };
+  const setOfferLinkItems = (items: OfferLink[]) => {
+    setOfferLinks(items);
+    setDirty(true);
+  };
+  const setProducts = (items: ProductLink[]) => {
+    setProductLinks(items);
+    setDirty(true);
+  };
   const offerIds = offerLinks.map((link) => link.offer_id);
-  const offerById = (id: string) => options.offers.find((offer) => String(offer.id) === id);
+  const offerById = (id: string) =>
+    options.offers.find((offer) => String(offer.id) === id);
   const attachOffer = (id: string) => {
     const offer = offerById(id);
     if (!offer) return;
-    if (offer.is_active === false) { setOfferMessage("Inactive offers cannot be inserted for review or publication."); return; }
-    if (!offerIds.includes(id)) setOfferLinkItems([...offerLinks, { offer_id: id, sort_order: offerLinks.length + 1, best_for: "", pros: "", cons: "", editorial_verdict: "" }]);
+    if (offer.is_active === false) {
+      setOfferMessage(
+        "Inactive offers cannot be inserted for review or publication.",
+      );
+      return;
+    }
+    if (!offerIds.includes(id))
+      setOfferLinkItems([
+        ...offerLinks,
+        {
+          offer_id: id,
+          sort_order: offerLinks.length + 1,
+          best_for: "",
+          pros: "",
+          cons: "",
+          editorial_verdict: "",
+        },
+      ]);
     set("contains_affiliate_content", true);
     setOfferPickerOpen(false);
   };
-  const removeOffer = (id: string) => setOfferLinkItems(offerLinks.filter((link) => link.offer_id !== id).map((link, index) => ({ ...link, sort_order: index + 1 })));
-  const updateOfferLink = (id: string, key: keyof OfferLink, next: string) => setOfferLinkItems(offerLinks.map((link) => link.offer_id === id ? { ...link, [key]: next } : link));
+  const removeOffer = (id: string) =>
+    setOfferLinkItems(
+      offerLinks
+        .filter((link) => link.offer_id !== id)
+        .map((link, index) => ({ ...link, sort_order: index + 1 })),
+    );
+  const updateOfferLink = (id: string, key: keyof OfferLink, next: string) =>
+    setOfferLinkItems(
+      offerLinks.map((link) =>
+        link.offer_id === id ? { ...link, [key]: next } : link,
+      ),
+    );
   const insertOfferRecommendation = (id: string) => {
     const offer = offerById(id);
     if (!offer) return;
-    if (offer.is_active === false) { setOfferMessage("Inactive offers cannot be inserted for review or publication."); return; }
-    if (!offerIds.includes(id)) setOfferLinkItems([...offerLinks, { offer_id: id, sort_order: offerLinks.length + 1, best_for: "", pros: "", cons: "", editorial_verdict: "" }]);
+    if (offer.is_active === false) {
+      setOfferMessage(
+        "Inactive offers cannot be inserted for review or publication.",
+      );
+      return;
+    }
+    if (!offerIds.includes(id))
+      setOfferLinkItems([
+        ...offerLinks,
+        {
+          offer_id: id,
+          sort_order: offerLinks.length + 1,
+          best_for: "",
+          pros: "",
+          cons: "",
+          editorial_verdict: "",
+        },
+      ]);
     set("contains_affiliate_content", true);
     insert(`[[affiliate:${String(offer.slug)}]]`);
     setOfferMessage("Affiliate recommendation inserted.");
     setOfferPickerOpen(false);
   };
   const insertAffiliateComparison = () => {
-    if (offerLinks.length < 2) { setOfferMessage("Attach at least two affiliate offers before inserting a comparison."); setOfferPickerOpen(true); return; }
+    if (offerLinks.length < 2) {
+      setOfferMessage(
+        "Attach at least two affiliate offers before inserting a comparison.",
+      );
+      setOfferPickerOpen(true);
+      return;
+    }
     insert("[[comparison:post-offers]]");
     setOfferMessage("Affiliate comparison inserted.");
   };
 
   useEffect(() => {
-    const onBeforeUnload = (event: BeforeUnloadEvent) => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; };
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
   useEffect(() => {
     if (!offerPickerOpen) return;
-    const focusSearch = window.setTimeout(() => document.querySelector<HTMLInputElement>(`[data-field="affiliate_offer_search"] input`)?.focus(), 0);
+    const focusSearch = window.setTimeout(
+      () =>
+        document
+          .querySelector<HTMLInputElement>(
+            `[data-field="affiliate_offer_search"] input`,
+          )
+          ?.focus(),
+      0,
+    );
     return () => window.clearTimeout(focusSearch);
   }, [offerPickerOpen]);
 
   const focusField = (key: string) => {
-    const target = document.querySelector<HTMLElement>(`[data-field="${key}"] input, [data-field="${key}"] textarea, [data-field="${key}"] select, [data-field="${key}"]`);
+    const target = document.querySelector<HTMLElement>(
+      `[data-field="${key}"] input, [data-field="${key}"] textarea, [data-field="${key}"] select, [data-field="${key}"]`,
+    );
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
     target?.focus();
   };
 
   const submit = (action: PostAction) => {
-    const payload = { ...draft, id: draft.id ?? post?.id, action, tag_ids: tagIds, source_ids: sourceIds, product_links: productLinks.filter((item)=>item.product_id), offer_links: offerLinks.map((link, index)=>({ offer_id: link.offer_id, sort_order:index + 1, best_for: link.best_for, editorial_verdict: link.editorial_verdict, pros: lineList(link.pros), cons: lineList(link.cons) })) };
+    const payload = {
+      ...draft,
+      id: draft.id ?? post?.id,
+      action,
+      tag_ids: tagIds,
+      source_ids: sourceIds,
+      product_links: productLinks.filter((item) => item.product_id),
+      offer_links: offerLinks.map((link, index) => ({
+        offer_id: link.offer_id,
+        sort_order: index + 1,
+        best_for: link.best_for,
+        editorial_verdict: link.editorial_verdict,
+        pros: lineList(link.pros),
+        cons: lineList(link.cons),
+      })),
+    };
     setPendingAction(action);
     startTransition(async () => {
       const result = await savePostAction(payload);
@@ -142,10 +596,18 @@ export function PostEditor({ post, options }: { post: AdminRecord | null; option
       setFieldErrors(result.fieldErrors ?? {});
       if (result.success) {
         setDirty(false);
-        setDraft((current) => ({ ...current, id: result.post?.id ?? result.id ?? current.id, slug: result.post?.slug ?? current.slug, status: result.post?.status ?? current.status, published_at: result.post?.publishedAt ?? current.published_at, updated_at: result.post?.updatedAt ?? current.updated_at }));
+        setDraft((current) => ({
+          ...current,
+          id: result.post?.id ?? result.id ?? current.id,
+          slug: result.post?.slug ?? current.slug,
+          status: result.post?.status ?? current.status,
+          published_at: result.post?.publishedAt ?? current.published_at,
+          updated_at: result.post?.updatedAt ?? current.updated_at,
+        }));
         setSlugManuallyEdited(true);
         router.refresh();
-        if (action === "continue" && result.post?.id && !post?.id) window.location.href = `/admin/content/posts/${result.post.id}/edit`;
+        if (action === "continue" && result.post?.id && !post?.id)
+          window.location.href = `/admin/content/posts/${result.post.id}/edit`;
       } else {
         const first = Object.keys(result.fieldErrors ?? {})[0];
         if (first) window.setTimeout(() => focusField(first), 0);
@@ -155,45 +617,1222 @@ export function PostEditor({ post, options }: { post: AdminRecord | null; option
 
   const uploadImage = () => {
     setUploadMessage("");
-    if (!uploadFile) { setUploadMessage("Select a JPEG, PNG, or WebP image first."); return; }
-    if (!uploadAlt.trim()) { setUploadMessage("Alt text is required for article images."); return; }
+    if (!uploadFile) {
+      setUploadMessage("Select a JPEG, PNG, or WebP image first.");
+      return;
+    }
+    if (!uploadAlt.trim()) {
+      setUploadMessage("Alt text is required for article images.");
+      return;
+    }
     const formData = new FormData();
     formData.append("image", uploadFile);
     startUploadTransition(async () => {
       setUploadMessage("Uploading image...");
       try {
-        const response = await fetch("/api/admin/content/media", { method: "POST", body: formData });
-        const result = await response.json() as { ok?: boolean; message?: string; media?: { url: string } };
-        if (!response.ok || !result.ok || !result.media?.url) { setUploadMessage(result.message || "Unable to upload image."); return; }
-        const caption = uploadCaption.trim().replaceAll('"', "'").replace(/[\r\n]+/g, " ");
-        insert(`![${uploadAlt.trim().replace(/[\r\n]+/g, " ")}](${result.media.url}${caption ? ` "${caption}"` : ""})`);
-        setUploadOpen(false); setUploadFile(null); setUploadAlt(""); setUploadCaption(""); setUploadMessage("Image uploaded and inserted.");
+        const response = await fetch("/api/admin/content/media", {
+          method: "POST",
+          body: formData,
+        });
+        const result = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          message?: string;
+          media?: { url: string };
+        } | null;
+        if (response.status === 401) {
+          setUploadMessage("Your admin session has expired. Sign in again.");
+          return;
+        }
+        if (!response.ok || !result?.ok || !result.media?.url) {
+          if (
+            /bucket.*(missing|not found)|not found.*bucket/i.test(
+              result?.message ?? "",
+            )
+          )
+            setUploadMessage("The content-media storage bucket is missing.");
+          else setUploadMessage("The image could not be uploaded. Try again.");
+          return;
+        }
+        const caption = uploadCaption
+          .trim()
+          .replaceAll('"', "'")
+          .replace(/[\r\n]+/g, " ");
+        insert(
+          `![${uploadAlt.trim().replace(/[\r\n]+/g, " ")}](${result.media.url}${caption ? ` "${caption}"` : ""})`,
+        );
+        setUploadOpen(false);
+        setUploadFile(null);
+        setUploadPreviewUrl("");
+        setUploadAlt("");
+        setUploadCaption("");
+        setUploadMessage("Image uploaded and inserted.");
+        if (imageInputRef.current) imageInputRef.current.value = "";
+        window.requestAnimationFrame(() => bodyRef.current?.focus());
       } catch (error) {
-        setUploadMessage(error instanceof Error ? error.message : "Unable to upload image.");
+        console.error("[Content image upload failed]", error);
+        setUploadMessage("The image could not be uploaded. Try again.");
       }
     });
   };
 
-  const selectedProducts = productLinks.map((link) => ({ link, product: options.products.find((product) => product.id === link.product_id) })).filter((item) => item.product);
-  const offerPartners = Array.from(new Map(options.offers.map((offer) => { const partner = relationRecord(offer.affiliate_partners); return partner?.name ? [String(partner.name), String(partner.name)] as const : null; }).filter(Boolean) as Array<readonly [string, string]>).values()).sort();
-  const filteredOffers = options.offers.filter((offer) => { const partner = relationRecord(offer.affiliate_partners); const haystack = [offer.title, offer.slug, partner?.name, offer.recommendation_basis, Array.isArray(offer.available_regions) ? offer.available_regions.join(" ") : ""].join(" ").toLowerCase(); const q = offerSearch.trim().toLowerCase(); if (offer.is_active === false && !q) return false; if (offerPartnerFilter !== "all" && String(partner?.name ?? "") !== offerPartnerFilter) return false; return !q || haystack.includes(q); });
-  const selectedOffers = offerLinks.map((link) => ({ link, offer: offerById(link.offer_id) })).filter((item) => item.offer);
-  const pendingLabel = pendingAction === "draft" ? "Saving draft..." : pendingAction === "continue" ? "Saving..." : pendingAction === "review" ? "Sending to review..." : pendingAction === "publish" ? "Publishing..." : pendingAction === "unpublish" ? "Unpublishing..." : pendingAction === "trash" ? "Moving to Trash..." : pendingAction === "restore" ? "Restoring..." : pendingAction ? "Saving..." : null;
+  const selectedProducts = productLinks
+    .map((link) => ({
+      link,
+      product: options.products.find(
+        (product) => product.id === link.product_id,
+      ),
+    }))
+    .filter((item) => item.product);
+  const offerPartners = Array.from(
+    new Map(
+      options.offers
+        .map((offer) => {
+          const partner = relationRecord(offer.affiliate_partners);
+          return partner?.name
+            ? ([String(partner.name), String(partner.name)] as const)
+            : null;
+        })
+        .filter(Boolean) as Array<readonly [string, string]>,
+    ).values(),
+  ).sort();
+  const filteredOffers = options.offers.filter((offer) => {
+    const partner = relationRecord(offer.affiliate_partners);
+    const haystack = [
+      offer.title,
+      offer.slug,
+      partner?.name,
+      offer.recommendation_basis,
+      Array.isArray(offer.available_regions)
+        ? offer.available_regions.join(" ")
+        : "",
+    ]
+      .join(" ")
+      .toLowerCase();
+    const q = offerSearch.trim().toLowerCase();
+    if (offer.is_active === false && !q) return false;
+    if (
+      offerPartnerFilter !== "all" &&
+      String(partner?.name ?? "") !== offerPartnerFilter
+    )
+      return false;
+    return !q || haystack.includes(q);
+  });
+  const selectedOffers = offerLinks
+    .map((link) => ({ link, offer: offerById(link.offer_id) }))
+    .filter((item) => item.offer);
+  const pendingLabel =
+    pendingAction === "draft"
+      ? "Saving draft..."
+      : pendingAction === "continue"
+        ? "Saving..."
+        : pendingAction === "review"
+          ? "Sending to review..."
+          : pendingAction === "publish"
+            ? "Publishing..."
+            : pendingAction === "unpublish"
+              ? "Unpublishing..."
+              : pendingAction === "trash"
+                ? "Moving to Trash..."
+                : pendingAction === "restore"
+                  ? "Restoring..."
+                  : pendingAction
+                    ? "Saving..."
+                    : null;
   const isPublished = value(draft, "status") === "published";
   const articleSlug = value(draft, "slug");
   const articleUrl = articleSlug ? publicArticleUrl(articleSlug) : "";
   const draftButtonLabel = isPublished ? "Save Changes" : "Save Draft";
 
-  return <div className="grid gap-6"><div className="rounded-lg bg-white p-5 shadow-sm"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-bold text-green-950">{post ? "Edit Article" : "Create Article"}</h2><p className="mt-1 text-sm text-stone-600">Publishing is explicit. Drafts and previews remain protected and noindex.</p><p className="mt-1 text-sm text-stone-600">This article will be published immediately using the current server time.</p>{dirty ? <p className="mt-1 text-sm font-bold text-amber-700">Unsaved changes</p> : null}{isPublished && articleUrl ? <p className="mt-2 text-sm text-stone-600">Published URL: <a className="font-bold text-green-800 underline" href={articleUrl} target="_blank" rel="noreferrer">{articleUrl}</a></p> : null}{copyMessage ? <p className="mt-1 text-sm font-bold text-green-800">{copyMessage}</p> : null}</div><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>submit("draft")} disabled={isPending} className="rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950">{pendingAction === "draft" ? "Saving..." : draftButtonLabel}</button><button type="button" onClick={()=>submit("continue")} disabled={isPending} className="rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950">{pendingAction === "continue" ? "Saving..." : "Save and Continue"}</button>{!isPublished ? <button type="button" onClick={()=>submit("review")} disabled={isPending} className="rounded-full bg-amber-600 px-4 py-2 text-sm font-bold text-white">{pendingAction === "review" ? "Sending to review..." : "Send to Review"}</button> : null}<button type="button" onClick={()=>submit("publish")} disabled={isPending} className="rounded-full bg-green-800 px-4 py-2 text-sm font-bold text-white">{pendingAction === "publish" ? "Publishing..." : isPublished ? "Republish Changes" : "Publish"}</button>{isPublished ? <button type="button" onClick={()=>submit("unpublish")} disabled={isPending} className="rounded-full border border-amber-700 px-4 py-2 text-sm font-bold text-amber-800">Unpublish</button> : null}{post ? <button type="button" onClick={()=>submit("archive")} disabled={isPending} className="rounded-full bg-stone-800 px-4 py-2 text-sm font-bold text-white">Archive</button> : null}{post && draft.deleted_at ? <button type="button" onClick={()=>submit("restore")} disabled={isPending} className="rounded-full bg-green-50 px-4 py-2 text-sm font-bold text-green-800">Restore</button> : null}{post && !draft.deleted_at ? <button type="button" onClick={()=>submit("trash")} disabled={isPending} className="rounded-full bg-red-50 px-4 py-2 text-sm font-bold text-red-800">Delete</button> : null}{isPublished && articleUrl ? <><a href={articleUrl} target="_blank" rel="noreferrer" className="rounded-full bg-stone-100 px-4 py-2 text-sm font-bold text-stone-800">View Published Article</a><button type="button" onClick={async()=>{ await navigator.clipboard?.writeText(articleUrl); setCopyMessage("Public link copied."); }} className="rounded-full bg-stone-100 px-4 py-2 text-sm font-bold text-stone-800">Copy Public Link</button></> : null}</div></div>{pendingLabel ? <p className="mt-4 text-sm font-bold text-stone-600">{pendingLabel}</p> : null}{message ? <div className={`mt-4 rounded-lg p-3 text-sm font-bold ${Object.keys(fieldErrors).length ? "bg-red-50 text-red-800" : "bg-green-50 text-green-900"}`}><p>{message}</p>{Object.keys(fieldErrors).length ? <ul className="mt-2 list-disc space-y-1 pl-5">{Object.entries(fieldErrors).map(([key, errors]) => <li key={key}><button type="button" className="text-left underline" onClick={() => focusField(key)}>{fieldLabel(key)}: {errors.join(" ")}</button></li>)}</ul> : null}</div> : null}</div><section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm md:grid-cols-2"><Input name="title" label="Title *" help="Required to save a draft." error={fieldErrors.title?.[0]} value={value(draft,"title")} onChange={setTitle} /><label data-field="slug" className="grid gap-2 text-sm font-bold text-stone-800">Slug<input id="slug" value={value(draft,"slug")} onChange={(e)=>setSlug(e.target.value)} aria-invalid={fieldErrors.slug ? "true" : undefined} aria-describedby={fieldErrors.slug?.[0] ? "slug-help slug-error" : "slug-help"} className={`h-11 rounded-lg border px-4 text-sm focus:outline-none focus:ring-2 ${invalidClass(fieldErrors.slug?.[0])}`} /><span id="slug-help" className="text-xs font-normal leading-5 text-stone-500">Generated from the title until manually edited. Use lowercase letters, numbers, and hyphens.</span>{fieldErrors.slug?.[0] ? <span id="slug-error" className="text-xs font-bold leading-5 text-red-700">{fieldErrors.slug[0]}</span> : null}<button type="button" onClick={regenerateSlug} className="justify-self-start rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950">Regenerate from title</button>{isPublished ? <span className="text-xs font-bold text-amber-700">Changing a published slug may break the old URL and is blocked until unpublished.</span> : null}</label><Text name="excerpt" label="Excerpt" help="Required before review or publication." error={fieldErrors.excerpt?.[0]} value={value(draft,"excerpt")} onChange={(v)=>set("excerpt",v)} /><Text name="answer_summary" label="Answer summary" error={fieldErrors.answer_summary?.[0]} value={value(draft,"answer_summary")} onChange={(v)=>set("answer_summary",v)} /><Text name="key_takeaways" label="Key takeaways (one per line)" error={fieldErrors.key_takeaways?.[0]} value={Array.isArray(draft.key_takeaways) ? (draft.key_takeaways as string[]).join("\n") : value(draft,"key_takeaways")} onChange={(v)=>set("key_takeaways",v)} /><Select name="author_id" label="Author" help="Required before review or publication." error={fieldErrors.author_id?.[0]} value={value(draft,"author_id")} onChange={(v)=>set("author_id",v)} options={options.authors.map((item): [string, string] => [String(item.id),String(item.name)])} /><Select name="category_id" label="Category" help="Required before review or publication." error={fieldErrors.category_id?.[0]} value={value(draft,"category_id")} onChange={(v)=>set("category_id",v)} options={options.categories.map((item): [string, string] => [String(item.id),String(item.name)])} /><Multi name="tags" label="Tags" items={options.tags} selected={tagIds} onChange={setTags} /><Select name="content_format" label="Content format" error={fieldErrors.content_format?.[0]} value={value(draft,"content_format","article")} onChange={(v)=>set("content_format",v)} options={[["article","Article"],["video_companion","Video companion"],["comparison","Comparison"],["resource_guide","Resource guide"],["case_study","Case study"],["farm_field_note","Field note"]]} /><Select name="post_type" label="Post type" error={fieldErrors.post_type?.[0]} value={value(draft,"post_type","guide")} onChange={(v)=>set("post_type",v)} options={[["guide","Guide"],["tutorial","Tutorial"],["buying_guide","Buying guide"],["review","Review"],["comparison","Comparison"],["case_study","Case study"],["market_insight","Market insight"],["farm_update","Farm update"]]} /><Select name="audience_scope" label="Audience" error={fieldErrors.audience_scope?.[0]} value={value(draft,"audience_scope","nigeria")} onChange={(v)=>set("audience_scope",v)} options={[["nigeria","Nigeria"],["africa","Africa"],["global","Global"]]} /><Input name="featured_image_url" label="Featured image URL" error={fieldErrors.featured_image_url?.[0]} value={value(draft,"featured_image_url")} onChange={(v)=>set("featured_image_url",v)} /><Input name="featured_image_alt" label="Featured image alt text" error={fieldErrors.featured_image_alt?.[0]} value={value(draft,"featured_image_alt")} onChange={(v)=>set("featured_image_alt",v)} /></section><section className="rounded-lg bg-white p-5 shadow-sm"><div className="flex flex-wrap gap-2">{[["Heading","## Heading"],["Bold","**bold text**"],["Italic","_italic text_"],["Link","[link text](https://example.com)"],["List","- List item"],["Quote","> Quote"],["Table","| Column | Column |\n| --- | --- |\n| Value | Value |"],["Video","[[video:post-video]]"],["Sources","[[sources]]"],["Newsletter","[[newsletter]]"],["Business Supply CTA","[[callout:business-supply]]"],["Feed Tool","[[tool:poultry-feed-requirement]]"],["Egg Tool","[[tool:egg-sales-margin]]"]].map(([label, token]) => <button type="button" key={label} onClick={()=>insert(token)} className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 hover:bg-green-50">{label}</button>)}<button type="button" onClick={()=>setOfferPickerOpen((open)=>!open)} className="rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white">Affiliate Recommendation</button><button type="button" onClick={insertAffiliateComparison} className="rounded-full border border-amber-700 px-3 py-1 text-xs font-bold text-amber-800">Affiliate Comparison</button><button type="button" onClick={()=>setUploadOpen((open)=>!open)} className="rounded-full bg-green-800 px-3 py-1 text-xs font-bold text-white">Insert Image</button></div>{offerMessage ? <p className="mt-3 text-sm font-bold text-amber-800">{offerMessage}</p> : null}{offerPickerOpen ? <div className="mt-4 grid gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4"><div className="grid gap-3 md:grid-cols-2"><Input name="affiliate_offer_search" label="Search offers" value={offerSearch} onChange={setOfferSearch} /><label className="grid gap-2 text-sm font-bold text-stone-800">Filter by partner<select value={offerPartnerFilter} onChange={(event)=>setOfferPartnerFilter(event.target.value)} className="h-11 rounded-lg border border-stone-200 px-4 text-sm"><option value="all">All partners</option>{offerPartners.map((partner)=><option key={partner} value={partner}>{partner}</option>)}</select></label></div><div className="grid gap-2">{filteredOffers.length ? filteredOffers.map((offer)=>{ const partner = relationRecord(offer.affiliate_partners); const attached = offerIds.includes(String(offer.id)); return <div key={String(offer.id)} className="rounded-lg bg-white p-3 text-sm"><div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><p className="font-bold text-green-950">{String(offer.title)}</p><p className="text-stone-600">{String(partner?.name ?? "No partner")} - {offerBasisLabel(offer.recommendation_basis)}</p><p className="text-xs text-stone-500">Regions: {Array.isArray(offer.available_regions) ? offer.available_regions.join(", ") : "Check merchant availability"} - {offer.is_active === false ? "Inactive" : "Active"}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>attachOffer(String(offer.id))} disabled={offer.is_active === false} className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 disabled:opacity-50">{attached ? "Attached" : "Attach"}</button><button type="button" onClick={()=>insertOfferRecommendation(String(offer.id))} disabled={offer.is_active === false} className="rounded-full bg-green-800 px-3 py-1 text-xs font-bold text-white disabled:opacity-50">Attach and Insert</button></div></div></div>; }) : <p className="text-sm text-stone-600">No active affiliate offers are available. Create an <a className="font-bold underline" href="/admin/affiliate/partners">affiliate partner</a> and <a className="font-bold underline" href="/admin/affiliate/offers">offer</a> first.</p>}<button type="button" onClick={()=>setOfferPickerOpen(false)} className="justify-self-start rounded-full border border-stone-400 px-3 py-1 text-xs font-bold text-stone-700">Cancel</button></div></div> : null}{uploadOpen ? <div className="mt-4 grid gap-3 rounded-lg border border-green-900/10 bg-green-50 p-4"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>{ setUploadFile(event.target.files?.[0] ?? null); setUploadMessage(""); }} />{uploadFile ? <p className="text-sm font-bold text-green-900">Selected file: {uploadFile.name}</p> : <p className="text-sm text-stone-600">Select a JPEG, PNG, or WebP image.</p>}<Input name="inline_image_alt" label="Image alt text *" value={uploadAlt} onChange={setUploadAlt} /><Input name="inline_image_caption" label="Optional caption" value={uploadCaption} onChange={setUploadCaption} /><button type="button" disabled={isUploading} onClick={uploadImage} className="justify-self-start rounded-full bg-green-800 px-4 py-2 text-sm font-bold text-white">{isUploading ? "Uploading..." : "Upload and Insert"}</button>{uploadMessage ? <p className="text-sm font-bold text-amber-800">{uploadMessage}</p> : null}</div> : null}<Text textareaRef={bodyRef} name="content_markdown" label="Article body" help="Drafts may be incomplete. Meaningful content is required before review." error={fieldErrors.content_markdown?.[0]} value={value(draft,"content_markdown")} onChange={(v)=>set("content_markdown",v)} rows={16} /></section><section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm"><h3 className="text-xl font-bold text-green-950">Sources</h3><Multi name="sources" label="Sources" items={options.sources} selected={sourceIds} onChange={setSources} labelKey="title" /></section><section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm"><h3 className="text-xl font-bold text-green-950">Related Shields Farms Products</h3><p className="text-sm text-stone-600">Product blocks use live product data. Do not copy prices into Markdown.</p><Select name="related_products" label="Add product" value="" onChange={(id)=>id && !productLinks.some((link)=>link.product_id===id) && setProducts([...productLinks,{product_id:id,sort_order:productLinks.length+1,custom_context:""}])} options={options.products.map((item): [string, string] => [String(item.id),String(item.name)])} />{selectedProducts.map(({link,product})=><div key={link.product_id} className="rounded-lg border border-stone-200 p-4"><p className="font-bold text-green-950">{String(product?.name)} - {formatNaira(Number(product?.price ?? 0))} / {String(product?.unit ?? "unit")}</p><Input name={`product_context_${link.product_id}`} label="Editorial context" value={link.custom_context} onChange={(v)=>setProducts(productLinks.map((item)=>item.product_id===link.product_id ? {...item,custom_context:v}:item))} /><div className="mt-2 flex gap-2"><button type="button" onClick={()=>insert(`[[product:${String(product?.slug)}]]`)} className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 hover:bg-green-50">Insert product token</button><button type="button" onClick={()=>setProducts(productLinks.filter((item)=>item.product_id!==link.product_id))} className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 hover:bg-green-50">Remove</button></div></div>)}</section><section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm"><h3 className="text-xl font-bold text-green-950">Affiliate and SEO</h3><label className="flex gap-3 text-sm font-bold"><input type="checkbox" checked={draft.contains_affiliate_content === true} onChange={(e)=>set("contains_affiliate_content",e.target.checked)} /> Contains affiliate content</label><label className="flex gap-3 text-sm font-bold"><input type="checkbox" checked={draft.is_featured === true} onChange={(e)=>set("is_featured",e.target.checked)} /> Featured</label><div data-field="offer_links" className="grid gap-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-bold text-stone-800">Related affiliate offers</p><p className="text-xs text-stone-500">Attach offers, insert recommendation tokens, and add article-specific pros, cons, best-for text and verdicts.</p></div><button type="button" onClick={()=>setOfferPickerOpen(true)} className="rounded-full bg-amber-600 px-4 py-2 text-sm font-bold text-white">Add Affiliate Offer</button></div>{fieldErrors.offer_links?.[0] ? <p className="text-xs font-bold text-red-700">{fieldErrors.offer_links[0]}</p> : null}{selectedOffers.length ? selectedOffers.map(({link, offer})=>{ const partner = relationRecord(offer?.affiliate_partners); return <div key={link.offer_id} className="grid gap-3 rounded-lg border border-stone-200 p-4"><div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><p className="font-bold text-green-950">{String(offer?.title)}</p><p className="text-sm text-stone-600">{String(partner?.name ?? "No partner")} - {offerBasisLabel(offer?.recommendation_basis)} - {offer?.is_active === false ? "Inactive" : "Active"}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>insertOfferRecommendation(link.offer_id)} className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950">Insert Recommendation</button><a href={`/recommend/${String(offer?.slug)}`} target="_blank" rel="noreferrer" className="rounded-full border border-amber-700 px-3 py-1 text-xs font-bold text-amber-800" title="Testing may create an affiliate click where consent permits.">Test redirect</a><button type="button" onClick={()=>removeOffer(link.offer_id)} className="rounded-full border border-stone-400 px-3 py-1 text-xs font-bold text-stone-700">Remove</button></div></div><Input name={`offer_best_for_${link.offer_id}`} label="Best-for text" value={link.best_for} onChange={(v)=>updateOfferLink(link.offer_id,"best_for",v)} /><div className="grid gap-3 md:grid-cols-2"><Text name={`offer_pros_${link.offer_id}`} label="Pros (one per line)" value={link.pros} onChange={(v)=>updateOfferLink(link.offer_id,"pros",v)} /><Text name={`offer_cons_${link.offer_id}`} label="Cons (one per line)" value={link.cons} onChange={(v)=>updateOfferLink(link.offer_id,"cons",v)} /></div><Text name={`offer_verdict_${link.offer_id}`} label="Editorial verdict" value={link.editorial_verdict} onChange={(v)=>updateOfferLink(link.offer_id,"editorial_verdict",v)} /></div>; }) : <p className="rounded-lg bg-stone-50 p-4 text-sm text-stone-600">No affiliate offers attached yet.</p>}</div><Text name="recommendation_methodology" label="Recommendation methodology" error={fieldErrors.recommendation_methodology?.[0]} value={value(draft,"recommendation_methodology")} onChange={(v)=>set("recommendation_methodology",v)} /><Text name="custom_affiliate_disclosure" label="Affiliate disclosure" help="Optional. The public article always shows the standard affiliate disclosure; this text only extends it." error={fieldErrors.custom_affiliate_disclosure?.[0]} value={value(draft,"custom_affiliate_disclosure")} onChange={(v)=>set("custom_affiliate_disclosure",v)} /><Input name="seo_title" label="SEO title" error={fieldErrors.seo_title?.[0]} value={value(draft,"seo_title")} onChange={(v)=>set("seo_title",v)} /><Text name="seo_description" label="SEO description" error={fieldErrors.seo_description?.[0]} value={value(draft,"seo_description")} onChange={(v)=>set("seo_description",v)} /><Input name="external_canonical_url" label="External canonical URL" error={fieldErrors.external_canonical_url?.[0]} value={value(draft,"external_canonical_url")} onChange={(v)=>set("external_canonical_url",v)} />{isPublished && value(draft,"published_at") ? <p className="text-sm font-bold text-green-950">Published {new Date(value(draft,"published_at")).toLocaleString("en-NG")}</p> : <p className="text-sm font-bold text-stone-600">Publish uses the current server time automatically.</p>}<Select name="status" label="Status" error={fieldErrors.status?.[0]} value={value(draft,"status","draft")} onChange={(v)=>set("status",v)} options={[["draft","Draft"],["review","Review"],["published","Published"],["archived","Archived"]]} /></section></div>;
+  return (
+    <div className="grid gap-6">
+      <input
+        ref={imageInputRef}
+        id="article-inline-image-input"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={handleImageSelected}
+      />
+      <div className="rounded-lg bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-green-950">
+              {post ? "Edit Article" : "Create Article"}
+            </h2>
+            <p className="mt-1 text-sm text-stone-600">
+              Publishing is explicit. Drafts and previews remain protected and
+              noindex.
+            </p>
+            <p className="mt-1 text-sm text-stone-600">
+              This article will be published immediately using the current
+              server time.
+            </p>
+            {dirty ? (
+              <p className="mt-1 text-sm font-bold text-amber-700">
+                Unsaved changes
+              </p>
+            ) : null}
+            {isPublished && articleUrl ? (
+              <p className="mt-2 text-sm text-stone-600">
+                Published URL:{" "}
+                <a
+                  className="font-bold text-green-800 underline"
+                  href={articleUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {articleUrl}
+                </a>
+              </p>
+            ) : null}
+            {copyMessage ? (
+              <p className="mt-1 text-sm font-bold text-green-800">
+                {copyMessage}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => submit("draft")}
+              disabled={isPending}
+              className="rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950"
+            >
+              {pendingAction === "draft" ? "Saving..." : draftButtonLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => submit("continue")}
+              disabled={isPending}
+              className="rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950"
+            >
+              {pendingAction === "continue" ? "Saving..." : "Save and Continue"}
+            </button>
+            {!isPublished ? (
+              <button
+                type="button"
+                onClick={() => submit("review")}
+                disabled={isPending}
+                className="rounded-full bg-amber-600 px-4 py-2 text-sm font-bold text-white"
+              >
+                {pendingAction === "review"
+                  ? "Sending to review..."
+                  : "Send to Review"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => submit("publish")}
+              disabled={isPending}
+              className="rounded-full bg-green-800 px-4 py-2 text-sm font-bold text-white"
+            >
+              {pendingAction === "publish"
+                ? "Publishing..."
+                : isPublished
+                  ? "Republish Changes"
+                  : "Publish"}
+            </button>
+            {isPublished ? (
+              <button
+                type="button"
+                onClick={() => submit("unpublish")}
+                disabled={isPending}
+                className="rounded-full border border-amber-700 px-4 py-2 text-sm font-bold text-amber-800"
+              >
+                Unpublish
+              </button>
+            ) : null}
+            {post ? (
+              <button
+                type="button"
+                onClick={() => submit("archive")}
+                disabled={isPending}
+                className="rounded-full bg-stone-800 px-4 py-2 text-sm font-bold text-white"
+              >
+                Archive
+              </button>
+            ) : null}
+            {post && draft.deleted_at ? (
+              <button
+                type="button"
+                onClick={() => submit("restore")}
+                disabled={isPending}
+                className="rounded-full bg-green-50 px-4 py-2 text-sm font-bold text-green-800"
+              >
+                Restore
+              </button>
+            ) : null}
+            {post && !draft.deleted_at ? (
+              <button
+                type="button"
+                onClick={() => submit("trash")}
+                disabled={isPending}
+                className="rounded-full bg-red-50 px-4 py-2 text-sm font-bold text-red-800"
+              >
+                Delete
+              </button>
+            ) : null}
+            {isPublished && articleUrl ? (
+              <>
+                <a
+                  href={articleUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full bg-stone-100 px-4 py-2 text-sm font-bold text-stone-800"
+                >
+                  View Published Article
+                </a>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard?.writeText(articleUrl);
+                    setCopyMessage("Public link copied.");
+                  }}
+                  className="rounded-full bg-stone-100 px-4 py-2 text-sm font-bold text-stone-800"
+                >
+                  Copy Public Link
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+        {pendingLabel ? (
+          <p className="mt-4 text-sm font-bold text-stone-600">
+            {pendingLabel}
+          </p>
+        ) : null}
+        {message ? (
+          <div
+            className={`mt-4 rounded-lg p-3 text-sm font-bold ${Object.keys(fieldErrors).length ? "bg-red-50 text-red-800" : "bg-green-50 text-green-900"}`}
+          >
+            <p>{message}</p>
+            {Object.keys(fieldErrors).length ? (
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {Object.entries(fieldErrors).map(([key, errors]) => (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      className="text-left underline"
+                      onClick={() => focusField(key)}
+                    >
+                      {fieldLabel(key)}: {errors.join(" ")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm md:grid-cols-2">
+        <Input
+          name="title"
+          label="Title *"
+          help="Required to save a draft."
+          error={fieldErrors.title?.[0]}
+          value={value(draft, "title")}
+          onChange={setTitle}
+        />
+        <label
+          data-field="slug"
+          className="grid gap-2 text-sm font-bold text-stone-800"
+        >
+          Slug
+          <input
+            id="slug"
+            value={value(draft, "slug")}
+            onChange={(e) => setSlug(e.target.value)}
+            aria-invalid={fieldErrors.slug ? "true" : undefined}
+            aria-describedby={
+              fieldErrors.slug?.[0] ? "slug-help slug-error" : "slug-help"
+            }
+            className={`h-11 rounded-lg border px-4 text-sm focus:outline-none focus:ring-2 ${invalidClass(fieldErrors.slug?.[0])}`}
+          />
+          <span
+            id="slug-help"
+            className="text-xs font-normal leading-5 text-stone-500"
+          >
+            Generated from the title until manually edited. Use lowercase
+            letters, numbers, and hyphens.
+          </span>
+          {fieldErrors.slug?.[0] ? (
+            <span
+              id="slug-error"
+              className="text-xs font-bold leading-5 text-red-700"
+            >
+              {fieldErrors.slug[0]}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={regenerateSlug}
+            className="justify-self-start rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950"
+          >
+            Regenerate from title
+          </button>
+          {isPublished ? (
+            <span className="text-xs font-bold text-amber-700">
+              Changing a published slug may break the old URL and is blocked
+              until unpublished.
+            </span>
+          ) : null}
+        </label>
+        <Text
+          name="excerpt"
+          label="Excerpt"
+          help="Required before review or publication."
+          error={fieldErrors.excerpt?.[0]}
+          value={value(draft, "excerpt")}
+          onChange={(v) => set("excerpt", v)}
+        />
+        <Text
+          name="answer_summary"
+          label="Answer summary"
+          error={fieldErrors.answer_summary?.[0]}
+          value={value(draft, "answer_summary")}
+          onChange={(v) => set("answer_summary", v)}
+        />
+        <Text
+          name="key_takeaways"
+          label="Key takeaways (one per line)"
+          error={fieldErrors.key_takeaways?.[0]}
+          value={
+            Array.isArray(draft.key_takeaways)
+              ? (draft.key_takeaways as string[]).join("\n")
+              : value(draft, "key_takeaways")
+          }
+          onChange={(v) => set("key_takeaways", v)}
+        />
+        <Select
+          name="author_id"
+          label="Author"
+          help="Required before review or publication."
+          error={fieldErrors.author_id?.[0]}
+          value={value(draft, "author_id")}
+          onChange={(v) => set("author_id", v)}
+          options={options.authors.map((item): [string, string] => [
+            String(item.id),
+            String(item.name),
+          ])}
+        />
+        <Select
+          name="category_id"
+          label="Category"
+          help="Required before review or publication."
+          error={fieldErrors.category_id?.[0]}
+          value={value(draft, "category_id")}
+          onChange={(v) => set("category_id", v)}
+          options={options.categories.map((item): [string, string] => [
+            String(item.id),
+            String(item.name),
+          ])}
+        />
+        <Multi
+          name="tags"
+          label="Tags"
+          items={options.tags}
+          selected={tagIds}
+          onChange={setTags}
+        />
+        <Select
+          name="content_format"
+          label="Content format"
+          error={fieldErrors.content_format?.[0]}
+          value={value(draft, "content_format", "article")}
+          onChange={(v) => set("content_format", v)}
+          options={[
+            ["article", "Article"],
+            ["video_companion", "Video companion"],
+            ["comparison", "Comparison"],
+            ["resource_guide", "Resource guide"],
+            ["case_study", "Case study"],
+            ["farm_field_note", "Field note"],
+          ]}
+        />
+        <Select
+          name="post_type"
+          label="Post type"
+          error={fieldErrors.post_type?.[0]}
+          value={value(draft, "post_type", "guide")}
+          onChange={(v) => set("post_type", v)}
+          options={[
+            ["guide", "Guide"],
+            ["tutorial", "Tutorial"],
+            ["buying_guide", "Buying guide"],
+            ["review", "Review"],
+            ["comparison", "Comparison"],
+            ["case_study", "Case study"],
+            ["market_insight", "Market insight"],
+            ["farm_update", "Farm update"],
+          ]}
+        />
+        <Select
+          name="audience_scope"
+          label="Audience"
+          error={fieldErrors.audience_scope?.[0]}
+          value={value(draft, "audience_scope", "nigeria")}
+          onChange={(v) => set("audience_scope", v)}
+          options={[
+            ["nigeria", "Nigeria"],
+            ["africa", "Africa"],
+            ["global", "Global"],
+          ]}
+        />
+        <Input
+          name="featured_image_url"
+          label="Featured image URL"
+          error={fieldErrors.featured_image_url?.[0]}
+          value={value(draft, "featured_image_url")}
+          onChange={(v) => set("featured_image_url", v)}
+        />
+        <Input
+          name="featured_image_alt"
+          label="Featured image alt text"
+          error={fieldErrors.featured_image_alt?.[0]}
+          value={value(draft, "featured_image_alt")}
+          onChange={(v) => set("featured_image_alt", v)}
+        />
+      </section>
+      <section className="rounded-lg bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {[
+            ["Heading", "## Heading"],
+            ["Bold", "**bold text**"],
+            ["Italic", "_italic text_"],
+            ["Link", "[link text](https://example.com)"],
+            ["List", "- List item"],
+            ["Quote", "> Quote"],
+            ["Table", "| Column | Column |\n| --- | --- |\n| Value | Value |"],
+            ["Video", "[[video:post-video]]"],
+            ["Sources", "[[sources]]"],
+            ["Newsletter", "[[newsletter]]"],
+            ["Business Supply CTA", "[[callout:business-supply]]"],
+            ["Feed Tool", "[[tool:poultry-feed-requirement]]"],
+            ["Egg Tool", "[[tool:egg-sales-margin]]"],
+          ].map(([label, token]) => (
+            <button
+              type="button"
+              key={label}
+              onClick={() => insert(token)}
+              className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 hover:bg-green-50"
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setOfferPickerOpen((open) => !open)}
+            className="rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white"
+          >
+            Affiliate Recommendation
+          </button>
+          <button
+            type="button"
+            onClick={insertAffiliateComparison}
+            className="rounded-full border border-amber-700 px-3 py-1 text-xs font-bold text-amber-800"
+          >
+            Affiliate Comparison
+          </button>
+          <button
+            type="button"
+            onClick={openImageChooser}
+            aria-label="Choose an image to insert into the article"
+            className="rounded-full bg-green-800 px-3 py-1 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-green-700 focus:ring-offset-2"
+          >
+            Insert Image
+          </button>
+          <label
+            htmlFor="article-inline-image-input"
+            aria-label="Choose an image to insert into the article"
+            tabIndex={0}
+            onKeyDown={handleChooserLabelKeyDown}
+            className="cursor-pointer rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 focus:outline-none focus:ring-2 focus:ring-green-700 focus:ring-offset-2"
+          >
+            Choose image
+          </label>
+        </div>
+        {offerMessage ? (
+          <p className="mt-3 text-sm font-bold text-amber-800">
+            {offerMessage}
+          </p>
+        ) : null}
+        {offerPickerOpen ? (
+          <div className="mt-4 grid gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input
+                name="affiliate_offer_search"
+                label="Search offers"
+                value={offerSearch}
+                onChange={setOfferSearch}
+              />
+              <label className="grid gap-2 text-sm font-bold text-stone-800">
+                Filter by partner
+                <select
+                  value={offerPartnerFilter}
+                  onChange={(event) =>
+                    setOfferPartnerFilter(event.target.value)
+                  }
+                  className="h-11 rounded-lg border border-stone-200 px-4 text-sm"
+                >
+                  <option value="all">All partners</option>
+                  {offerPartners.map((partner) => (
+                    <option key={partner} value={partner}>
+                      {partner}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="grid gap-2">
+              {filteredOffers.length ? (
+                filteredOffers.map((offer) => {
+                  const partner = relationRecord(offer.affiliate_partners);
+                  const attached = offerIds.includes(String(offer.id));
+                  return (
+                    <div
+                      key={String(offer.id)}
+                      className="rounded-lg bg-white p-3 text-sm"
+                    >
+                      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="font-bold text-green-950">
+                            {String(offer.title)}
+                          </p>
+                          <p className="text-stone-600">
+                            {String(partner?.name ?? "No partner")} -{" "}
+                            {offerBasisLabel(offer.recommendation_basis)}
+                          </p>
+                          <p className="text-xs text-stone-500">
+                            Regions:{" "}
+                            {Array.isArray(offer.available_regions)
+                              ? offer.available_regions.join(", ")
+                              : "Check merchant availability"}{" "}
+                            -{" "}
+                            {offer.is_active === false ? "Inactive" : "Active"}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => attachOffer(String(offer.id))}
+                            disabled={offer.is_active === false}
+                            className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 disabled:opacity-50"
+                          >
+                            {attached ? "Attached" : "Attach"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              insertOfferRecommendation(String(offer.id))
+                            }
+                            disabled={offer.is_active === false}
+                            className="rounded-full bg-green-800 px-3 py-1 text-xs font-bold text-white disabled:opacity-50"
+                          >
+                            Attach and Insert
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-stone-600">
+                  No active affiliate offers are available. Create an{" "}
+                  <a
+                    className="font-bold underline"
+                    href="/admin/affiliate/partners"
+                  >
+                    affiliate partner
+                  </a>{" "}
+                  and{" "}
+                  <a
+                    className="font-bold underline"
+                    href="/admin/affiliate/offers"
+                  >
+                    offer
+                  </a>{" "}
+                  first.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setOfferPickerOpen(false)}
+                className="justify-self-start rounded-full border border-stone-400 px-3 py-1 text-xs font-bold text-stone-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {uploadOpen && uploadFile ? (
+          <div className="mt-4 grid gap-3 rounded-lg border border-green-900/10 bg-green-50 p-4">
+            {/* Local object URLs are admin-only previews and cannot use the Next image optimizer. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={uploadPreviewUrl}
+              alt={uploadAlt.trim() || "Selected article image preview"}
+              className="max-h-72 w-auto rounded-lg border border-green-900/10 object-contain"
+            />
+            <dl className="grid gap-1 text-sm text-stone-700">
+              <div><dt className="inline font-bold">Filename: </dt><dd className="inline">{uploadFile.name}</dd></div>
+              <div><dt className="inline font-bold">File type: </dt><dd className="inline">{uploadFile.type}</dd></div>
+              <div><dt className="inline font-bold">File size: </dt><dd className="inline">{formatFileSize(uploadFile.size)}</dd></div>
+            </dl>
+            <label className="grid gap-2 text-sm font-bold text-stone-800">
+              Image alt text *
+              <input ref={imageAltRef} name="inline_image_alt" value={uploadAlt} onChange={(event) => setUploadAlt(event.target.value)} required className="h-11 rounded-lg border border-stone-200 px-4 text-sm focus:border-green-700 focus:outline-none focus:ring-2 focus:ring-green-700/20" />
+            </label>
+            <Input
+              name="inline_image_caption"
+              label="Optional caption"
+              value={uploadCaption}
+              onChange={setUploadCaption}
+            />
+            <div className="flex flex-wrap gap-2">
+              <label htmlFor="article-inline-image-input" aria-label="Choose an image to insert into the article" tabIndex={0} onKeyDown={handleChooserLabelKeyDown} className="cursor-pointer rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950 focus:outline-none focus:ring-2 focus:ring-green-700 focus:ring-offset-2">Change image</label>
+              <button type="button" onClick={cancelImageUpload} className="rounded-full border border-stone-400 px-4 py-2 text-sm font-bold text-stone-700">Cancel</button>
+              <button type="button" disabled={isUploading || !uploadAlt.trim()} onClick={uploadImage} className="rounded-full bg-green-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{isUploading ? "Uploading..." : "Upload and Insert"}</button>
+            </div>
+            {uploadMessage ? (
+              <p className="text-sm font-bold text-amber-800">
+                {uploadMessage}
+              </p>
+            ) : null}
+          </div>
+        ) : uploadMessage ? (
+          <div className="mt-3 grid justify-items-start gap-2">
+            <p className="text-sm font-bold text-amber-800">{uploadMessage}</p>
+            <label htmlFor="article-inline-image-input" aria-label="Choose an image to insert into the article" tabIndex={0} onKeyDown={handleChooserLabelKeyDown} className="cursor-pointer rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950 focus:outline-none focus:ring-2 focus:ring-green-700 focus:ring-offset-2">Choose image</label>
+          </div>
+        ) : null}
+        <Text
+          textareaRef={bodyRef}
+          name="content_markdown"
+          label="Article body"
+          help="Drafts may be incomplete. Meaningful content is required before review."
+          error={fieldErrors.content_markdown?.[0]}
+          value={value(draft, "content_markdown")}
+          onChange={(v) => set("content_markdown", v)}
+          rows={16}
+        />
+      </section>
+      <section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm">
+        <h3 className="text-xl font-bold text-green-950">Sources</h3>
+        <Multi
+          name="sources"
+          label="Sources"
+          items={options.sources}
+          selected={sourceIds}
+          onChange={setSources}
+          labelKey="title"
+        />
+      </section>
+      <section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm">
+        <h3 className="text-xl font-bold text-green-950">
+          Related Shields Farms Products
+        </h3>
+        <p className="text-sm text-stone-600">
+          Product blocks use live product data. Do not copy prices into
+          Markdown.
+        </p>
+        <Select
+          name="related_products"
+          label="Add product"
+          value=""
+          onChange={(id) =>
+            id &&
+            !productLinks.some((link) => link.product_id === id) &&
+            setProducts([
+              ...productLinks,
+              {
+                product_id: id,
+                sort_order: productLinks.length + 1,
+                custom_context: "",
+              },
+            ])
+          }
+          options={options.products.map((item): [string, string] => [
+            String(item.id),
+            String(item.name),
+          ])}
+        />
+        {selectedProducts.map(({ link, product }) => (
+          <div
+            key={link.product_id}
+            className="rounded-lg border border-stone-200 p-4"
+          >
+            <p className="font-bold text-green-950">
+              {String(product?.name)} -{" "}
+              {formatNaira(Number(product?.price ?? 0))} /{" "}
+              {String(product?.unit ?? "unit")}
+            </p>
+            <Input
+              name={`product_context_${link.product_id}`}
+              label="Editorial context"
+              value={link.custom_context}
+              onChange={(v) =>
+                setProducts(
+                  productLinks.map((item) =>
+                    item.product_id === link.product_id
+                      ? { ...item, custom_context: v }
+                      : item,
+                  ),
+                )
+              }
+            />
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => insert(`[[product:${String(product?.slug)}]]`)}
+                className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 hover:bg-green-50"
+              >
+                Insert product token
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setProducts(
+                    productLinks.filter(
+                      (item) => item.product_id !== link.product_id,
+                    ),
+                  )
+                }
+                className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950 hover:bg-green-50"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </section>
+      <section className="grid gap-4 rounded-lg bg-white p-5 shadow-sm">
+        <h3 className="text-xl font-bold text-green-950">Affiliate and SEO</h3>
+        <label className="flex gap-3 text-sm font-bold">
+          <input
+            type="checkbox"
+            checked={draft.contains_affiliate_content === true}
+            onChange={(e) =>
+              set("contains_affiliate_content", e.target.checked)
+            }
+          />{" "}
+          Contains affiliate content
+        </label>
+        <label className="flex gap-3 text-sm font-bold">
+          <input
+            type="checkbox"
+            checked={draft.is_featured === true}
+            onChange={(e) => set("is_featured", e.target.checked)}
+          />{" "}
+          Featured
+        </label>
+        <div data-field="offer_links" className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-stone-800">
+                Related affiliate offers
+              </p>
+              <p className="text-xs text-stone-500">
+                Attach offers, insert recommendation tokens, and add
+                article-specific pros, cons, best-for text and verdicts.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOfferPickerOpen(true)}
+              className="rounded-full bg-amber-600 px-4 py-2 text-sm font-bold text-white"
+            >
+              Add Affiliate Offer
+            </button>
+          </div>
+          {fieldErrors.offer_links?.[0] ? (
+            <p className="text-xs font-bold text-red-700">
+              {fieldErrors.offer_links[0]}
+            </p>
+          ) : null}
+          {selectedOffers.length ? (
+            selectedOffers.map(({ link, offer }) => {
+              const partner = relationRecord(offer?.affiliate_partners);
+              return (
+                <div
+                  key={link.offer_id}
+                  className="grid gap-3 rounded-lg border border-stone-200 p-4"
+                >
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="font-bold text-green-950">
+                        {String(offer?.title)}
+                      </p>
+                      <p className="text-sm text-stone-600">
+                        {String(partner?.name ?? "No partner")} -{" "}
+                        {offerBasisLabel(offer?.recommendation_basis)} -{" "}
+                        {offer?.is_active === false ? "Inactive" : "Active"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => insertOfferRecommendation(link.offer_id)}
+                        className="rounded-full border border-green-800 px-3 py-1 text-xs font-bold text-green-950"
+                      >
+                        Insert Recommendation
+                      </button>
+                      <a
+                        href={`/recommend/${String(offer?.slug)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-amber-700 px-3 py-1 text-xs font-bold text-amber-800"
+                        title="Testing may create an affiliate click where consent permits."
+                      >
+                        Test redirect
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => removeOffer(link.offer_id)}
+                        className="rounded-full border border-stone-400 px-3 py-1 text-xs font-bold text-stone-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                  <Input
+                    name={`offer_best_for_${link.offer_id}`}
+                    label="Best-for text"
+                    value={link.best_for}
+                    onChange={(v) =>
+                      updateOfferLink(link.offer_id, "best_for", v)
+                    }
+                  />
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Text
+                      name={`offer_pros_${link.offer_id}`}
+                      label="Pros (one per line)"
+                      value={link.pros}
+                      onChange={(v) =>
+                        updateOfferLink(link.offer_id, "pros", v)
+                      }
+                    />
+                    <Text
+                      name={`offer_cons_${link.offer_id}`}
+                      label="Cons (one per line)"
+                      value={link.cons}
+                      onChange={(v) =>
+                        updateOfferLink(link.offer_id, "cons", v)
+                      }
+                    />
+                  </div>
+                  <Text
+                    name={`offer_verdict_${link.offer_id}`}
+                    label="Editorial verdict"
+                    value={link.editorial_verdict}
+                    onChange={(v) =>
+                      updateOfferLink(link.offer_id, "editorial_verdict", v)
+                    }
+                  />
+                </div>
+              );
+            })
+          ) : (
+            <p className="rounded-lg bg-stone-50 p-4 text-sm text-stone-600">
+              No affiliate offers attached yet.
+            </p>
+          )}
+        </div>
+        <Text
+          name="recommendation_methodology"
+          label="Recommendation methodology"
+          error={fieldErrors.recommendation_methodology?.[0]}
+          value={value(draft, "recommendation_methodology")}
+          onChange={(v) => set("recommendation_methodology", v)}
+        />
+        <Text
+          name="custom_affiliate_disclosure"
+          label="Affiliate disclosure"
+          help="Optional. The public article always shows the standard affiliate disclosure; this text only extends it."
+          error={fieldErrors.custom_affiliate_disclosure?.[0]}
+          value={value(draft, "custom_affiliate_disclosure")}
+          onChange={(v) => set("custom_affiliate_disclosure", v)}
+        />
+        <Input
+          name="seo_title"
+          label="SEO title"
+          error={fieldErrors.seo_title?.[0]}
+          value={value(draft, "seo_title")}
+          onChange={(v) => set("seo_title", v)}
+        />
+        <Text
+          name="seo_description"
+          label="SEO description"
+          error={fieldErrors.seo_description?.[0]}
+          value={value(draft, "seo_description")}
+          onChange={(v) => set("seo_description", v)}
+        />
+        <Input
+          name="external_canonical_url"
+          label="External canonical URL"
+          error={fieldErrors.external_canonical_url?.[0]}
+          value={value(draft, "external_canonical_url")}
+          onChange={(v) => set("external_canonical_url", v)}
+        />
+        {isPublished && value(draft, "published_at") ? (
+          <p className="text-sm font-bold text-green-950">
+            Published{" "}
+            {new Date(value(draft, "published_at")).toLocaleString("en-NG")}
+          </p>
+        ) : (
+          <p className="text-sm font-bold text-stone-600">
+            Publish uses the current server time automatically.
+          </p>
+        )}
+        <Select
+          name="status"
+          label="Status"
+          error={fieldErrors.status?.[0]}
+          value={value(draft, "status", "draft")}
+          onChange={(v) => set("status", v)}
+          options={[
+            ["draft", "Draft"],
+            ["review", "Review"],
+            ["published", "Published"],
+            ["archived", "Archived"],
+          ]}
+        />
+      </section>
+    </div>
+  );
 }
 
-function fieldLabel(key: string) { return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
-function errorId(name: string) { return `${name}-error`; }
-function helpId(name: string) { return `${name}-help`; }
-function invalidClass(error?: string) { return error ? "border-red-500 focus:border-red-700 focus:ring-red-700/20" : "border-stone-200 focus:border-green-700 focus:ring-green-700/20"; }
-function FieldHelp({ name, help, error }: { name: string; help?: string; error?: string }) { return <>{help ? <span id={helpId(name)} className="text-xs font-normal leading-5 text-stone-500">{help}</span> : null}{error ? <span id={errorId(name)} className="text-xs font-bold leading-5 text-red-700">{error}</span> : null}</>; }
-function describedBy(name: string, help?: string, error?: string) { return [help ? helpId(name) : "", error ? errorId(name) : ""].filter(Boolean).join(" ") || undefined; }
-function Input({ name, label, value, onChange, type="text", error, help }: { name:string; label:string; value:string; type?:string; error?:string; help?:string; onChange:(value:string)=>void }) { return <label data-field={name} className="grid gap-2 text-sm font-bold text-stone-800">{label}<input id={name} type={type} value={value} onChange={(e)=>onChange(e.target.value)} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(name, help, error)} className={`h-11 rounded-lg border px-4 text-sm focus:outline-none focus:ring-2 ${invalidClass(error)}`} /><FieldHelp name={name} help={help} error={error} /></label>; }
-function Text({ name, label, value, onChange, rows=4, error, help, textareaRef }: { name:string; label:string; value:string; rows?:number; error?:string; help?:string; textareaRef?: RefObject<HTMLTextAreaElement | null>; onChange:(value:string)=>void }) { return <label data-field={name} className="grid gap-2 text-sm font-bold text-stone-800 md:col-span-2">{label}<textarea ref={textareaRef} id={name} rows={rows} value={value} onChange={(e)=>onChange(e.target.value)} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(name, help, error)} className={`rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-2 ${invalidClass(error)}`} /><FieldHelp name={name} help={help} error={error} /></label>; }
-function Select({ name, label, value, onChange, options, error, help }: { name:string; label:string; value:string; options:Array<[string,string]>; error?:string; help?:string; onChange:(value:string)=>void }) { return <label data-field={name} className="grid gap-2 text-sm font-bold text-stone-800">{label}<select id={name} value={value} onChange={(e)=>onChange(e.target.value)} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(name, help, error)} className={`h-11 rounded-lg border px-4 text-sm focus:outline-none focus:ring-2 ${invalidClass(error)}`}><option value="">Choose...</option>{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><FieldHelp name={name} help={help} error={error} /></label>; }
-function Multi({ name, label, items, selected, onChange, labelKey="name", error, help }: { name:string; label:string; items:AdminRecord[]; selected:string[]; labelKey?:string; error?:string; help?:string; onChange:(ids:string[])=>void }) { return <fieldset id={name} data-field={name} tabIndex={-1} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy(name, help, error)} className="grid gap-2 text-sm font-bold text-stone-800 md:col-span-2"><legend>{label}</legend><div className={`grid max-h-44 gap-2 overflow-y-auto rounded-lg border p-3 md:grid-cols-2 ${invalidClass(error)}`}>{items.length ? items.map((item)=><label key={String(item.id)} className="flex items-center gap-2 font-medium"><input type="checkbox" checked={selected.includes(String(item.id))} onChange={(e)=>onChange(e.target.checked ? [...selected,String(item.id)] : selected.filter((id)=>id!==String(item.id)))} />{String(item[labelKey] ?? item.slug)}</label>) : <p className="text-xs font-normal text-stone-500">No options available yet.</p>}</div><FieldHelp name={name} help={help} error={error} /></fieldset>; }
+function fieldLabel(key: string) {
+  return key
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+function formatFileSize(bytes: number) {
+  return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+function errorId(name: string) {
+  return `${name}-error`;
+}
+function helpId(name: string) {
+  return `${name}-help`;
+}
+function invalidClass(error?: string) {
+  return error
+    ? "border-red-500 focus:border-red-700 focus:ring-red-700/20"
+    : "border-stone-200 focus:border-green-700 focus:ring-green-700/20";
+}
+function FieldHelp({
+  name,
+  help,
+  error,
+}: {
+  name: string;
+  help?: string;
+  error?: string;
+}) {
+  return (
+    <>
+      {help ? (
+        <span
+          id={helpId(name)}
+          className="text-xs font-normal leading-5 text-stone-500"
+        >
+          {help}
+        </span>
+      ) : null}
+      {error ? (
+        <span
+          id={errorId(name)}
+          className="text-xs font-bold leading-5 text-red-700"
+        >
+          {error}
+        </span>
+      ) : null}
+    </>
+  );
+}
+function describedBy(name: string, help?: string, error?: string) {
+  return (
+    [help ? helpId(name) : "", error ? errorId(name) : ""]
+      .filter(Boolean)
+      .join(" ") || undefined
+  );
+}
+function Input({
+  name,
+  label,
+  value,
+  onChange,
+  type = "text",
+  error,
+  help,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  type?: string;
+  error?: string;
+  help?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label
+      data-field={name}
+      className="grid gap-2 text-sm font-bold text-stone-800"
+    >
+      {label}
+      <input
+        id={name}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={describedBy(name, help, error)}
+        className={`h-11 rounded-lg border px-4 text-sm focus:outline-none focus:ring-2 ${invalidClass(error)}`}
+      />
+      <FieldHelp name={name} help={help} error={error} />
+    </label>
+  );
+}
+function Text({
+  name,
+  label,
+  value,
+  onChange,
+  rows = 4,
+  error,
+  help,
+  textareaRef,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  rows?: number;
+  error?: string;
+  help?: string;
+  textareaRef?: RefObject<HTMLTextAreaElement | null>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label
+      data-field={name}
+      className="grid gap-2 text-sm font-bold text-stone-800 md:col-span-2"
+    >
+      {label}
+      <textarea
+        ref={textareaRef}
+        id={name}
+        rows={rows}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={describedBy(name, help, error)}
+        className={`rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-2 ${invalidClass(error)}`}
+      />
+      <FieldHelp name={name} help={help} error={error} />
+    </label>
+  );
+}
+function Select({
+  name,
+  label,
+  value,
+  onChange,
+  options,
+  error,
+  help,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  error?: string;
+  help?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label
+      data-field={name}
+      className="grid gap-2 text-sm font-bold text-stone-800"
+    >
+      {label}
+      <select
+        id={name}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={describedBy(name, help, error)}
+        className={`h-11 rounded-lg border px-4 text-sm focus:outline-none focus:ring-2 ${invalidClass(error)}`}
+      >
+        <option value="">Choose...</option>
+        {options.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+      <FieldHelp name={name} help={help} error={error} />
+    </label>
+  );
+}
+function Multi({
+  name,
+  label,
+  items,
+  selected,
+  onChange,
+  labelKey = "name",
+  error,
+  help,
+}: {
+  name: string;
+  label: string;
+  items: AdminRecord[];
+  selected: string[];
+  labelKey?: string;
+  error?: string;
+  help?: string;
+  onChange: (ids: string[]) => void;
+}) {
+  return (
+    <fieldset
+      id={name}
+      data-field={name}
+      tabIndex={-1}
+      aria-invalid={error ? "true" : undefined}
+      aria-describedby={describedBy(name, help, error)}
+      className="grid gap-2 text-sm font-bold text-stone-800 md:col-span-2"
+    >
+      <legend>{label}</legend>
+      <div
+        className={`grid max-h-44 gap-2 overflow-y-auto rounded-lg border p-3 md:grid-cols-2 ${invalidClass(error)}`}
+      >
+        {items.length ? (
+          items.map((item) => (
+            <label
+              key={String(item.id)}
+              className="flex items-center gap-2 font-medium"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(String(item.id))}
+                onChange={(e) =>
+                  onChange(
+                    e.target.checked
+                      ? [...selected, String(item.id)]
+                      : selected.filter((id) => id !== String(item.id)),
+                  )
+                }
+              />
+              {String(item[labelKey] ?? item.slug)}
+            </label>
+          ))
+        ) : (
+          <p className="text-xs font-normal text-stone-500">
+            No options available yet.
+          </p>
+        )}
+      </div>
+      <FieldHelp name={name} help={help} error={error} />
+    </fieldset>
+  );
+}
