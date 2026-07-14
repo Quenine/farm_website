@@ -83,8 +83,8 @@ check("Review validation requires author", actions.includes("Author is required 
 check("Review validation requires category", actions.includes("Category is required before review or publication."));
 check("Publish uses server publication time", actions.includes("existing?.published_at ?? new Date().toISOString()"));
 check("Publish validation requires image alt text", actions.includes("Featured image alt text is required when a featured image exists."));
-check("Affiliate publish validation requires disclosure", actions.includes("Affiliate disclosure is required when affiliate recommendations are attached or embedded."));
-check("Affiliate publish validation requires methodology", actions.includes("Recommendation methodology is required when affiliate recommendations are attached or embedded."));
+check("Affiliate publish validation keeps standard disclosure automatic", actions.includes("standardAffiliateDisclosureIsRendered") && fs.readFileSync("src/components/content/content-renderer.tsx", "utf8").includes("may earn a commission at no additional cost"));
+check("Affiliate publish validation requires meaningful methodology", actions.includes("Add meaningful recommendation methodology") && actions.includes("hasMeaningfulMethodology"));
 check("Draft save auto-generates unique slug", actions.includes("async function uniqueSlug") && actions.includes("slugFromTitle"));
 check("Post action returns fieldErrors on failure", actions.includes("fieldErrors: parsed.errors"));
 

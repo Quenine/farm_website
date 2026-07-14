@@ -256,6 +256,28 @@ function addMarkdownImageErrors(errors: FieldErrors, markdown: string) {
   if (malformedCount > index) addError(errors, "content_markdown", "One or more inline images appear malformed. Use ![alt text](https://example.com/image.jpg). ");
 }
 
+
+function affiliateTokenSlugs(markdown: string) {
+  const slugs = new Set<string>();
+  const pattern = /\[\[affiliate:([^\]]+)\]\]/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(markdown)) !== null) {
+    const slug = match[1]?.trim();
+    if (slug) slugs.add(slug);
+  }
+  return [...slugs];
+}
+
+function hasMeaningfulMethodology(value: string | null) {
+  const text = value?.trim();
+  if (!text) return false;
+  return !/^(try it out|test|n\/?a|properly disclosed)$/i.test(text);
+}
+
+function relationOne<T>(value: T | T[] | null | undefined): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
 function relationLinks(payload: Record<string, unknown>) {
   const rawProducts = Array.isArray(payload.product_links) ? payload.product_links : [];
   const rawOffers = Array.isArray(payload.offer_links) ? payload.offer_links : [];
@@ -271,18 +293,18 @@ function relationLinks(payload: Record<string, unknown>) {
         custom_context: typeof row.custom_context === "string" && row.custom_context.trim() ? row.custom_context.trim() : null,
       } : null;
     }).filter(Boolean) as Array<{ product_id: string; sort_order: number; custom_context: string | null }>,
-    offerLinks: rawOffers.map((item, index) => {
+    offerLinks: Array.from(new Map(rawOffers.map((item, index) => {
       const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
       const offer_id = optionalUuid(row.offer_id);
-      return offer_id ? {
+      return offer_id ? [offer_id, {
         offer_id,
         sort_order: Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : index + 1,
         best_for: typeof row.best_for === "string" && row.best_for.trim() ? row.best_for.trim() : null,
         editorial_verdict: typeof row.editorial_verdict === "string" && row.editorial_verdict.trim() ? row.editorial_verdict.trim() : null,
-        pros: Array.isArray(row.pros) ? row.pros.filter((value): value is string => typeof value === "string") : null,
-        cons: Array.isArray(row.cons) ? row.cons.filter((value): value is string => typeof value === "string") : null,
-      } : null;
-    }).filter(Boolean) as Array<{ offer_id: string; sort_order: number; best_for: string | null; editorial_verdict: string | null; pros: string[] | null; cons: string[] | null }>,
+        pros: Array.isArray(row.pros) ? row.pros.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).map((value) => value.trim()) : null,
+        cons: Array.isArray(row.cons) ? row.cons.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).map((value) => value.trim()) : null,
+      }] as const : null;
+    }).filter(Boolean) as Array<readonly [string, { offer_id: string; sort_order: number; best_for: string | null; editorial_verdict: string | null; pros: string[] | null; cons: string[] | null }]>).values()),
   };
 }
 
@@ -322,13 +344,53 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
     addMarkdownImageErrors(errors, content_markdown);
   }
 
-  if (action === "publish") {
-    const hasAffiliateRecommendations = contains_affiliate_content || links.offerLinks.length > 0 || /\[\[(comparison|affiliate|recommend):/i.test(content_markdown);
-    if (hasAffiliateRecommendations && !custom_affiliate_disclosure) {
-      addError(errors, "custom_affiliate_disclosure", "Affiliate disclosure is required when affiliate recommendations are attached or embedded.");
+  const affiliateSlugs = affiliateTokenSlugs(content_markdown);
+  const hasComparisonToken = /\[\[comparison:post-offers\]\]/i.test(content_markdown);
+  const hasAffiliateRecommendations = contains_affiliate_content || links.offerLinks.length > 0 || affiliateSlugs.length > 0 || hasComparisonToken || /\[\[recommend:/i.test(content_markdown);
+  const standardAffiliateDisclosureIsRendered = true;
+
+  if (needsReviewFields && hasAffiliateRecommendations) {
+    if (!standardAffiliateDisclosureIsRendered) addError(errors, "contains_affiliate_content", "Standard affiliate disclosure must be available before review or publication.");
+    if (!hasMeaningfulMethodology(recommendation_methodology)) {
+      addError(errors, "recommendation_methodology", "Add meaningful recommendation methodology. Placeholder text such as Try it out, Test, N/A, or Properly disclosed is not accepted.");
     }
-    if (hasAffiliateRecommendations && !recommendation_methodology) {
-      addError(errors, "recommendation_methodology", "Recommendation methodology is required when affiliate recommendations are attached or embedded.");
+    if (hasComparisonToken && links.offerLinks.length < 2) {
+      addError(errors, "offer_links", "Attach at least two affiliate offers before inserting a comparison.");
+    }
+
+    const linkedOfferIds = [...new Set(links.offerLinks.map((link) => link.offer_id))];
+    const offerRows: Array<{ id: string; slug: string; title: string; is_active: boolean; affiliate_partners?: { name?: string; is_active?: boolean } | Array<{ name?: string; is_active?: boolean }> | null }> = [];
+    if (linkedOfferIds.length) {
+      const { data, error } = await supabase.from("affiliate_offers").select("id,slug,title,is_active,affiliate_partners(name,is_active)").in("id", linkedOfferIds);
+      if (error) throw new Error(error.message);
+      offerRows.push(...((data ?? []) as typeof offerRows));
+    }
+    if (affiliateSlugs.length) {
+      const missingSlugs = affiliateSlugs.filter((slug) => !offerRows.some((offer) => offer.slug === slug));
+      if (missingSlugs.length) {
+        const { data, error } = await supabase.from("affiliate_offers").select("id,slug,title,is_active,affiliate_partners(name,is_active)").in("slug", missingSlugs);
+        if (error) throw new Error(error.message);
+        offerRows.push(...((data ?? []) as typeof offerRows));
+      }
+    }
+
+    const offersById = new Map(offerRows.map((offer) => [offer.id, offer]));
+    const offersBySlug = new Map(offerRows.map((offer) => [offer.slug, offer]));
+    for (const offerId of linkedOfferIds) {
+      const offer = offersById.get(offerId);
+      if (!offer) addError(errors, "offer_links", "One attached affiliate offer no longer exists.");
+      else if (!offer.is_active) addError(errors, "offer_links", `Attached affiliate offer "${offer.title}" is inactive.`);
+      const partner = relationOne(offer?.affiliate_partners);
+      if (offer && partner?.is_active === false) addError(errors, "offer_links", `Affiliate partner for "${offer.title}" is inactive.`);
+    }
+    const attachedIds = new Set(linkedOfferIds);
+    for (const slug of affiliateSlugs) {
+      const offer = offersBySlug.get(slug);
+      if (!offer) addError(errors, "content_markdown", `Affiliate token references an unknown offer: ${slug}.`);
+      else if (!attachedIds.has(offer.id)) addError(errors, "offer_links", `Attach the affiliate offer used by token [[affiliate:${slug}]].`);
+      else if (!offer.is_active) addError(errors, "content_markdown", `Affiliate token [[affiliate:${slug}]] references an inactive offer.`);
+      const partner = relationOne(offer?.affiliate_partners);
+      if (offer && partner?.is_active === false) addError(errors, "content_markdown", `Affiliate token [[affiliate:${slug}]] belongs to an inactive partner.`);
     }
   }
 
@@ -366,7 +428,7 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
     post_type: enumField(payload, "post_type", postTypes, "guide"),
     audience_scope: enumField(payload, "audience_scope", audienceScopes, "nigeria"),
     is_featured: boolField(payload, "is_featured"),
-    contains_affiliate_content,
+    contains_affiliate_content: contains_affiliate_content || links.offerLinks.length > 0 || affiliateSlugs.length > 0,
     custom_affiliate_disclosure,
     recommendation_methodology,
     seo_title: stringField(payload, "seo_title") || null,

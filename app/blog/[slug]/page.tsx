@@ -11,6 +11,12 @@ import { contentMetadata } from "@/src/lib/content-config";
 
 export const dynamic = "force-dynamic";
 
+function hasMeaningfulMethodology(value: string | null) {
+  const text = value?.trim();
+  if (!text) return false;
+  return !/^(try it out|test|n\/?a|properly disclosed)$/i.test(text);
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const post = contentPublicConfig.hubEnabled ? await getPublishedPostBySlug(slug) : null;
@@ -24,6 +30,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const post = await getPublishedPostBySlug(slug);
   if (!post) notFound();
   const hasAffiliate = post.contains_affiliate_content || post.offers.length > 0;
+  const methodology = hasMeaningfulMethodology(post.recommendation_methodology) ? post.recommendation_methodology!.trim() : null;
   const articleJsonLd = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
@@ -52,7 +59,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
           {post.answer_summary ? <section className="rounded-lg bg-green-50 p-5"><h2 className="text-xl font-bold text-green-950">Answer summary</h2><p className="mt-2 leading-7 text-green-950">{post.answer_summary}</p></section> : null}
           {post.key_takeaways?.length ? <section className="rounded-lg bg-white p-5 shadow-sm"><h2 className="text-xl font-bold text-green-950">Key takeaways</h2><ul className="mt-3 ml-5 list-disc space-y-2 text-stone-700">{post.key_takeaways.map((item) => <li key={item}>{item}</li>)}</ul></section> : null}
           {hasAffiliate ? <AffiliateDisclosure post={post} /> : null}
-          {post.recommendation_methodology ? <section className="rounded-lg border border-green-900/10 bg-white p-5"><h2 className="text-xl font-bold text-green-950">Recommendation methodology</h2><p className="mt-2 text-sm leading-6 text-stone-700">{post.recommendation_methodology}</p></section> : null}
+          {methodology ? <details className="rounded-md border border-green-900/10 bg-white px-4 py-3 text-sm text-stone-700"><summary className="cursor-pointer font-bold text-green-950">How we selected these recommendations</summary><p className="mt-3 leading-6">{methodology}</p></details> : null}
         </div>
         <div className="mt-8"><SafeContentMarkdown post={post} /></div>
         {post.author ? <section className="mt-10 rounded-lg bg-white p-5 shadow-sm"><h2 className="text-xl font-bold text-green-950">About the author</h2><p className="mt-2 font-bold text-stone-900">{post.author.name}</p>{post.author.credentials_or_experience || post.author.bio ? <p className="mt-2 text-sm leading-6 text-stone-700">{post.author.credentials_or_experience ?? post.author.bio}</p> : null}</section> : null}

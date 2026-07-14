@@ -246,7 +246,7 @@ export async function loadAdminOptions() {
     contentPublicConfig.hubEnabled ? supabase.from("content_sources").select("id,title,url,is_active").order("title") : Promise.resolve({ data: [] }),
     contentPublicConfig.hubEnabled ? supabase.from("products").select("id,name,slug,price,unit,status,stock_quantity,product_media(url,alt_text,is_primary)").order("name") : Promise.resolve({ data: [] }),
     contentPublicConfig.affiliateEnabled ? supabase.from("affiliate_partners").select("id,name,slug,is_active").order("name") : Promise.resolve({ data: [] }),
-    contentPublicConfig.affiliateEnabled ? supabase.from("affiliate_offers").select("id,title,slug,is_active").order("title") : Promise.resolve({ data: [] }),
+    contentPublicConfig.affiliateEnabled ? supabase.from("affiliate_offers").select("id,title,slug,short_description,recommendation_basis,available_regions,is_active,affiliate_partners(name,slug,is_active)").order("title") : Promise.resolve({ data: [] }),
     contentPublicConfig.hubEnabled ? supabase.from("content_posts").select("id,title,slug,status").order("updated_at", { ascending: false }).limit(200) : Promise.resolve({ data: [] }),
   ]);
   return {

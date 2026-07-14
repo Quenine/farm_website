@@ -7,6 +7,7 @@ function check(name, condition) { if (!condition) throw new Error("FAIL " + name
 const editor = file("src/components/content-admin/post-admin.tsx");
 const actions = file("app/admin/(protected)/content/actions.ts");
 const renderer = file("src/components/content/content-renderer.tsx");
+const affiliateRecommendation = file("src/components/content/affiliate-recommendation.tsx");
 const article = file("app/blog/[slug]/page.tsx");
 const share = file("src/components/content/article-share.tsx");
 const content = file("src/lib/content.ts");
@@ -42,3 +43,20 @@ check("Affiliate links route through recommend route", renderer.includes('/recom
 check("Affiliate redirect validates active offer and partner", recommend.includes('getActiveAffiliateOffer') && content.includes('partner.is_active === false'));
 check("Affiliate redirect ignores logging failures", recommend.includes('Redirects must continue even if optional click logging fails'));
 check("content:publishing-checks script is registered", pkg.scripts?.["content:publishing-checks"] === "node scripts/check-content-publishing.mjs");
+check("Slim article disclosure renders with standard wording", renderer.includes("Disclosure</Link>: This article may contain") && renderer.includes("/affiliate-disclosure") && renderer.includes("may earn a commission at no additional cost"));
+check("Methodology is collapsed by default", article.includes("<details") && article.includes("How we selected these recommendations") && !article.includes("Recommendation methodology</h2>"));
+check("Placeholder methodology is rejected before publication", actions.includes("hasMeaningfulMethodology") && actions.includes("Try it out, Test, N/A, or Properly disclosed"));
+check("Compact affiliate recommendation renders", affiliateRecommendation.includes("Affiliate recommendation") && affiliateRecommendation.includes("View details") && affiliateRecommendation.includes("details"));
+check("View details expands without navigating", affiliateRecommendation.includes("<summary") && affiliateRecommendation.includes("onToggle") && affiliateRecommendation.includes("affiliate_details_expand"));
+check("Check current price uses recommend route", affiliateRecommendation.includes("/recommend/$") || affiliateRecommendation.includes("/recommend/"));
+check("External merchant link is labelled", affiliateRecommendation.includes("External merchant link") && renderer.includes("External merchant link"));
+check("Offer picker lists and searches affiliate offers", editor.includes("Affiliate Recommendation") && editor.includes("Search offers") && editor.includes("Filter by partner"));
+check("Offer picker attaches offers and inserts token", editor.includes("attachOffer") && editor.includes("insertOfferRecommendation") && editor.includes("[[affiliate:"));
+check("Duplicate affiliate relationships are avoided", actions.includes("new Map(rawOffers.map") && editor.includes("!offerIds.includes(id)"));
+check("Comparison requires at least two offers", editor.includes("Attach at least two affiliate offers before inserting a comparison") && actions.includes("hasComparisonToken && links.offerLinks.length < 2"));
+check("Offer relationships carry article-specific fields", editor.includes("best_for") && editor.includes("editorial_verdict") && editor.includes("pros: lineList") && actions.includes("content_post_affiliate_offers"));
+check("Inactive offers and partners are blocked for review and publish", actions.includes("is inactive") && actions.includes("belongs to an inactive partner"));
+check("Affiliate admin explains partner offer redirect and commission model", file("app/admin/(protected)/affiliate/page.tsx").includes("An affiliate partner is the merchant") && file("app/admin/(protected)/affiliate/page.tsx").includes("/recommend/[slug]") && file("app/admin/(protected)/affiliate/page.tsx").includes("records outbound clicks only"));
+check("Offer test redirect action exists", editor.includes("Test redirect") && editor.includes("Testing may create an affiliate click where consent permits"));
+check("Internal commission notes are never public", !renderer.includes("internal_commission_note") && !affiliateRecommendation.includes("internal_commission_note"));
+check("No commission or payout system was introduced", !renderer.includes("payout") && !affiliateRecommendation.includes("payout balance"));

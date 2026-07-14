@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import { ArrowRight, ExternalLink } from "lucide-react";
+import { AffiliateRecommendation } from "@/src/components/content/affiliate-recommendation";
 import { ContentSubscribeForm } from "@/src/components/content/subscribe-form";
 import { siteConfig, siteContact } from "@/src/config/site";
 import type { AffiliateOffer, ContentPost } from "@/src/lib/content";
@@ -56,45 +57,20 @@ function MarkdownChunk({ value }: { value: string }) {
 }
 
 export function AffiliateDisclosure({ post }: { post?: ContentPost }) {
-  const text = post?.custom_affiliate_disclosure || `Some recommendations on this page use affiliate links. ${siteConfig.name} may earn a commission when you purchase through those links, at no additional cost to you.`;
+  const custom = post?.custom_affiliate_disclosure?.trim();
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-      <p className="font-bold">Affiliate disclosure</p>
-      <p className="mt-1">{text}</p>
+    <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+      <p>
+        <Link href="/affiliate-disclosure" className="font-bold underline underline-offset-4">Disclosure</Link>: This article may contain{" "}
+        <Link href="/affiliate-disclosure" className="font-bold underline underline-offset-4">affiliate links</Link>. {siteConfig.name} may earn a commission at no additional cost to you.
+      </p>
+      {custom ? <p className="mt-1 text-amber-900">{custom}</p> : null}
     </div>
   );
 }
 
 function OfferCard({ offer, post }: { offer: AffiliateOffer; post: ContentPost }) {
-  const basis = offer.recommendation_basis.replaceAll("_", " ");
-  return (
-    <article className="rounded-lg border border-green-900/10 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">{offer.partner?.name ?? "Affiliate partner"}</p>
-          <h3 className="mt-2 text-xl font-bold text-green-950">{offer.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-stone-700">{offer.short_description}</p>
-          {offer.best_for ? <p className="mt-3 text-sm font-bold text-green-900">Best for: {offer.best_for}</p> : null}
-        </div>
-        <Link href={`/recommend/${offer.slug}?post=${encodeURIComponent(post.slug)}`} rel="sponsored nofollow noopener noreferrer" className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-green-800 px-5 text-sm font-bold text-white hover:bg-green-900">
-          {offer.button_label || "Check current price"}
-          <ExternalLink size={16} />
-        </Link>
-      </div>
-      <dl className="mt-4 grid gap-3 text-sm text-stone-700 md:grid-cols-3">
-        <div><dt className="font-bold text-stone-950">Basis</dt><dd className="capitalize">{basis}</dd></div>
-        <div><dt className="font-bold text-stone-950">Regions</dt><dd>{offer.available_regions?.join(", ") || "Check merchant availability"}</dd></div>
-        <div><dt className="font-bold text-stone-950">Price freshness</dt><dd>{offer.price_last_checked_at ? `Checked ${new Date(offer.price_last_checked_at).toLocaleDateString("en-NG")}` : "Confirm on merchant site"}</dd></div>
-      </dl>
-      {offer.pros?.length || offer.cons?.length ? (
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {offer.pros?.length ? <div><p className="font-bold text-green-950">Pros</p><ul className="mt-2 ml-5 list-disc text-sm text-stone-700">{offer.pros.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
-          {offer.cons?.length ? <div><p className="font-bold text-green-950">Cons</p><ul className="mt-2 ml-5 list-disc text-sm text-stone-700">{offer.cons.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
-        </div>
-      ) : null}
-      <p className="mt-4 text-xs leading-5 text-stone-500">Affiliate link. The merchant controls checkout, price, availability, and commission tracking.</p>
-    </article>
-  );
+  return <AffiliateRecommendation offer={offer} postSlug={post.slug} />;
 }
 
 function ProductBlock({ slug, post }: { slug: string; post: ContentPost }) {
@@ -128,7 +104,7 @@ function ComparisonBlock({ post }: { post: ContentPost }) {
               <td className="px-4 py-3">{offer.best_for ?? "Review merchant details"}</td>
               <td className="px-4 py-3 capitalize">{offer.recommendation_basis.replaceAll("_", " ")}</td>
               <td className="px-4 py-3">{offer.editorial_verdict ?? "No fabricated rating or score."}</td>
-              <td className="px-4 py-3"><Link href={`/recommend/${offer.slug}?post=${encodeURIComponent(post.slug)}`} rel="sponsored nofollow noopener noreferrer" className="font-bold text-green-800 underline">Visit merchant</Link></td>
+              <td className="px-4 py-3"><Link href={`/recommend/${offer.slug}?post=${encodeURIComponent(post.slug)}`} target="_blank" rel="sponsored nofollow noopener noreferrer" className="inline-flex items-center gap-1 font-bold text-green-800 underline">Check current price <ExternalLink size={14} aria-hidden /><span className="sr-only">External merchant link</span></Link></td>
             </tr>
           ))}
         </tbody>
