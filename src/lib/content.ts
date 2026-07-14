@@ -294,6 +294,7 @@ export const getContentIndexData = cache(async (filters: ContentListFilters = {}
     .eq("status", "published")
     .not("published_at", "is", null)
     .lte("published_at", new Date().toISOString())
+    .is("deleted_at", null)
     .order("is_featured", { ascending: false })
     .order("published_at", { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
@@ -333,6 +334,7 @@ export async function getPublishedPostBySlug(slug: string) {
     .eq("status", "published")
     .not("published_at", "is", null)
     .lte("published_at", new Date().toISOString())
+    .is("deleted_at", null)
     .maybeSingle();
   if (shouldHideSupabaseError(error)) return null;
   if (error) throw new Error(`Unable to load article: ${error.message}`);
@@ -347,6 +349,7 @@ export async function getActiveAffiliateOffer(slug: string) {
     .select("id, title, slug, destination_url, is_active, affiliate_partners ( id, name, slug, website_url, is_active )")
     .eq("slug", slug)
     .eq("is_active", true)
+    .is("deleted_at", null)
     .maybeSingle();
   if (shouldHideSupabaseError(error)) return null;
   if (error) throw new Error(`Unable to load affiliate offer: ${error.message}`);
@@ -361,7 +364,7 @@ export async function getContentAdminSummary() {
   }
   const supabase = createContentAdminSupabaseClient();
   const [posts, affiliateClicks, productClicks, subscribers, orders] = await Promise.all([
-    supabase.from("content_posts").select("status, content_format, contains_affiliate_content"),
+    supabase.from("content_posts").select("status, content_format, contains_affiliate_content").is("deleted_at", null),
     supabase.from("affiliate_clicks").select("id", { count: "exact", head: true }),
     supabase.from("content_product_clicks").select("id", { count: "exact", head: true }),
     supabase.from("content_subscribers").select("id", { count: "exact", head: true }).eq("status", "active"),

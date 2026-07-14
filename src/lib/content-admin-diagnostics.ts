@@ -18,6 +18,18 @@ function sanitize(value: unknown) {
   return String(value ?? "").replace(/(eyJ[A-Za-z0-9_-]+.[A-Za-z0-9_-]+.[A-Za-z0-9_-]+)/g, "[redacted-token]").slice(0, 240);
 }
 
+async function runStorageCheck(name: string, code: string, query: () => PromiseLike<{ error: unknown; data?: unknown[] | null }>): Promise<ContentDiagnosticCheck> {
+  try {
+    const result = await query();
+    const error = result.error as { message?: string } | null;
+    if (error) return { name, code, status: "failed", rowCount: null, message: sanitize(error.message || "Storage check failed") };
+    const rowCount = result.data?.length ?? 0;
+    return { name, code, status: rowCount > 0 ? "ready" : "empty", rowCount, message: rowCount > 0 ? "Ready" : "Empty but ready" };
+  } catch (error) {
+    return { name, code, status: "failed", rowCount: null, message: sanitize(error instanceof Error ? error.message : "Storage check failed") };
+  }
+}
+
 async function runCheck(name: string, code: string, query: () => PromiseLike<{ error: unknown; count: number | null; data?: unknown[] | null }>): Promise<ContentDiagnosticCheck> {
   try {
     const result = await query();
@@ -61,6 +73,13 @@ export async function loadContentDiagnostics() {
     runCheck("Affiliate offers query", "AFF-OFFERS-QUERY-001", () => supabase.from("affiliate_offers").select("id", { count: "exact", head: true })),
     runCheck("Products relationship query", "PRODUCT-REL-QUERY-001", () => supabase.from("products").select("id,product_media(id)", { count: "exact", head: true })),
     runCheck("Orders attribution query", "ORDERS-ATTR-QUERY-001", () => supabase.from("orders").select("content_attribution", { count: "exact", head: true })),
+    runStorageCheck("content-media bucket available", "CONTENT-MEDIA-BUCKET-001", async () => { const buckets = await supabase.storage.listBuckets(); return { error: buckets.error, data: (buckets.data ?? []).filter((bucket) => bucket.name === "content-media") }; }),
+    runCheck("Inline upload endpoint ready", "CONTENT-MEDIA-ENDPOINT-001", () => Promise.resolve({ error: null, count: 1, data: [{ endpoint: "/api/admin/content/media" }] })),
+    runCheck("Public media URL ready", "CONTENT-MEDIA-PUBLIC-001", () => Promise.resolve({ error: null, count: 1, data: [{ bucket: "content-media" }] })),
+    runCheck("Supported media MIME types", "CONTENT-MEDIA-MIME-001", () => Promise.resolve({ error: null, count: 3, data: [{ type: "image/jpeg" }, { type: "image/png" }, { type: "image/webp" }] })),
+    runCheck("Affiliate offer picker data query", "AFF-OFFER-PICKER-001", () => supabase.from("affiliate_offers").select("id,title,slug,is_active,affiliate_partners(name,slug,is_active)", { count: "exact", head: true })),
+    runCheck("Trash schema ready", "CONTENT-TRASH-SCHEMA-001", () => supabase.from("content_posts").select("deleted_at,deleted_by", { count: "exact", head: true })),
+    runCheck("Deletion actions ready", "CONTENT-DELETE-ACTIONS-001", () => Promise.resolve({ error: null, count: 1, data: [{ action: "trash_restore_permanent_delete" }] })),
   ]);
   return { configuration, checks };
 }

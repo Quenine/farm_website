@@ -11,6 +11,12 @@ import type { AffiliateOffer, ContentPost } from "@/src/lib/content";
 import { readingMinutes } from "@/src/lib/content";
 import { formatNaira } from "@/src/lib/format";
 
+function meaningfulDisclosureText(value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text || /^(try it out|test|n\/?a|properly disclosed)$/i.test(text)) return null;
+  return text;
+}
+
 const tokenPattern = /^\[\[(affiliate|product|comparison|video|sources|newsletter|callout|tool):?([^\]]*)\]\]$/;
 
 function MarkdownChunk({ value }: { value: string }) {
@@ -57,7 +63,7 @@ function MarkdownChunk({ value }: { value: string }) {
 }
 
 export function AffiliateDisclosure({ post }: { post?: ContentPost }) {
-  const custom = post?.custom_affiliate_disclosure?.trim();
+  const custom = meaningfulDisclosureText(post?.custom_affiliate_disclosure);
   return (
     <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
       <p>

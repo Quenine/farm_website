@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { saveAdminEntityAction, toggleAdminEntityAction } from "@/app/admin/(protected)/content/actions";
+import { moveAdminEntityToTrashAction, permanentlyDeleteAdminEntityAction, restoreAdminEntityAction, saveAdminEntityAction, toggleAdminEntityAction } from "@/app/admin/(protected)/content/actions";
 import type { AdminEntity, AdminRecord } from "@/src/lib/content-admin";
 
 type Field = { name: string; label: string; type?: "text" | "textarea" | "number" | "url" | "date" | "checkbox" | "select" | "json-text"; required?: boolean; options?: Array<{ label: string; value: string }>; help?: string };
@@ -46,17 +46,20 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
   const [message, setMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [trashFilter, setTrashFilter] = useState("active");
   const [isPending, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
+      if (trashFilter === "active" && item.deleted_at) return false;
+      if (trashFilter === "trash" && !item.deleted_at) return false;
       if (activeFilter === "active" && item.is_active !== true) return false;
       if (activeFilter === "inactive" && item.is_active !== false) return false;
       if (!q) return true;
       return Object.values(item).some((value) => stringValue(value).toLowerCase().includes(q));
     });
-  }, [activeFilter, items, search]);
+  }, [activeFilter, items, search, trashFilter]);
 
   const openCreate = () => {
     if (createDisabledReason) { setMessage(createDisabledReason); return; }
@@ -98,6 +101,37 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
     });
   };
 
+
+  const moveToTrash = (record: AdminRecord) => {
+    const name = stringValue(record.title || record.name || record.slug || record.id);
+    if (!window.confirm("Move '" + name + "' to Trash? This is reversible and public redirects or new selection will be disabled where applicable.")) return;
+    startTransition(async () => {
+      const result = await moveAdminEntityToTrashAction(entity, String(record.id), name);
+      setMessage(result.message);
+      if (result.success) setItems((current) => current.map((item) => item.id === record.id ? { ...item, deleted_at: new Date().toISOString(), is_active: false } : item));
+    });
+  };
+
+  const restore = (record: AdminRecord) => {
+    const name = stringValue(record.title || record.name || record.slug || record.id);
+    if (!window.confirm("Restore '" + name + "' from Trash? It will remain inactive unless edited or reactivated.")) return;
+    startTransition(async () => {
+      const result = await restoreAdminEntityAction(entity, String(record.id), false);
+      setMessage(result.message);
+      if (result.success) setItems((current) => current.map((item) => item.id === record.id ? { ...item, deleted_at: null } : item));
+    });
+  };
+
+  const permanentDelete = (record: AdminRecord) => {
+    const name = stringValue(record.title || record.name || record.slug || record.id);
+    const confirmation = window.prompt("Permanently delete '" + name + "'? This cannot be undone. Type DELETE to continue.") ?? "";
+    startTransition(async () => {
+      const result = await permanentlyDeleteAdminEntityAction(entity, String(record.id), confirmation);
+      setMessage(result.message);
+      if (result.success) setItems((current) => current.filter((item) => item.id !== record.id));
+    });
+  };
+
   const updateDraft = (key: string, value: string | boolean) => {
     setEditing((current) => {
       if (!current) return current;
@@ -118,9 +152,7 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px]">
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={searchPlaceholder} className="h-11 rounded-lg border border-stone-200 px-4 text-sm focus:border-green-700 focus:outline-none focus:ring-2 focus:ring-green-700/20" />
-          <select value={activeFilter} onChange={(event) => setActiveFilter(event.target.value)} className="h-11 rounded-lg border border-stone-200 px-4 text-sm">
-            <option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option>
-          </select>
+          <div className="grid gap-2 sm:grid-cols-2"><select value={activeFilter} onChange={(event) => setActiveFilter(event.target.value)} className="h-11 rounded-lg border border-stone-200 px-4 text-sm"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select><select value={trashFilter} onChange={(event) => setTrashFilter(event.target.value)} className="h-11 rounded-lg border border-stone-200 px-4 text-sm"><option value="active">Active records</option><option value="trash">Trash</option><option value="all">All records</option></select></div>
         </div>
       </div>
       {loadError ? <div role="alert" className="rounded-lg bg-amber-50 p-4 text-sm font-bold text-amber-900">{loadError}</div> : null}
@@ -132,7 +164,7 @@ export function CrudManager({ entity, title, createLabel, records, fields, colum
         </div>
         <button disabled={isPending} className="h-11 w-fit rounded-full bg-green-800 px-5 text-sm font-bold text-white disabled:opacity-60">{isPending ? "Saving..." : "Save"}</button>
       </form> : null}
-      {filtered.length ? <div className="overflow-hidden rounded-lg bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-green-950 text-white"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 font-semibold">{column.label}</th>)}<th className="px-4 py-3 font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-stone-100">{filtered.map((record) => <tr key={String(record.id)} className="text-stone-700">{columns.map((column) => <td key={column.key} className="px-4 py-4 align-top">{columnValue(record, column)}</td>)}<td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setEditing(record)} className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-800">Edit</button>{"is_active" in record ? <button type="button" onClick={() => toggle(record)} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">{record.is_active ? "Deactivate" : "Activate"}</button> : null}</div></td></tr>)}</tbody></table></div></div> : <div className="rounded-lg bg-white p-8 text-center shadow-sm"><h3 className="text-xl font-bold text-green-950">{emptyTitle}</h3><p className="mt-2 text-sm text-stone-600">{emptyBody}</p>{createDisabledReason ? null : <button type="button" onClick={openCreate} className="mt-4 rounded-full bg-green-800 px-5 py-2 text-sm font-bold text-white">{createLabel}</button>}</div>}
+      {filtered.length ? <div className="overflow-hidden rounded-lg bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-green-950 text-white"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 font-semibold">{column.label}</th>)}<th className="px-4 py-3 font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-stone-100">{filtered.map((record) => <tr key={String(record.id)} className="text-stone-700">{columns.map((column) => <td key={column.key} className="px-4 py-4 align-top">{columnValue(record, column)}</td>)}<td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setEditing(record)} className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-800">Edit</button>{"is_active" in record && !record.deleted_at ? <button type="button" onClick={() => toggle(record)} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">{record.is_active ? "Deactivate" : "Activate"}</button> : null}{record.deleted_at ? <><button type="button" onClick={() => restore(record)} className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-800">Restore</button><button type="button" onClick={() => permanentDelete(record)} className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-800">Permanently Delete</button></> : <button type="button" onClick={() => moveToTrash(record)} className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-700">Move to Trash</button>}</div></td></tr>)}</tbody></table></div></div> : <div className="rounded-lg bg-white p-8 text-center shadow-sm"><h3 className="text-xl font-bold text-green-950">{emptyTitle}</h3><p className="mt-2 text-sm text-stone-600">{emptyBody}</p>{createDisabledReason ? null : <button type="button" onClick={openCreate} className="mt-4 rounded-full bg-green-800 px-5 py-2 text-sm font-bold text-white">{createLabel}</button>}</div>}
     </div>
   );
 }

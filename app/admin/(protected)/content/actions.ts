@@ -187,10 +187,73 @@ export async function toggleAdminEntityAction(entity: keyof typeof schemas, id: 
   }
 }
 
-type PostAction = "draft" | "continue" | "review" | "publish" | "unpublish" | "archive";
+
+export async function moveAdminEntityToTrashAction(entity: keyof typeof schemas, id: string, name: string): Promise<AdminMutationState> {
+  try {
+    await ensureContentAdmin(entity as AdminEntity);
+    const parsedId = z.string().uuid().parse(id);
+    const table = entityTables[entity as AdminEntity];
+    if (!table) throw new Error("Unsupported entity.");
+    const supabase = createContentAdminSupabaseClient();
+    const updates: Record<string, unknown> = { deleted_at: new Date().toISOString(), deleted_by: "admin" };
+    if (["authors", "categories", "tags", "sources", "partners", "offers", "videos"].includes(entity)) updates.is_active = false;
+    if (entity === "partners") await supabase.from("affiliate_offers").update({ is_active: false }).eq("partner_id", parsedId);
+    const { error } = await supabase.from(table).update(updates).eq("id", parsedId);
+    if (error) throw new Error(error.message);
+    revalidateContentAdmin();
+    return { ok: true, success: true, message: "Moved " + (name || "record") + " to Trash. This is reversible.", fieldErrors: {} };
+  } catch (error) {
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to move record to Trash.", fieldErrors: {} };
+  }
+}
+
+export async function restoreAdminEntityAction(entity: keyof typeof schemas, id: string, reactivate = false): Promise<AdminMutationState> {
+  try {
+    await ensureContentAdmin(entity as AdminEntity);
+    const parsedId = z.string().uuid().parse(id);
+    const table = entityTables[entity as AdminEntity];
+    if (!table) throw new Error("Unsupported entity.");
+    const updates: Record<string, unknown> = { deleted_at: null, deleted_by: null };
+    if (reactivate && ["authors", "categories", "tags", "sources", "offers", "videos"].includes(entity)) updates.is_active = true;
+    const supabase = createContentAdminSupabaseClient();
+    const { error } = await supabase.from(table).update(updates).eq("id", parsedId);
+    if (error) throw new Error(error.message);
+    revalidateContentAdmin();
+    return { ok: true, success: true, message: reactivate ? "Restored and activated." : "Restored from Trash.", fieldErrors: {} };
+  } catch (error) {
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to restore record.", fieldErrors: {} };
+  }
+}
+
+export async function permanentlyDeleteAdminEntityAction(entity: keyof typeof schemas, id: string, confirmation: string): Promise<AdminMutationState> {
+  try {
+    await ensureContentAdmin(entity as AdminEntity);
+    if (confirmation !== "DELETE") return { ok: false, success: false, message: "Type DELETE to permanently delete this unused record.", fieldErrors: { confirmation: ["Type DELETE to continue."] } };
+    const parsedId = z.string().uuid().parse(id);
+    const table = entityTables[entity as AdminEntity];
+    if (!table) throw new Error("Unsupported entity.");
+    const supabase = createContentAdminSupabaseClient();
+    if (entity === "offers") {
+      const [posts, clicks] = await Promise.all([supabase.from("content_post_affiliate_offers").select("offer_id", { count: "exact", head: true }).eq("offer_id", parsedId), supabase.from("affiliate_clicks").select("offer_id", { count: "exact", head: true }).eq("offer_id", parsedId)]);
+      if ((posts.count ?? 0) > 0 || (clicks.count ?? 0) > 0) throw new Error("This offer has article usage or click history, so permanent deletion is blocked.");
+    }
+    if (entity === "partners") {
+      const offers = await supabase.from("affiliate_offers").select("partner_id", { count: "exact", head: true }).eq("partner_id", parsedId);
+      if ((offers.count ?? 0) > 0) throw new Error("Handle this partner's offers before permanently deleting the partner.");
+    }
+    const { error } = await supabase.from(table).delete().eq("id", parsedId).not("deleted_at", "is", null);
+    if (error) throw new Error(error.message);
+    revalidateContentAdmin();
+    return { ok: true, success: true, message: "Permanently deleted unused record.", fieldErrors: {} };
+  } catch (error) {
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to permanently delete record.", fieldErrors: {} };
+  }
+}
+
+type PostAction = "draft" | "continue" | "review" | "publish" | "unpublish" | "archive" | "trash" | "restore";
 type FieldErrors = Record<string, string[]>;
 
-const postActions = ["draft", "continue", "review", "publish", "unpublish", "archive"] as const;
+const postActions = ["draft", "continue", "review", "publish", "unpublish", "archive", "trash", "restore"] as const;
 const contentFormats = ["article", "video_companion", "comparison", "resource_guide", "case_study", "farm_field_note"] as const;
 const postTypes = ["guide", "tutorial", "buying_guide", "review", "comparison", "case_study", "market_insight", "farm_update"] as const;
 const audienceScopes = ["nigeria", "africa", "global"] as const;
@@ -268,6 +331,11 @@ function affiliateTokenSlugs(markdown: string) {
   return [...slugs];
 }
 
+function isMeaninglessAffiliateText(value: string | null) {
+  const text = value?.trim();
+  return Boolean(text && /^(try it out|test|n\/?a|properly disclosed)$/i.test(text));
+}
+
 function hasMeaningfulMethodology(value: string | null) {
   const text = value?.trim();
   if (!text) return false;
@@ -323,7 +391,8 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
   const featured_image_alt = stringField(payload, "featured_image_alt") || null;
   const clientPublishedAt = stringField(payload, "published_at") || null;
   const contains_affiliate_content = boolField(payload, "contains_affiliate_content");
-  const custom_affiliate_disclosure = stringField(payload, "custom_affiliate_disclosure") || null;
+  const rawCustomAffiliateDisclosure = stringField(payload, "custom_affiliate_disclosure") || null;
+  const custom_affiliate_disclosure = isMeaninglessAffiliateText(rawCustomAffiliateDisclosure) ? null : rawCustomAffiliateDisclosure;
   const recommendation_methodology = stringField(payload, "recommendation_methodology") || null;
   const external_canonical_url = stringField(payload, "external_canonical_url") || null;
   const links = relationLinks(payload);
@@ -351,8 +420,11 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
 
   if (needsReviewFields && hasAffiliateRecommendations) {
     if (!standardAffiliateDisclosureIsRendered) addError(errors, "contains_affiliate_content", "Standard affiliate disclosure must be available before review or publication.");
-    if (!hasMeaningfulMethodology(recommendation_methodology)) {
-      addError(errors, "recommendation_methodology", "Add meaningful recommendation methodology. Placeholder text such as Try it out, Test, N/A, or Properly disclosed is not accepted.");
+    const usesPersonallyTestedClaim = /personally_tested/i.test(content_markdown) || links.offerLinks.some((link) => { void link; return false; });
+    if ((hasComparisonToken || usesPersonallyTestedClaim) && !hasMeaningfulMethodology(recommendation_methodology)) {
+      addError(errors, "recommendation_methodology", "Add meaningful recommendation methodology for comparisons or personally tested recommendations. Placeholder text such as Try it out, Test, N/A, or Properly disclosed is not accepted.");
+    } else if (isMeaninglessAffiliateText(recommendation_methodology)) {
+      addError(errors, "recommendation_methodology", "Remove placeholder methodology such as Try it out, Test, N/A, or Properly disclosed.");
     }
     if (hasComparisonToken && links.offerLinks.length < 2) {
       addError(errors, "offer_links", "Attach at least two affiliate offers before inserting a comparison.");
@@ -408,7 +480,10 @@ async function validatePostPayload(payload: Record<string, unknown>, supabase: R
     return { ok: false as const, errors: { slug: ["Changing a published slug may break the old public URL. Unpublish first if a slug change is required."] } };
   }
 
-  const status = action === "publish" ? "published" : action === "review" ? "review" : action === "archive" ? "archived" : action === "unpublish" ? "draft" : existing?.status === "published" ? "published" : "draft";
+  if (action === "trash" && existing?.status === "published") {
+    return { ok: false as const, errors: { status: ["Published posts must be unpublished before they can be moved to Trash."] } };
+  }
+  const status = action === "publish" ? "published" : action === "review" ? "review" : action === "archive" || action === "trash" ? "archived" : action === "unpublish" || action === "restore" ? "draft" : existing?.status === "published" ? "published" : "draft";
   const published_at = status === "published" ? (existing?.published_at ?? new Date().toISOString()) : clientPublishedAt;
   return { ok: true as const, value: {
     id,
@@ -473,6 +548,8 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
       external_canonical_url: value.external_canonical_url,
       published_at: value.published_at,
       reviewed_at: value.status === "review" || value.status === "published" ? new Date().toISOString() : null,
+      ...(value.action === "trash" ? { deleted_at: new Date().toISOString(), deleted_by: "admin" } : {}),
+      ...(value.action === "restore" ? { deleted_at: null, deleted_by: null } : {}),
     };
     const oldSlugResult = value.id ? await supabase.from("content_posts").select("slug,status,published_at").eq("id", value.id).single() : null;
     if (oldSlugResult?.error) throw new Error(oldSlugResult.error.message);
@@ -504,6 +581,8 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
       publish: "Article published.",
       unpublish: "Draft saved.",
       archive: "Article archived.",
+      trash: "Article moved to Trash.",
+      restore: "Article restored from Trash.",
     };
     return { ok: true, success: true, message: messages[value.action], id: postId, post: { id: savedPost.id, slug: savedPost.slug, status: savedPost.status, publishedAt: savedPost.published_at, updatedAt: savedPost.updated_at }, fieldErrors: {} };
   } catch (error) {

@@ -27,14 +27,14 @@ check("Content mutation revalidates article path", actions.includes('paths.add(`
 check("Content mutation revalidates old article path", actions.includes('paths.add(`/blog/${input.oldSlug}`)'));
 check("Content mutation revalidates category and tag pages", actions.includes('/blog/category/${category.slug}') && actions.includes('/blog/tag/${tag.slug}'));
 check("Content mutation revalidates resources videos feed and sitemap", actions.includes('"/resources"') && actions.includes('"/videos"') && actions.includes('"/blog/feed.xml"') && actions.includes('"/sitemap.xml"'));
-check("Unpublish removes public access through status change", actions.includes('action === "unpublish" ? "draft"') && content.includes('.eq("status", "published")'));
+check("Unpublish removes public access through status change", actions.includes('action === "unpublish" || action === "restore" ? "draft"') && content.includes('.eq("status", "published")'));
 check("Public article query requires persisted slug and published date", content.includes('.eq("slug", slug)') && content.includes('.lte("published_at", new Date().toISOString())'));
 check("Standard Markdown images render", renderer.includes('allowedElements={["p"') && renderer.includes('"img"') && renderer.includes('figcaption'));
 check("Markdown image title renders as caption", renderer.includes('<figcaption'));
 check("Unsafe image protocols are blocked", renderer.includes('/^(https?:|\\/)/i.test') && actions.includes('Inline image ${index} uses an unsafe'));
-check("Inline uploaded image inserts Markdown", editor.includes('Upload and Insert') && editor.includes('![${uploadAlt.trim()}]'));
-check("Inline upload validates server-side MIME and size", actions.includes('image/jpeg') && actions.includes('image/webp') && actions.includes('contentImageMaxBytes'));
-check("Inline upload uses content-media bucket", actions.includes('.from("content-media")'));
+check("Inline uploaded image inserts Markdown", editor.includes('Upload and Insert') && editor.includes('result.media.url') && editor.includes('uploadAlt.trim()'));
+check("Inline upload validates server-side MIME and size", file("app/api/admin/content/media/route.ts").includes('image/jpeg') && file("app/api/admin/content/media/route.ts").includes('image/webp') && file("app/api/admin/content/media/route.ts").includes('contentImageMaxBytes'));
+check("Inline upload uses content-media bucket", file("app/api/admin/content/media/route.ts").includes('.from("content-media")'));
 check("Share uses navigator.share where supported", share.includes('navigator.share'));
 check("Share fallback copies link", share.includes('clipboard') && share.includes('Article link copied.'));
 check("Share tracks share_content", share.includes('trackShareContent'));

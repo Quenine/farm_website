@@ -12,14 +12,14 @@ export type AdminEntity = "authors" | "categories" | "tags" | "sources" | "posts
 export type AdminRecord = Record<string, unknown>;
 
 const tables: Record<AdminEntity, string> = {
-  authors: "content_authors",
-  categories: "content_categories",
-  tags: "content_tags",
-  sources: "content_sources",
-  posts: "content_posts",
-  partners: "affiliate_partners",
-  offers: "affiliate_offers",
-  videos: "content_videos",
+  authors: "content_authors,deleted_at,deleted_by",
+  categories: "content_categories,deleted_at,deleted_by",
+  tags: "content_tags,deleted_at,deleted_by",
+  sources: "content_sources,deleted_at,deleted_by",
+  posts: "content_posts,deleted_at,deleted_by",
+  partners: "affiliate_partners,deleted_at,deleted_by",
+  offers: "affiliate_offers,deleted_at,deleted_by",
+  videos: "content_videos,deleted_at,deleted_by",
   subscribers: "content_subscribers",
 };
 
@@ -240,14 +240,14 @@ export async function loadAdminOptions() {
   if (!hasAdminSupabaseConfig()) return { authors: [], categories: [], tags: [], sources: [], products: [], partners: [], offers: [], posts: [] };
   const supabase = createContentAdminSupabaseClient();
   const [authors, categories, tags, sources, products, partners, offers, posts] = await Promise.all([
-    contentPublicConfig.hubEnabled ? supabase.from("content_authors").select("id,name,slug,is_active").order("name") : Promise.resolve({ data: [] }),
-    contentPublicConfig.hubEnabled ? supabase.from("content_categories").select("id,name,slug,is_active").order("sort_order").order("name") : Promise.resolve({ data: [] }),
-    contentPublicConfig.hubEnabled ? supabase.from("content_tags").select("id,name,slug,is_active").order("name") : Promise.resolve({ data: [] }),
-    contentPublicConfig.hubEnabled ? supabase.from("content_sources").select("id,title,url,is_active").order("title") : Promise.resolve({ data: [] }),
+    contentPublicConfig.hubEnabled ? supabase.from("content_authors").select("id,name,slug,is_active,deleted_at").is("deleted_at", null).order("name") : Promise.resolve({ data: [] }),
+    contentPublicConfig.hubEnabled ? supabase.from("content_categories").select("id,name,slug,is_active,deleted_at").is("deleted_at", null).order("sort_order").order("name") : Promise.resolve({ data: [] }),
+    contentPublicConfig.hubEnabled ? supabase.from("content_tags").select("id,name,slug,is_active,deleted_at").is("deleted_at", null).order("name") : Promise.resolve({ data: [] }),
+    contentPublicConfig.hubEnabled ? supabase.from("content_sources").select("id,title,url,is_active,deleted_at").is("deleted_at", null).order("title") : Promise.resolve({ data: [] }),
     contentPublicConfig.hubEnabled ? supabase.from("products").select("id,name,slug,price,unit,status,stock_quantity,product_media(url,alt_text,is_primary)").order("name") : Promise.resolve({ data: [] }),
-    contentPublicConfig.affiliateEnabled ? supabase.from("affiliate_partners").select("id,name,slug,is_active").order("name") : Promise.resolve({ data: [] }),
-    contentPublicConfig.affiliateEnabled ? supabase.from("affiliate_offers").select("id,title,slug,short_description,recommendation_basis,available_regions,is_active,affiliate_partners(name,slug,is_active)").order("title") : Promise.resolve({ data: [] }),
-    contentPublicConfig.hubEnabled ? supabase.from("content_posts").select("id,title,slug,status").order("updated_at", { ascending: false }).limit(200) : Promise.resolve({ data: [] }),
+    contentPublicConfig.affiliateEnabled ? supabase.from("affiliate_partners").select("id,name,slug,is_active,deleted_at").is("deleted_at", null).order("name") : Promise.resolve({ data: [] }),
+    contentPublicConfig.affiliateEnabled ? supabase.from("affiliate_offers").select("id,title,slug,short_description,recommendation_basis,available_regions,is_active,deleted_at,affiliate_partners(name,slug,is_active)").is("deleted_at", null).order("title") : Promise.resolve({ data: [] }),
+    contentPublicConfig.hubEnabled ? supabase.from("content_posts").select("id,title,slug,status,deleted_at").is("deleted_at", null).order("updated_at", { ascending: false }).limit(200) : Promise.resolve({ data: [] }),
   ]);
   return {
     authors: authors.data ?? [],

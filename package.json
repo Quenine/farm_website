@@ -10,7 +10,8 @@
     "content:probe": "node scripts/probe-content-admin.mjs",
     "content:repair-checks": "node scripts/check-content-repair.mjs",
     "content:ui-checks": "node scripts/check-content-admin-ui.mjs",
-    "content:publishing-checks": "node scripts/check-content-publishing.mjs"
+    "content:publishing-checks": "node scripts/check-content-publishing.mjs",
+    "content:e2e": "node scripts/check-content-e2e.mjs"
   },
   "dependencies": {
     "@paystack/inline-js": "^2.22.9",
