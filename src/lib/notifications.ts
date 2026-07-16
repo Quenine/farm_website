@@ -6,6 +6,7 @@ import { formatNaira } from "@/src/lib/format";
 import { getSiteUrl } from "@/src/lib/site-url";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 import type { DatabaseOrderStatus, DeliveryMethod } from "@/src/types";
+import { emailConfig } from "@/src/lib/email-config";
 
 export type NotificationOrderRow = {
   id: string;
@@ -42,6 +43,8 @@ type EmailPayload = {
   to: string;
   subject: string;
   html: string;
+  from?: string;
+  replyTo?: string;
 };
 
 type CustomerStatusNotificationStatus =
@@ -223,13 +226,13 @@ function normalizeStatusForCustomerNotification(
     : null;
 }
 
-async function sendGmailEmail({ to, subject, html }: EmailPayload) {
+async function sendGmailEmail({ to, subject, html, from: requestedFrom, replyTo: requestedReplyTo }: EmailPayload) {
   const host = process.env.GMAIL_SMTP_HOST?.trim() || "smtp.gmail.com";
   const port = Number(process.env.GMAIL_SMTP_PORT?.trim() || 465);
   const user = process.env.GMAIL_USER?.trim();
   const pass = process.env.GMAIL_APP_PASSWORD?.trim();
-  const from = process.env.FROM_EMAIL?.trim();
-  const replyTo = process.env.REPLY_TO_EMAIL?.trim();
+  const from = requestedFrom || emailConfig.fromGeneral;
+  const replyTo = requestedReplyTo || emailConfig.replyToSupport;
 
   if (!host || !Number.isInteger(port) || port <= 0 || !user || !pass || !from || !to.trim()) {
     return false;
@@ -256,9 +259,9 @@ async function sendGmailEmail({ to, subject, html }: EmailPayload) {
   return true;
 }
 
-async function sendResendEmail({ to, subject, html }: EmailPayload) {
+async function sendResendEmail({ to, subject, html, from: requestedFrom, replyTo }: EmailPayload) {
   const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.FROM_EMAIL?.trim();
+  const from = requestedFrom || emailConfig.fromGeneral;
   if (!apiKey || !from || !to.trim()) return false;
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -267,7 +270,7 @@ async function sendResendEmail({ to, subject, html }: EmailPayload) {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ from, to, subject, html }),
+    body: JSON.stringify({ from, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
 
   if (!response.ok) {
@@ -278,7 +281,7 @@ async function sendResendEmail({ to, subject, html }: EmailPayload) {
   return true;
 }
 
-async function sendEmail(payload: EmailPayload) {
+export async function sendEmail(payload: EmailPayload) {
   const provider = selectedEmailProvider();
 
   if (provider === "gmail") {
@@ -374,13 +377,14 @@ async function markStatusNotificationSent({
 
 export async function sendAdminEmailNotification(order: NotificationOrderRow) {
   if (order.admin_email_notified_at) return;
-  const to = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
+  const to = emailConfig.adminNotificationEmail;
   if (!to) return;
 
   const sent = await sendEmail({
     to,
     subject: `New paid order \u2014 ${siteConfig.name} #${order.order_reference}`,
     html: adminEmailHtml(order),
+    from: emailConfig.fromOrders,
   });
 
   if (sent) await markChannelSent(order.id, "admin_email_notified_at");
@@ -393,6 +397,8 @@ export async function sendCustomerOrderConfirmation(order: NotificationOrderRow)
     to: order.customer_email,
     subject: `Your ${siteConfig.name} order is confirmed`,
     html: customerEmailHtml(order),
+    from: emailConfig.fromOrders,
+    replyTo: emailConfig.replyToSupport,
   });
 
   if (sent) await markChannelSent(order.id, "customer_email_notified_at");
@@ -525,6 +531,8 @@ export async function sendCustomerStatusEmailNotification(
     to: recipient,
     subject: customerStatusSubjects[status],
     html: customerStatusEmailHtml(order, status),
+    from: emailConfig.fromOrders,
+    replyTo: emailConfig.replyToSupport,
   });
 
   if (sent) {

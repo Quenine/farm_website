@@ -32,11 +32,12 @@ export default async function AffiliateAdminPage() {
       <div className="mb-6 flex flex-wrap gap-3">
         <Link href="/admin/affiliate/partners" className="rounded-full bg-green-800 px-5 py-3 text-sm font-bold text-white">Create Partner</Link>
         <Link href="/admin/affiliate/offers" className="rounded-full border border-green-800 px-5 py-3 text-sm font-bold text-green-950">Create Offer</Link>
+        <Link href="/admin/content/trash?section=offers" className="rounded-full border border-stone-500 px-5 py-3 text-sm font-bold text-stone-800">Trash ({summary.trashedPartners + summary.trashedOffers})</Link>
       </div>
       <div className="grid gap-4 md:grid-cols-5">
-        <StatCard label="Total partners" value={String(summary.totalPartners)} note="All merchant partners." />
+        <StatCard label="Total partners" value={String(summary.totalPartners)} note="Non-trashed merchant partners." />
         <StatCard label="Active partners" value={String(summary.activePartners)} note="Visible for active offers." />
-        <StatCard label="Total offers" value={String(summary.totalOffers)} note="All stored offers." />
+        <StatCard label="Total offers" value={String(summary.totalOffers)} note="Non-trashed stored offers." />
         <StatCard label="Active offers" value={String(summary.activeOffers)} note="Redirectable offers." />
         <StatCard label="Affiliate clicks" value={String(summary.affiliateClicks)} note="Outbound recommendation clicks." />
       </div>

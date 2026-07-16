@@ -128,12 +128,106 @@ function revalidateContentAdmin() {
   revalidatePath("/admin/content");
   revalidatePath("/admin/content/posts");
   revalidatePath("/admin/affiliate");
+  revalidatePath("/admin/content/trash");
   revalidatePath("/blog");
   revalidatePath("/resources");
   revalidatePath("/videos");
   revalidatePath("/tools");
   revalidatePath("/blog/feed.xml");
   revalidatePath("/sitemap.xml");
+}
+
+const trashTables: Record<Exclude<AdminEntity, "subscribers">, string> = {
+  posts: "content_posts", authors: "content_authors", categories: "content_categories",
+  tags: "content_tags", sources: "content_sources", videos: "content_videos",
+  partners: "affiliate_partners", offers: "affiliate_offers",
+};
+
+export async function restoreTrashedRecordAction(entity: Exclude<AdminEntity, "subscribers">, id: string, reactivate = false): Promise<AdminMutationState> {
+  try {
+    await ensureContentAdmin(entity);
+    const parsedId = z.string().uuid().parse(id);
+    const table = trashTables[entity];
+    const supabase = createContentAdminSupabaseClient();
+    const existing = await supabase.from(table).select("id,deleted_at").eq("id", parsedId).maybeSingle();
+    if (existing.error) throw new Error(existing.error.message);
+    if (!existing.data?.deleted_at) throw new Error("Only records already in Trash can be restored.");
+    const updates: Record<string, unknown> = { deleted_at: null, deleted_by: null };
+    if (entity === "posts") updates.status = "draft";
+    else updates.is_active = reactivate && !["partners", "offers"].includes(entity);
+    const result = await supabase.from(table).update(updates).eq("id", parsedId);
+    if (result.error) throw new Error(result.error.message);
+    revalidateContentAdmin();
+    return { ok: true, success: true, message: entity === "posts" ? "Restored to draft. The article was not republished." : reactivate && !["partners", "offers"].includes(entity) ? "Restored and activated." : "Restored as inactive.", fieldErrors: {} };
+  } catch (error) {
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to restore record.", fieldErrors: {} };
+  }
+}
+
+async function dependencyCount(supabase: ReturnType<typeof createContentAdminSupabaseClient>, table: string, column: string, id: string) {
+  const result = await supabase.from(table).select(column, { count: "exact", head: true }).eq(column, id);
+  if (result.error) throw new Error(result.error.message);
+  return result.count ?? 0;
+}
+
+export async function permanentlyDeleteTrashedRecordAction(entity: Exclude<AdminEntity, "subscribers">, id: string, confirmation: string): Promise<AdminMutationState> {
+  try {
+    await ensureContentAdmin(entity);
+    if (confirmation !== "DELETE") return { ok: false, success: false, message: "Type DELETE to permanently delete this record.", fieldErrors: { confirmation: ["Type DELETE to continue."] } };
+    const parsedId = z.string().uuid().parse(id);
+    const table = trashTables[entity];
+    const supabase = createContentAdminSupabaseClient();
+    const existing = await supabase.from(table).select("id,deleted_at,status").eq("id", parsedId).maybeSingle();
+    if (existing.error) throw new Error(existing.error.message);
+    if (!existing.data?.deleted_at) throw new Error("The record must already be in Trash.");
+
+    if (entity === "posts") {
+      if (existing.data.status === "published") throw new Error("Published posts cannot be permanently deleted. Restore and unpublish first.");
+      const [affiliateClicks, productClicks, paidOrders] = await Promise.all([
+        dependencyCount(supabase, "affiliate_clicks", "post_id", parsedId),
+        dependencyCount(supabase, "content_product_clicks", "post_id", parsedId),
+        supabase.from("orders").select("content_attribution").eq("payment_status", "paid").not("content_attribution", "is", null),
+      ]);
+      const attributedOrders = (paidOrders.data ?? []).filter((row) => {
+        const attribution = row.content_attribution as Record<string, unknown> | null;
+        return attribution?.postId === parsedId;
+      }).length;
+      if (affiliateClicks || productClicks || attributedOrders) throw new Error(`Historical attribution must be retained: affiliate clicks=${affiliateClicks}, product clicks=${productClicks}, paid attributed orders=${attributedOrders}.`);
+      for (const relation of ["content_post_tags", "content_post_sources", "content_post_products", "content_post_affiliate_offers", "content_videos"]) {
+        const deletion = await supabase.from(relation).delete().eq("post_id", parsedId);
+        if (deletion.error) throw new Error(deletion.error.message);
+      }
+    } else {
+      const safeguards: Partial<Record<typeof entity, [string, string, string]>> = {
+        authors: ["content_posts", "author_id", "post(s) still reference this author"],
+        categories: ["content_posts", "category_id", "post(s) still use this category; reassign them first"],
+        tags: ["content_post_tags", "tag_id", "post(s) still use this tag; detach it first"],
+        sources: ["content_post_sources", "source_id", "post(s) still reference this source"],
+        partners: ["affiliate_offers", "partner_id", "offer(s) must be handled first"],
+        offers: ["content_post_affiliate_offers", "offer_id", "article usage must be detached first"],
+      };
+      const safeguard = safeguards[entity];
+      if (safeguard) {
+        const count = await dependencyCount(supabase, safeguard[0], safeguard[1], parsedId);
+        if (count) throw new Error(`${count} ${safeguard[2]}.`);
+      }
+      if (entity === "offers") {
+        const clicks = await dependencyCount(supabase, "affiliate_clicks", "offer_id", parsedId);
+        if (clicks) throw new Error(`${clicks} affiliate click(s) require this offer's history to be retained.`);
+      }
+      if (entity === "videos") {
+        const video = await supabase.from("content_videos").select("post_id,content_posts(status,deleted_at)").eq("id", parsedId).maybeSingle();
+        const post = Array.isArray(video.data?.content_posts) ? video.data.content_posts[0] : video.data?.content_posts;
+        if (post && post.status === "published" && !post.deleted_at) throw new Error("A published, non-trashed article depends on this video. Detach it first.");
+      }
+    }
+    const deletion = await supabase.from(table).delete().eq("id", parsedId).not("deleted_at", "is", null);
+    if (deletion.error) throw new Error(deletion.error.message);
+    revalidateContentAdmin();
+    return { ok: true, success: true, message: "Permanently deleted. This action cannot be undone.", fieldErrors: {} };
+  } catch (error) {
+    return { ok: false, success: false, message: error instanceof Error ? error.message : "Unable to permanently delete record.", fieldErrors: {} };
+  }
 }
 
 async function revalidateContentMutation(input: { supabase: ReturnType<typeof createContentAdminSupabaseClient>; oldSlug?: string | null; newSlug?: string | null }) {

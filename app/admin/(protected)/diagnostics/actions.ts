@@ -8,6 +8,8 @@ import {
   initializePaystackDiagnosticTransaction,
 } from "@/src/lib/paystack";
 import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
+import { emailConfig } from "@/src/lib/email-config";
+import { sendEmail } from "@/src/lib/notifications";
 
 export type PaystackDiagnosticResult =
   | {
@@ -121,6 +123,18 @@ export async function testPaystackInitializationAction(): Promise<PaystackDiagno
     referencePresent: result.referencePresent,
     callbackUrl,
   };
+}
+
+export async function sendDiagnosticEmailAction() {
+  await requireAdmin();
+  if (!emailConfig.adminNotificationEmail || !emailConfig.fromGeneral) return { success: false, message: "Admin recipient or general sender is missing." };
+  try {
+    const sent = await sendEmail({ to: emailConfig.adminNotificationEmail, from: emailConfig.fromGeneral, replyTo: emailConfig.replyToSupport, subject: `${siteConfig.name} email diagnostic`, html: `<p>${siteConfig.name} outbound email is working.</p>` });
+    return sent ? { success: true, message: "Test email sent to the configured private admin recipient." } : { success: false, message: "Email provider is not fully configured." };
+  } catch (error) {
+    console.error("[Email Diagnostic Failed]", { reason: error instanceof Error ? error.message : "unknown" });
+    return { success: false, message: "The provider rejected the diagnostic email. Check server logs." };
+  }
 }
 
 

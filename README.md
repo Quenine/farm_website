@@ -238,6 +238,8 @@ For Shields QA, enable the public content flags but keep `CONTENT_INDEXING_ENABL
 3. `database/step-content-trash-and-deletion.sql`
 4. `database/verify-content-affiliate-publisher.sql`
 5. `database/verify-content-admin-operational.sql`
+6. `database/step-contact-inquiries.sql`
+7. `database/verify-contact-inquiries.sql`
 
 See `docs/content-affiliate-publisher.md`, `docs/agribusiness-content-strategy.md`, and `docs/permanent-domain-content-launch.md`. Do not share production order tables or duplicate Shields articles across farms.
 

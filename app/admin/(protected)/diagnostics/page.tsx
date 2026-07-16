@@ -4,6 +4,8 @@ import { siteConfig } from "@/src/config/site";
 import { getPaystackEnvironmentDiagnostics } from "@/src/lib/paystack";
 import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
 import { PaystackTestButton } from "./paystack-test-button";
+import { EmailTestButton } from "./email-test-button";
+import { emailDiagnostics } from "@/src/lib/email-config";
 
 function configurationStatus(value: string | undefined) {
   return value?.trim() ? "Configured" : "Missing";
@@ -15,14 +17,6 @@ function yesNo(value: boolean) {
 
 function notificationsAreEnabled() {
   return process.env.NOTIFICATIONS_ENABLED?.trim().toLowerCase() === "true";
-}
-
-function selectedEmailProvider() {
-  const provider = process.env.EMAIL_PROVIDER?.trim();
-  if (provider) return provider;
-  return process.env.RESEND_API_KEY?.trim()
-    ? "resend (from RESEND_API_KEY)"
-    : "Not selected";
 }
 
 function gmailConfigured() {
@@ -84,6 +78,7 @@ export default async function AdminDiagnosticsPage() {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const siteUrlValidation = validateConfiguredSiteUrl();
   const paystackDiagnostics = getPaystackEnvironmentDiagnostics();
+  const email = emailDiagnostics();
   const callbackUrl = siteUrlValidation.valid
     ? `${siteUrlValidation.siteUrl}/payment/callback`
     : `Unavailable: ${siteUrlValidation.reason}`;
@@ -188,12 +183,12 @@ export default async function AdminDiagnosticsPage() {
     },
     {
       label: "Notifications enabled",
-      value: yesNo(notificationsAreEnabled()),
+      value: email.notificationsEnabled ? "Ready" : "Missing",
       isSecret: false,
     },
     {
       label: "Email provider selected",
-      value: selectedEmailProvider(),
+      value: email.provider,
       isSecret: false,
     },
     {
@@ -208,7 +203,7 @@ export default async function AdminDiagnosticsPage() {
     },
     {
       label: "Admin notification email configured",
-      value: yesNo(Boolean(process.env.ADMIN_NOTIFICATION_EMAIL?.trim())),
+      value: email.adminRecipient ? "Configured, not runtime-tested" : "Missing",
       isSecret: true,
     },
     {
@@ -237,6 +232,17 @@ export default async function AdminDiagnosticsPage() {
       isSecret: true,
     },
   ];
+  diagnostics.push(
+    { label: "General sender configured", value: email.generalSender ? "Configured, not runtime-tested" : "Missing", isSecret: true },
+    { label: "Support sender configured", value: email.supportSender ? "Configured, not runtime-tested" : "Missing", isSecret: true },
+    { label: "Orders sender configured", value: email.ordersSender ? "Configured, not runtime-tested" : "Missing", isSecret: true },
+    { label: "Support Reply-To configured", value: email.replyTo ? "Configured, not runtime-tested" : "Missing", isSecret: true },
+    { label: "Contact inbox configured", value: email.contactInbox ? "Configured, not runtime-tested" : "Missing", isSecret: true },
+    { label: "Public business email configured", value: email.publicBusiness ? "Ready" : "Missing", isSecret: false },
+    { label: "Public support email configured", value: email.publicSupport ? "Ready" : "Missing", isSecret: false },
+    { label: "Public orders email configured", value: email.publicOrders ? "Ready" : "Missing", isSecret: false },
+    { label: "Sender domain matches shieldsfarms.store", value: email.domainMatches ? "Ready" : "Misconfigured", isSecret: false },
+  );
 
   return (
     <>
@@ -268,6 +274,7 @@ export default async function AdminDiagnosticsPage() {
         </dl>
       </div>
       <PaystackTestButton />
+      <EmailTestButton />
     </>
   );
 }

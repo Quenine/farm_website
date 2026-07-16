@@ -12,10 +12,12 @@ export default async function ContentAdminPage() {
   if (!contentPublicConfig.hubEnabled) notFound();
   const [summary, diagnostics] = await Promise.all([loadContentDashboard(), loadContentOperationalDiagnostics()]);
   const cards = [
-    ["Total posts", summary.posts, "All content records.", "/admin/content/posts"],
+    ["Total posts", summary.posts, "Non-trashed content records.", "/admin/content/posts"],
     ["Drafts", summary.drafts, "Work in progress.", "/admin/content/posts?status=draft"],
     ["In review", summary.review, "Needs editorial approval.", "/admin/content/posts?status=review"],
     ["Published", summary.published, "Public eligible content.", "/admin/content/posts?status=published"],
+    ["Archived", summary.archived, "Archived but not deleted.", "/admin/content/posts?status=archived"],
+    ["Trash", summary.trashedPosts, "Soft-deleted content records.", "/admin/content/trash"],
     ["Videos", summary.videos, "Video companion content.", "/admin/content/videos"],
     ["Comparisons", summary.comparisons, "Comparison content.", "/admin/content/posts?format=comparison"],
     ["Affiliate-enabled", summary.affiliatePosts, "Posts requiring disclosure.", "/admin/content/posts?affiliate=yes"],

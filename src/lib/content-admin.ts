@@ -223,6 +223,36 @@ export async function loadAdminEntity(entity: AdminEntity, filters: Record<strin
   }
 }
 
+export async function loadTrashDependencies(entity: AdminEntity, records: AdminRecord[]) {
+  const ids = records.map((record) => String(record.id ?? "")).filter(Boolean);
+  if (!ids.length) return records;
+  const supabase = createContentAdminSupabaseClient();
+  const relation: Partial<Record<AdminEntity, [string, string]>> = {
+    authors: ["content_posts", "author_id"], categories: ["content_posts", "category_id"],
+    tags: ["content_post_tags", "tag_id"], sources: ["content_post_sources", "source_id"],
+    videos: ["content_videos", "id"], partners: ["affiliate_offers", "partner_id"],
+    offers: ["content_post_affiliate_offers", "offer_id"],
+  };
+  if (entity === "posts") {
+    const tables = [
+      ["content_post_tags", "post_id"], ["content_post_sources", "post_id"],
+      ["content_post_products", "post_id"], ["content_post_affiliate_offers", "post_id"],
+      ["content_videos", "post_id"], ["affiliate_clicks", "post_id"], ["content_product_clicks", "post_id"],
+    ] as const;
+    const counts = await Promise.all(tables.map(async ([table, column]) => {
+      const result = await supabase.from(table).select(column).in(column, ids);
+      return (result.data ?? []) as unknown as Array<Record<string, unknown>>;
+    }));
+    return records.map((record) => ({ ...record, dependency_count: counts.reduce((sum, rows) => sum + rows.filter((row) => row.post_id === record.id).length, 0) }));
+  }
+  const config = relation[entity];
+  if (!config) return records;
+  const [table, column] = config;
+  const result = await supabase.from(table).select(column).in(column, ids);
+  const rows = (result.data ?? []) as unknown as Array<Record<string, unknown>>;
+  return records.map((record) => ({ ...record, dependency_count: rows.filter((row) => row[column] === record.id).length }));
+}
+
 export async function loadAdminOptions() {
   await requireAdmin();
   if (!hasAdminSupabaseConfig()) return { authors: [], categories: [], tags: [], sources: [], products: [], partners: [], offers: [], posts: [] };
@@ -264,8 +294,9 @@ export async function loadPostForEdit(id: string) {
 export async function loadContentDashboard() {
   await ensureContentAdmin("posts");
   const supabase = createContentAdminSupabaseClient();
-  const [posts, affiliateClicks, productClicks, subscribers, paidOrders] = await Promise.all([
-    supabase.from("content_posts").select("id,status,content_format,contains_affiliate_content"),
+  const [posts, trashedPosts, affiliateClicks, productClicks, subscribers, paidOrders] = await Promise.all([
+    supabase.from("content_posts").select("id,status,content_format,contains_affiliate_content").is("deleted_at", null),
+    supabase.from("content_posts").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
     supabase.from("affiliate_clicks").select("id", { count: "exact", head: true }),
     supabase.from("content_product_clicks").select("id", { count: "exact", head: true }),
     contentPublicConfig.subscriptionsEnabled ? supabase.from("content_subscribers").select("id", { count: "exact", head: true }).eq("status", "active") : Promise.resolve({ count: 0 }),
@@ -273,7 +304,7 @@ export async function loadContentDashboard() {
   ]);
   if (posts.error) {
     console.error("[Content Dashboard Load Failed]", { code: posts.error.code, message: posts.error.message });
-    return { posts: 0, drafts: 0, review: 0, published: 0, videos: 0, comparisons: 0, affiliatePosts: 0, affiliateClicks: 0, productClicks: 0, activeSubscribers: 0, contentAssistedPaidOrders: 0, contentAssistedPaidRevenue: 0 };
+    return { posts: 0, drafts: 0, review: 0, published: 0, archived: 0, trashedPosts: 0, videos: 0, comparisons: 0, affiliatePosts: 0, affiliateClicks: 0, productClicks: 0, activeSubscribers: 0, contentAssistedPaidOrders: 0, contentAssistedPaidRevenue: 0 };
   }
   const rows = (posts.data ?? []) as Array<{ status: string; content_format: string; contains_affiliate_content: boolean }>;
   const orders = (paidOrders.data ?? []) as Array<{ total_amount: number | string }>;
@@ -282,6 +313,8 @@ export async function loadContentDashboard() {
     drafts: rows.filter((row) => row.status === "draft").length,
     review: rows.filter((row) => row.status === "review").length,
     published: rows.filter((row) => row.status === "published").length,
+    archived: rows.filter((row) => row.status === "archived").length,
+    trashedPosts: trashedPosts.count ?? 0,
     videos: rows.filter((row) => row.content_format === "video_companion").length,
     comparisons: rows.filter((row) => row.content_format === "comparison").length,
     affiliatePosts: rows.filter((row) => row.contains_affiliate_content).length,
@@ -296,9 +329,11 @@ export async function loadContentDashboard() {
 export async function loadAffiliateDashboard() {
   await ensureContentAdmin("partners");
   const supabase = createContentAdminSupabaseClient();
-  const [partners, offers, clicks, topOffers, topPosts] = await Promise.all([
-    supabase.from("affiliate_partners").select("id,is_active"),
-    supabase.from("affiliate_offers").select("id,is_active"),
+  const [partners, offers, trashedPartners, trashedOffers, clicks, topOffers, topPosts] = await Promise.all([
+    supabase.from("affiliate_partners").select("id,is_active").is("deleted_at", null),
+    supabase.from("affiliate_offers").select("id,is_active").is("deleted_at", null),
+    supabase.from("affiliate_partners").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
+    supabase.from("affiliate_offers").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
     supabase.from("affiliate_clicks").select("id", { count: "exact", head: true }),
     supabase.from("affiliate_clicks").select("offer_id, affiliate_offers(title,slug)").limit(1000),
     supabase.from("affiliate_clicks").select("post_id, content_posts(title,slug)").limit(1000),
@@ -321,6 +356,8 @@ export async function loadAffiliateDashboard() {
     activePartners: partnerRows.filter((row) => row.is_active).length,
     totalOffers: offerRows.length,
     activeOffers: offerRows.filter((row) => row.is_active).length,
+    trashedPartners: trashedPartners.count ?? 0,
+    trashedOffers: trashedOffers.count ?? 0,
     affiliateClicks: clicks.count ?? 0,
     topOffers: aggregate((topOffers.data ?? []) as unknown as AdminRecord[], "offer_id", "affiliate_offers"),
     topPosts: aggregate((topPosts.data ?? []) as unknown as AdminRecord[], "post_id", "content_posts"),

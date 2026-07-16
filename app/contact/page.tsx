@@ -1,6 +1,7 @@
 ﻿import { Globe2, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { siteConfig, siteContact } from "@/src/config/site";
-import { Field, PageShell, SectionHeader, TextArea } from "@/src/components/ui";
+import { PageShell, SectionHeader } from "@/src/components/ui";
+import { ContactForm } from "./contact-form";
 
 export default function ContactPage() {
   return (
@@ -38,20 +39,7 @@ export default function ContactPage() {
             </a>
           </div>
         </div>
-        <form action={siteContact.emailHref} method="post" encType="text/plain" className="grid gap-5 rounded-lg bg-white p-6 shadow-sm">
-          <p className="rounded-lg bg-amber-50 p-3 text-sm font-semibold leading-6 text-amber-900">
-            For urgent orders, call or WhatsApp {siteConfig.name} directly. You can also use this form to open an email message.
-          </p>
-          <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Full name" placeholder="Adebayo Noble" />
-            <Field label="Phone number" placeholder="0803 571 2314" />
-          </div>
-          <Field label="Email" placeholder="you@example.com" type="email" />
-          <TextArea label="Message" placeholder="Tell us what you need" />
-          <button className="h-12 rounded-full bg-green-800 px-6 text-sm font-bold text-white">
-            Send message
-          </button>
-        </form>
+        <ContactForm />
       </section>
     </PageShell>
   );

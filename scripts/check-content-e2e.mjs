@@ -15,6 +15,14 @@ const diagnostics = file("src/lib/content-admin-diagnostics.ts");
 const migration = file("database/step-content-trash-and-deletion.sql");
 const blogPage = file("app/blog/page.tsx");
 const blogCardImage = file("src/components/content/blog-card-image.tsx");
+const contentAdmin = file("src/lib/content-admin.ts");
+const trashPage = file("app/admin/(protected)/content/trash/page.tsx");
+const contactAction = file("app/contact/actions.ts");
+const contactForm = file("app/contact/contact-form.tsx");
+const emailConfig = file("src/lib/email-config.ts");
+const notifications = file("src/lib/notifications.ts");
+const adminDiagnostics = file("app/admin/(protected)/diagnostics/page.tsx");
+const diagnosticsActions = file("app/admin/(protected)/diagnostics/actions.ts");
 const definitions = (await import('../src/lib/content-admin-entities.mjs')).adminEntityDefinitions;
 
 check("Add Affiliate Offer opens a visible picker", editor.includes("setOfferPickerOpen(true)") && editor.includes("Search offers") && editor.includes("Filter by partner"));
@@ -55,6 +63,19 @@ check("Featured Blog posts are removed from regular grid", blogPage.includes("fe
 check("Blog pagination preserves active filters", ["q", "category", "tag", "format", "audience"].every((key) => blogPage.includes(`query.set("${key}"`)) && blogPage.includes("pageHref(data.page"));
 check("Blog image URLs reject unsafe protocols", blogCardImage.includes('url.protocol === "https:"') && blogCardImage.includes('source.startsWith("/")') && !blogCardImage.includes('protocol === "data:"'));
 check("Blog card grid remains responsive", blogPage.includes("grid-cols-1") && blogPage.includes("md:grid-cols-2") && blogPage.includes("lg:grid-cols-3"));
+check("Content overview excludes Trash and counts it separately", contentAdmin.includes('.is("deleted_at", null)') && contentAdmin.includes("trashedPosts.count"));
+check("Affiliate overview excludes trashed inventory", contentAdmin.includes('affiliate_partners").select("id,is_active").is("deleted_at", null)') && contentAdmin.includes("trashedPartners.count") && contentAdmin.includes("trashedOffers.count"));
+check("Central Trash page reads soft-deleted records server-side", trashPage.includes('trash: "trash"') && trashPage.includes("loadTrashDependencies") && trashPage.includes("Search Trash"));
+check("Post restore returns to draft without republishing", actions.includes('if (entity === "posts") updates.status = "draft"') && actions.includes("was not republished"));
+check("Permanent post deletion requires DELETE and blocks history", actions.includes('confirmation !== "DELETE"') && actions.includes("Historical attribution must be retained") && actions.includes("affiliate_clicks") && actions.includes("content_product_clicks"));
+check("Category deletion reports dependency and reassignment", actions.includes("reassign them first") && actions.includes('categories: ["content_posts", "category_id"'));
+check("Contact form validates and preserves fields", contactAction.includes("schema.safeParse") && contactForm.includes("state.values") && contactForm.includes("fieldErrors"));
+check("Contact honeypot is rejected", contactAction.includes('website: z.string().max(0)') && contactForm.includes('name="website"'));
+check("Contact routes notification privately and acknowledges publicly", contactAction.includes("emailConfig.contactInboxEmail") && contactAction.includes("emailConfig.fromSupport") && contactAction.includes("replyTo: parsed.data.email") && contactAction.includes("replyTo: emailConfig.replyToSupport"));
+check("Private inbox configuration remains server-only", emailConfig.includes('import "server-only"') && !contactForm.includes("CONTACT_INBOX_EMAIL") && !contactForm.includes("ADMIN_NOTIFICATION_EMAIL"));
+check("Resend sends provider reply_to", notifications.includes("reply_to: replyTo"));
+check("Admin test email is protected", diagnosticsActions.includes("await requireAdmin()") && diagnosticsActions.includes("sendDiagnosticEmailAction"));
+check("Email diagnostics expose configuration states, not recipients", adminDiagnostics.includes("Contact inbox configured") && adminDiagnostics.includes("Configured, not runtime-tested") && !adminDiagnostics.includes("contactInboxEmail"));
 
 const baseUrl = process.env.CONTENT_E2E_BASE_URL;
 if (baseUrl) {

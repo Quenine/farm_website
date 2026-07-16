@@ -13,6 +13,7 @@ export const contentTabs = [
   ["Videos", "/admin/content/videos"],
   ["Content Commerce", "/admin/content/commerce"],
   ["Subscribers", "/admin/content/subscribers"],
+  ["Trash", "/admin/content/trash"],
 ] as const;
 
 export const affiliateTabs = [
