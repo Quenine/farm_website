@@ -329,14 +329,15 @@ export async function loadContentDashboard() {
 export async function loadAffiliateDashboard() {
   await ensureContentAdmin("partners");
   const supabase = createContentAdminSupabaseClient();
-  const [partners, offers, trashedPartners, trashedOffers, clicks, topOffers, topPosts] = await Promise.all([
+  const [partners, offers, trashedPartners, trashedOffers, clicks, topOffers, topPosts, references] = await Promise.all([
     supabase.from("affiliate_partners").select("id,is_active").is("deleted_at", null),
-    supabase.from("affiliate_offers").select("id,is_active").is("deleted_at", null),
+    supabase.from("affiliate_offers").select("id,title,slug,is_active,affiliate_partners(is_active,deleted_at)").is("deleted_at", null),
     supabase.from("affiliate_partners").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
     supabase.from("affiliate_offers").select("id", { count: "exact", head: true }).not("deleted_at", "is", null),
     supabase.from("affiliate_clicks").select("id", { count: "exact", head: true }),
-    supabase.from("affiliate_clicks").select("offer_id, affiliate_offers(title,slug)").limit(1000),
+    supabase.from("affiliate_clicks").select("offer_id,clicked_at, affiliate_offers(title,slug)").order("clicked_at", { ascending: false }).limit(1000),
     supabase.from("affiliate_clicks").select("post_id, content_posts(title,slug)").limit(1000),
+    supabase.from("content_post_affiliate_offers").select("offer_id,affiliate_offers(title,slug,is_active,deleted_at,affiliate_partners(is_active,deleted_at)),content_posts(title,slug,status,deleted_at)").limit(2000),
   ]);
   function aggregate(rows: AdminRecord[], idKey: string, relationKey: string) {
     const map = new Map<string, { label: string; count: number }>();
@@ -350,17 +351,40 @@ export async function loadAffiliateDashboard() {
     return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 8);
   }
   const partnerRows = (partners.data ?? []) as Array<{ is_active: boolean }>;
-  const offerRows = (offers.data ?? []) as Array<{ is_active: boolean }>;
+  const offerRows = (offers.data ?? []) as unknown as Array<{ id: string; title: string; is_active: boolean; affiliate_partners: { is_active: boolean; deleted_at: string | null } | Array<{ is_active: boolean; deleted_at: string | null }> | null }>;
+  const eligibleOffers = offerRows.filter((row) => {
+    const partner = Array.isArray(row.affiliate_partners) ? row.affiliate_partners[0] : row.affiliate_partners;
+    return row.is_active && partner?.is_active && !partner.deleted_at;
+  });
+  const clickedOfferIds = new Set(((topOffers.data ?? []) as Array<{ offer_id: string }>).map((row) => row.offer_id));
+  const referenceRows = (references.data ?? []) as unknown as AdminRecord[];
+  const publishedArticleIds = new Set<string>();
+  const retiredReferences: Array<{ label: string; count: number }> = [];
+  for (const row of referenceRows) {
+    const post = Array.isArray(row.content_posts) ? (row.content_posts as AdminRecord[])[0] : row.content_posts as AdminRecord | undefined;
+    const offer = Array.isArray(row.affiliate_offers) ? (row.affiliate_offers as AdminRecord[])[0] : row.affiliate_offers as AdminRecord | undefined;
+    const partner = Array.isArray(offer?.affiliate_partners) ? (offer?.affiliate_partners as AdminRecord[])[0] : offer?.affiliate_partners as AdminRecord | undefined;
+    if (post?.status === "published" && !post.deleted_at) publishedArticleIds.add(String(post.slug));
+    if (offer && (offer.is_active !== true || offer.deleted_at || partner?.is_active !== true || partner?.deleted_at)) retiredReferences.push({ label: `${String(offer.title ?? offer.slug)} in ${String(post?.title ?? post?.slug ?? "unknown post")}`, count: 1 });
+  }
+  const clickRows = (topOffers.data ?? []) as unknown as Array<{ clicked_at?: string }>;
+  const now = Date.now();
   return {
     totalPartners: partnerRows.length,
     activePartners: partnerRows.filter((row) => row.is_active).length,
     totalOffers: offerRows.length,
-    activeOffers: offerRows.filter((row) => row.is_active).length,
+    activeOffers: eligibleOffers.length,
+    eligibleOffers: eligibleOffers.length,
     trashedPartners: trashedPartners.count ?? 0,
     trashedOffers: trashedOffers.count ?? 0,
     affiliateClicks: clicks.count ?? 0,
     topOffers: aggregate((topOffers.data ?? []) as unknown as AdminRecord[], "offer_id", "affiliate_offers"),
     topPosts: aggregate((topPosts.data ?? []) as unknown as AdminRecord[], "post_id", "content_posts"),
+    clicksLast7Days: clickRows.filter((row) => row.clicked_at && now - new Date(row.clicked_at).getTime() <= 7 * 86400000).length,
+    clicksLast30Days: clickRows.filter((row) => row.clicked_at && now - new Date(row.clicked_at).getTime() <= 30 * 86400000).length,
+    offersWithNoClicks: eligibleOffers.filter((offer) => !clickedOfferIds.has(offer.id)).map((offer) => ({ label: offer.title, count: 0 })),
+    publishedArticlesWithOffers: publishedArticleIds.size,
+    retiredReferences,
   };
 }
 

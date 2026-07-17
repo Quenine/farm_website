@@ -8,6 +8,10 @@ import "./globals.css";
 
 const siteName = siteConfig.name;
 const description = siteConfig.description;
+const verificationValue = (name: string) => {
+  const value = process.env[name]?.trim() ?? "";
+  return /^[A-Za-z0-9._=-]{6,200}$/.test(value) ? value : undefined;
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
@@ -16,6 +20,10 @@ export const metadata: Metadata = {
     template: `%s | ${siteName}`,
   },
   description,
+  verification: {
+    ...(verificationValue("NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION") ? { google: verificationValue("NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION") } : {}),
+    ...(verificationValue("NEXT_PUBLIC_BING_SITE_VERIFICATION") ? { other: { "msvalidate.01": verificationValue("NEXT_PUBLIC_BING_SITE_VERIFICATION")! } } : {}),
+  },
   icons: {
     icon: "/favicon.ico",
     apple: siteConfig.logoPath,

@@ -34,18 +34,21 @@ export default async function AffiliateAdminPage() {
         <Link href="/admin/affiliate/offers" className="rounded-full border border-green-800 px-5 py-3 text-sm font-bold text-green-950">Create Offer</Link>
         <Link href="/admin/content/trash?section=offers" className="rounded-full border border-stone-500 px-5 py-3 text-sm font-bold text-stone-800">Trash ({summary.trashedPartners + summary.trashedOffers})</Link>
       </div>
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Total partners" value={String(summary.totalPartners)} note="Non-trashed merchant partners." />
         <StatCard label="Active partners" value={String(summary.activePartners)} note="Visible for active offers." />
         <StatCard label="Total offers" value={String(summary.totalOffers)} note="Non-trashed stored offers." />
-        <StatCard label="Active offers" value={String(summary.activeOffers)} note="Redirectable offers." />
+        <StatCard label="Eligible offers" value={String(summary.eligibleOffers)} note="Active offer and active partner; neither trashed." />
         <StatCard label="Affiliate clicks" value={String(summary.affiliateClicks)} note="Outbound recommendation clicks." />
+        <StatCard label="Clicks: 7 days" value={String(summary.clicksLast7Days)} note="Consent-permitted recent clicks." />
+        <StatCard label="Clicks: 30 days" value={String(summary.clicksLast30Days)} note="Consent-permitted recent clicks." />
+        <StatCard label="Published articles with offers" value={String(summary.publishedArticlesWithOffers)} note="Published, non-trashed articles referencing offers." />
       </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-2"><Panel title="Top clicked offers" rows={summary.topOffers} /><Panel title="Top referring articles" rows={summary.topPosts} /></div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-2"><Panel title="Clicks by offer" rows={summary.topOffers} /><Panel title="Clicks by article" rows={summary.topPosts} /><Panel title="Eligible offers with no clicks" rows={summary.offersWithNoClicks} empty="Every eligible offer has at least one recorded click." /><Panel title="Retired offers still referenced" rows={summary.retiredReferences} empty="No draft or published article references a retired offer." /></div>
     </div>
   );
 }
 
-function Panel({ title, rows }: { title: string; rows: Array<{ label: string; count: number }> }) {
-  return <section className="rounded-lg bg-white p-5 shadow-sm"><h2 className="text-xl font-bold text-green-950">{title}</h2><div className="mt-4 grid gap-2">{rows.length ? rows.map((row) => <div key={row.label} className="flex justify-between rounded-lg bg-green-50 p-3 text-sm"><span>{row.label}</span><strong>{row.count}</strong></div>) : <p className="text-sm text-stone-600">No clicks yet.</p>}</div></section>;
+function Panel({ title, rows, empty = "No clicks yet." }: { title: string; rows: Array<{ label: string; count: number }>; empty?: string }) {
+  return <section className="rounded-lg bg-white p-5 shadow-sm"><h2 className="text-xl font-bold text-green-950">{title}</h2><div className="mt-4 grid gap-2">{rows.length ? rows.map((row) => <div key={row.label} className="flex justify-between rounded-lg bg-green-50 p-3 text-sm"><span>{row.label}</span><strong>{row.count}</strong></div>) : <p className="text-sm text-stone-600">{empty}</p>}</div></section>;
 }

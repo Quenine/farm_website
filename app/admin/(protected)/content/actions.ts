@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ensureContentAdmin, type AdminEntity } from "@/src/lib/content-admin";
 import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
+import { submitIndexNowArticle } from "@/src/lib/indexnow";
 
 export type SavedPostSummary = { id: string; slug: string; status: string; publishedAt: string | null; updatedAt: string };
 export type AdminMutationState = { ok: true; success: true; message: string; id?: string; post?: SavedPostSummary; fieldErrors: Record<string, string[]> } | { ok: false; success: false; message: string; fieldErrors: Record<string, string[]> };
@@ -668,6 +669,9 @@ export async function savePostAction(payload: Record<string, unknown>): Promise<
     const relationError = relationResults.find((result) => result.error)?.error;
     if (relationError) throw new Error(relationError.message);
     await revalidateContentMutation({ supabase, oldSlug, newSlug: savedPost.slug });
+    if (savedPost.status === "published" && (value.action === "publish" || (oldSlugResult?.data as { status?: string } | null)?.status === "published")) {
+      void submitIndexNowArticle(savedPost.slug);
+    }
     const messages: Record<PostAction, string> = {
       draft: "Draft saved.",
       continue: "Draft saved. You can continue editing.",

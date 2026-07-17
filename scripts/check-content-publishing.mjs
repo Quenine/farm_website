@@ -40,7 +40,7 @@ check("Share fallback copies link", share.includes('clipboard') && share.include
 check("Share tracks share_content", share.includes('trackShareContent'));
 check("Affiliate card renders public recommendation fields", renderer.includes('Recommendation basis') || renderer.includes('Basis'));
 check("Affiliate links route through recommend route", renderer.includes('/recommend/${offer.slug}?post='));
-check("Affiliate redirect validates active offer and partner", recommend.includes('getActiveAffiliateOffer') && content.includes('partner.is_active === false'));
+check("Affiliate redirect validates active offer and partner", recommend.includes('getActiveAffiliateOffer') && content.includes('partner.is_active !== true') && content.includes('partner.deleted_at'));
 check("Affiliate redirect ignores logging failures", recommend.includes('Redirects must continue even if optional click logging fails'));
 check("content:publishing-checks script is registered", pkg.scripts?.["content:publishing-checks"] === "node scripts/check-content-publishing.mjs");
 check("Slim article disclosure renders with standard wording", renderer.includes("Disclosure</Link>: This article may contain") && renderer.includes("/affiliate-disclosure") && renderer.includes("may earn a commission at no additional cost"));

@@ -42,7 +42,10 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     publisher: { "@type": "Organization", name: siteConfig.name, url: siteConfig.url },
     image: post.featured_image_url || siteConfig.logoPath,
     mainEntityOfPage: `${siteConfig.url.replace(/\/$/, "")}/blog/${post.slug}`,
+    articleSection: post.category?.name ?? undefined,
+    keywords: post.tags.length ? post.tags.map((tag) => tag.name) : undefined,
   };
+  const organizationJsonLd = { "@context": "https://schema.org", "@type": "Organization", name: siteConfig.name, url: siteConfig.url, logo: new URL(siteConfig.logoPath, siteConfig.url).toString(), email: siteConfig.email || undefined, contactPoint: siteConfig.phone ? [{ "@type": "ContactPoint", telephone: siteConfig.phone, contactType: "customer service" }] : undefined };
   const breadcrumbJsonLd = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Blog", item: `${siteConfig.url}/blog` }, { "@type": "ListItem", position: 2, name: post.title, item: `${siteConfig.url}/blog/${post.slug}` }] };
   const videoJsonLd = post.video && post.video.thumbnail_url && post.video.upload_date ? { "@context": "https://schema.org", "@type": "VideoObject", name: post.video.title, description: post.video.description || post.excerpt, thumbnailUrl: [post.video.thumbnail_url], uploadDate: post.video.upload_date, duration: post.video.duration_seconds ? `PT${post.video.duration_seconds}S` : undefined, embedUrl: post.video.embed_url ?? undefined, contentUrl: post.video.watch_url ?? undefined } : null;
 
@@ -63,10 +66,12 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
         </div>
         <div className="mt-8"><SafeContentMarkdown post={post} /></div>
         {post.author ? <section className="mt-10 rounded-lg bg-white p-5 shadow-sm"><h2 className="text-xl font-bold text-green-950">About the author</h2><p className="mt-2 font-bold text-stone-900">{post.author.name}</p>{post.author.credentials_or_experience || post.author.bio ? <p className="mt-2 text-sm leading-6 text-stone-700">{post.author.credentials_or_experience ?? post.author.bio}</p> : null}</section> : null}
-        <div className="mt-8 flex flex-wrap gap-3"><WhatsAppContentCta title={post.title} /><ArticleShare title={post.title} text={post.excerpt} slug={post.slug} canonicalUrl={`${siteConfig.url.replace(/\/$/, "")}/blog/${post.slug}`} /><Link href="/shop" className="rounded-full bg-green-800 px-5 py-3 text-sm font-bold text-white">Shop {siteConfig.name}</Link></div>
-        <div className="mt-10"><ContentSubscribeForm sourcePath={`/blog/${post.slug}`} /></div>
+        {post.products.length ? <section className="mt-10 rounded-lg bg-green-50 p-5"><h2 className="text-xl font-bold text-green-950">Relevant products</h2><div className="mt-3 flex flex-wrap gap-3">{post.products.slice(0, 3).map((product) => <Link key={product.slug} href={`/content-product/${post.slug}/${product.slug}`} className="rounded-full bg-green-800 px-4 py-2 text-sm font-bold text-white">{product.name}</Link>)}</div></section> : null}
+        <div className="mt-8 flex flex-wrap gap-3"><WhatsAppContentCta title={post.title} /><ArticleShare title={post.title} text={post.excerpt} slug={post.slug} canonicalUrl={`${siteConfig.url.replace(/\/$/, "")}/blog/${post.slug}`} />{post.products.length ? <Link href="/shop" className="rounded-full bg-green-800 px-5 py-3 text-sm font-bold text-white">Shop {siteConfig.name}</Link> : null}{post.post_type === "market_insight" || post.post_type === "case_study" ? <Link href="/business-supply" className="rounded-full border border-green-800 px-5 py-3 text-sm font-bold text-green-950">Business Supply</Link> : null}</div>
+        {post.post_type === "guide" || post.post_type === "market_insight" ? <div className="mt-10"><ContentSubscribeForm sourcePath={`/blog/${post.slug}`} /></div> : null}
       </article>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       {videoJsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }} /> : null}
     </PageShell>

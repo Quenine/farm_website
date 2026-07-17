@@ -3,6 +3,7 @@ import { contentPublicConfig } from "@/src/config/site";
 import { getActiveAffiliateOffer, getPublishedPostBySlug, validHttpUrl } from "@/src/lib/content";
 import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 import { hasAdminSupabaseConfig } from "@/src/lib/supabase/config";
+import { CONSENT_COOKIE_NAME, parseConsentCookie } from "@/src/lib/consent-cookie";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const postSlug = request.nextUrl.searchParams.get("post")?.trim() ?? "";
   const post = postSlug ? await getPublishedPostBySlug(postSlug) : null;
-  const consent = request.nextUrl.searchParams.get("consent") === "1";
-  if (consent && hasAdminSupabaseConfig()) {
+  const consent = parseConsentCookie(request.cookies.get(CONSENT_COOKIE_NAME)?.value);
+  if (consent.marketing && hasAdminSupabaseConfig()) {
     try {
       const supabase = createContentAdminSupabaseClient();
-      await supabase.from("affiliate_clicks").insert({ offer_id: offer.id, post_id: post?.id ?? null, referrer_path: post ? `/blog/${post.slug}` : request.headers.get("referer"), consent_recorded: true, campaign_context: null });
+      const referrer = request.headers.get("referer");
+      const safeReferrerPath = post ? `/blog/${post.slug}` : referrer ? new URL(referrer, request.url).pathname.slice(0, 500) : null;
+      await supabase.from("affiliate_clicks").insert({ offer_id: offer.id, post_id: post?.id ?? null, referrer_path: safeReferrerPath, consent_recorded: true, campaign_context: null });
     } catch {
       // Redirects must continue even if optional click logging fails.
     }

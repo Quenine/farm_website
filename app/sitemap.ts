@@ -2,8 +2,9 @@ import type { MetadataRoute } from "next";
 
 import { contentConfig } from "@/src/lib/content-config";
 import { getSiteUrl } from "@/src/lib/site-url";
+import { getIndexableContentData } from "@/src/lib/content-indexing";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
   const routes = ["", "/shop", "/business-supply", "/about", "/contact", "/delivery", "/refund-policy", "/privacy-policy", "/terms", "/track-order"];
   if (contentConfig.hubEnabled && contentConfig.indexingEnabled) {
@@ -13,11 +14,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     routes.push("/editorial-policy");
   }
 
-  return routes.map((route) => ({
+  const result: MetadataRoute.Sitemap = routes.map((route) => ({
     url: `${siteUrl}${route}`,
     lastModified: new Date(),
     changeFrequency: route === "" || route === "/shop" ? "daily" : "monthly",
     priority: route === "" ? 1 : route === "/shop" ? 0.9 : 0.6,
   }));
+  if (contentConfig.hubEnabled && contentConfig.indexingEnabled) {
+    const data = await getIndexableContentData();
+    for (const post of data.posts) result.push({ url: `${siteUrl}/blog/${post.slug}`, lastModified: new Date(post.updated_at), changeFrequency: "weekly", priority: 0.75 });
+    for (const category of data.categories) result.push({ url: `${siteUrl}/blog/category/${category.slug}`, lastModified: new Date(category.updated_at), changeFrequency: "weekly", priority: 0.65 });
+    for (const tag of data.tags) result.push({ url: `${siteUrl}/blog/tag/${tag.slug}`, lastModified: new Date(tag.updated_at), changeFrequency: "monthly", priority: 0.55 });
+  }
+  return result;
 }
 

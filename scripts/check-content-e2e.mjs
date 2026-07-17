@@ -25,6 +25,18 @@ const adminDiagnostics = file("app/admin/(protected)/diagnostics/page.tsx");
 const diagnosticsActions = file("app/admin/(protected)/diagnostics/actions.ts");
 const errorPage = file("app/error.tsx");
 const siteConfig = file("src/config/site.ts");
+const consentCookie = file("src/lib/consent-cookie.ts");
+const analytics = file("src/lib/analytics.ts");
+const recommendRoute = file("app/recommend/[slug]/route.ts");
+const productRedirect = file("app/content-product/[postSlug]/[productSlug]/route.ts");
+const contentService = file("src/lib/content.ts");
+const sitemap = file("app/sitemap.ts");
+const rss = file("app/blog/feed.xml/route.ts");
+const layout = file("app/layout.tsx");
+const indexing = file("src/lib/content-indexing.ts");
+const indexNow = file("src/lib/indexnow.ts");
+const checklist = file("app/admin/(protected)/launch-checklist/page.tsx");
+const checklistActions = file("app/admin/(protected)/launch-checklist/actions.ts");
 const definitions = (await import('../src/lib/content-admin-entities.mjs')).adminEntityDefinitions;
 
 check("Add Affiliate Offer opens a visible picker", editor.includes("setOfferPickerOpen(true)") && editor.includes("Search offers") && editor.includes("Filter by partner"));
@@ -87,6 +99,20 @@ check("Deployment error branding avoids generic Shields label", errorPage.includ
 check("Resend sends provider reply_to", notifications.includes("reply_to: replyTo"));
 check("Admin test email is protected", diagnosticsActions.includes("await requireAdmin()") && diagnosticsActions.includes("sendDiagnosticEmailAction"));
 check("Email diagnostics expose configuration states, not recipients", adminDiagnostics.includes("Contact inbox configured") && adminDiagnostics.includes("Configured, not runtime-tested") && !adminDiagnostics.includes("contactInboxEmail"));
+check("Consent cookie defaults optional consent to false", consentCookie.includes("analytics: false") && consentCookie.includes("marketing: false"));
+check("Consent changes synchronize server-readable cookie", analytics.includes("document.cookie") && analytics.includes("serializeConsentCookie(input)") && consentCookie.includes("SameSite") === false);
+check("Affiliate redirect reads consent cookie without query dependency", recommendRoute.includes("parseConsentCookie") && recommendRoute.includes("consent.marketing") && !recommendRoute.includes('searchParams.get("consent")'));
+check("Affiliate redirect survives click logging failure", recommendRoute.includes("Redirects must continue") && recommendRoute.indexOf("NextResponse.redirect") > recommendRoute.indexOf("catch"));
+check("Product redirect reads cookie and survives logging failure", productRedirect.includes("consent.analytics") && productRedirect.includes("should never fail") && productRedirect.includes("farm_content_referral"));
+check("Public article select excludes affiliate destination and internal notes", !contentService.match(/content_post_affiliate_offers[^\n]*destination_url/) && !contentService.match(/content_post_affiliate_offers[^\n]*internal_commission_note/));
+check("Public eligibility enforces offer and partner active and not trashed", contentService.includes("offer.is_active !== true") && contentService.includes("partner.is_active !== true") && contentService.includes("partner.deleted_at"));
+check("Sitemap gates and includes eligible articles", sitemap.includes("contentConfig.indexingEnabled") && sitemap.includes("/blog/${post.slug}") && sitemap.includes("getIndexableContentData"));
+check("RSS is 404 while indexing disabled and uses eligible posts", rss.includes("!contentConfig.indexingEnabled") && rss.includes("status: 404") && rss.includes("getIndexableContentData"));
+check("Search verification metadata is conditional", layout.includes("NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION") && layout.includes("NEXT_PUBLIC_BING_SITE_VERIFICATION") && layout.includes("verificationValue"));
+check("IndexNow is disabled unless every gate is true", indexNow.includes("if (!indexNowCanSubmit())") && indexNow.includes("deduplicated") && indexNow.includes("provider_unavailable_or_rejected"));
+check("Readiness requires five articles and precise blockers", indexing.includes("data.posts.length < 5") && indexing.includes("blockers.push") && indexing.includes("readyForContentIndexing"));
+check("Readiness detects broken or retired affiliate tokens", indexing.includes("affiliateTokens") && indexing.includes("broken or retired"));
+check("Checklist is persisted per brand with admin identity and reset", checklist.includes("ChecklistClient") && checklistActions.includes("requireAdmin()") && checklistActions.includes("siteConfig.domain") && checklistActions.includes("resetLaunchChecklistAction"));
 
 const baseUrl = process.env.CONTENT_E2E_BASE_URL;
 if (baseUrl) {

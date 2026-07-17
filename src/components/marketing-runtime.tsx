@@ -9,6 +9,7 @@ import {
   trackPageView,
   type ConsentPreferences,
 } from "@/src/lib/analytics";
+import { CONSENT_COOKIE_NAME } from "@/src/lib/consent-cookie";
 
 function defaultDraft(): ConsentPreferences {
   return { essential: true, analytics: false, marketing: false, updatedAt: new Date().toISOString() };
@@ -129,4 +130,5 @@ export function CookiePreferencesLink() {
 
 export function resetConsentForTests() {
   window.localStorage.removeItem(CONSENT_STORAGE_KEY);
+  document.cookie = `${CONSENT_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
 }

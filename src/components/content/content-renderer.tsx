@@ -98,7 +98,7 @@ function ProductBlock({ slug, post }: { slug: string; post: ContentPost }) {
 }
 
 function ComparisonBlock({ post }: { post: ContentPost }) {
-  if (!post.offers.length) return <MissingToken label="comparison:post-offers" />;
+  if (post.offers.length < 2) return <UnavailableRecommendation />;
   return (
     <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
       <table className="min-w-[760px] w-full text-sm">
@@ -176,6 +176,10 @@ function MissingToken({ label }: { label: string }) {
   return <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">Content block unavailable: {label}</div>;
 }
 
+function UnavailableRecommendation() {
+  return <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm font-semibold text-stone-700">This recommendation is currently unavailable.</div>;
+}
+
 function TokenBlock({ line, post }: { line: string; post: ContentPost }) {
   const match = line.match(tokenPattern);
   if (!match) return null;
@@ -183,7 +187,7 @@ function TokenBlock({ line, post }: { line: string; post: ContentPost }) {
   const value = rawValue.trim();
   if (type === "affiliate") {
     const offer = post.offers.find((item) => item.slug === value);
-    return offer ? <OfferCard offer={offer} post={post} /> : <MissingToken label={`affiliate:${value}`} />;
+    return offer ? <OfferCard offer={offer} post={post} /> : <UnavailableRecommendation />;
   }
   if (type === "product") return <ProductBlock slug={value} post={post} />;
   if (type === "comparison") return <ComparisonBlock post={post} />;

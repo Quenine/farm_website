@@ -1,104 +1,31 @@
 import Link from "next/link";
 import { AdminHeader } from "@/src/components/admin";
+import { requireAdmin } from "@/src/lib/admin-auth";
+import { getContentIndexingReadiness } from "@/src/lib/content-indexing";
+import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { siteConfig } from "@/src/config/site";
+import { ChecklistClient, type ChecklistSection } from "./checklist-client";
 
 export const dynamic = "force-dynamic";
 
-const checklistSections = [
-  {
-    title: "Catalogue",
-    items: [
-      "Product prices confirmed",
-      "Stock quantities confirmed",
-      "Product stock reviewed after test cleanup",
-      "Product images uploaded",
-    ],
-  },
-  {
-    title: "Delivery",
-    items: [
-      "Delivery coverage checked",
-      "Delivery rates checked for launch locations",
-      "Every orderable product has destination rates or All-city fallbacks",
-    ],
-  },
-  {
-    title: "Payments",
-    items: [
-      "Paystack mode confirmed",
-      "Paystack live keys configured when ready",
-      "One successful launch test order reviewed",
-    ],
-  },
-  {
-    title: "Content",
-    items: [
-      "Trash empty or reviewed",
-      "No public test posts",
-      "Five real articles published",
-      "Featured images present",
-      "Author and category metadata reviewed",
-    ],
-  },
-  {
-    title: "Email",
-    items: [
-      "Official addresses displayed",
-      "Inbound forwarding tested",
-      "Admin inquiry delivered",
-      "Customer acknowledgement delivered",
-      "Order confirmation delivered",
-      "Reply-To tested",
-    ],
-  },
-  {
-    title: "Operations",
-    items: [
-      "Admin links are hidden from public site",
-      "Test orders cleared before launch",
-      "Test orders reviewed, cancelled, or ignored",
-      "Someone assigned to monitor orders",
-      "Contact inquiry inbox monitored",
-      "Order notification inbox monitored",
-      "WhatsApp monitored",
-      "Support response owner assigned",
-      "Real paid orders will be kept for reconciliation",
-    ],
-  },
-];
+const labels: Record<string, string[]> = {
+  Technical: ["Canonical domain confirmed", "HTTPS confirmed", "Robots reviewed", "Sitemap reviewed", "RSS reviewed"],
+  Content: ["Trash reviewed", "No public test posts", "Five real articles published", "Featured images and metadata reviewed", "Internal links reviewed"],
+  Email: ["Official addresses displayed", "Inbound forwarding tested", "Outbound Resend delivery tested", "Reply-To tested"],
+  Payments: ["Paystack mode confirmed", "One successful launch test order reviewed"],
+  Delivery: ["Delivery coverage checked", "Delivery rates checked", "Product delivery fallbacks reviewed"],
+  Marketing: ["Campaign URLs reviewed", "Consent preferences tested", "Search verification configured"],
+  Affiliate: ["Eligible offers reviewed", "Retired references resolved", "Click reports compared with network reports", "Affiliate disclosure reviewed"],
+  Operations: ["Inquiry inbox monitored", "Order inbox monitored", "WhatsApp monitored", "Support response owner assigned"],
+};
+const sections: ChecklistSection[] = Object.entries(labels).map(([title, items]) => ({ title, items: items.map((label, index) => ({ id: `${title.toLowerCase()}:${index}`, label })) }));
 
-export default function AdminLaunchChecklistPage() {
-  return (
-    <>
-      <AdminHeader
-        title="Launch Checklist"
-        body="A simple operational checklist for public launch and daily readiness. These checks are intentionally manual."
-      />
-      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-        Test orders can be cancelled instead of deleted. Real paid orders should not be deleted; keep records for Paystack, inventory, delivery, and payment reconciliation.
-      </div>
-      <div className="mb-5 flex flex-wrap gap-2">
-        <Link href="/admin/delivery-coverage" className="inline-flex h-10 items-center rounded-full bg-green-800 px-4 text-sm font-bold text-white">
-          Check Delivery Coverage
-        </Link>
-        <Link href="/admin/diagnostics" className="inline-flex h-10 items-center rounded-full border border-green-800 px-4 text-sm font-bold text-green-950">
-          Check Diagnostics
-        </Link>
-      </div>
-      <section className="grid gap-4 lg:grid-cols-2">
-        {checklistSections.map((section) => (
-          <div key={section.title} className="rounded-lg border border-green-100 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-bold text-green-950">{section.title}</h2>
-            <div className="mt-4 grid gap-2">
-              {section.items.map((item) => (
-                <label key={item} className="flex items-start gap-3 rounded-lg border border-stone-100 bg-stone-50 p-3 text-sm font-semibold text-stone-800">
-                  <input type="checkbox" className="mt-1 size-4 rounded border-stone-300" />
-                  <span>{item}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        ))}
-      </section>
-    </>
-  );
+export default async function AdminLaunchChecklistPage() {
+  await requireAdmin();
+  const [readiness, setting] = await Promise.all([
+    getContentIndexingReadiness(),
+    createAdminSupabaseClient().from("app_settings").select("value,updated_at").eq("key", `launch_checklist:${siteConfig.domain}`).maybeSingle(),
+  ]);
+  const value = (setting.data?.value ?? {}) as { checked?: string[]; updatedAt?: string; checkedBy?: string };
+  return <><AdminHeader title="Launch Checklist" body="Automatic readiness checks and persistent admin confirmations. Completing this page never enables indexing automatically." /><section className={`mb-5 rounded-lg border p-5 ${readiness.readyForContentIndexing ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}><h2 className="text-xl font-bold text-green-950">Automatic indexing readiness: {readiness.readyForContentIndexing ? "Ready" : "Blocked"}</h2><p className="mt-2 text-sm">Eligible articles: {readiness.eligibleArticleCount}; sitemap articles while current flags apply: {readiness.sitemapArticleCount}; RSS: {readiness.rssEnabled ? "enabled" : "disabled"}.</p>{readiness.blockers.length ? <ul className="mt-3 ml-5 list-disc space-y-1 text-sm">{readiness.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : null}</section><div className="mb-5 flex gap-2"><Link href="/admin/diagnostics" className="rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950">Full diagnostics</Link><Link href="/admin/affiliate" className="rounded-full border border-green-800 px-4 py-2 text-sm font-bold text-green-950">Affiliate report</Link></div><ChecklistClient sections={sections} initialChecked={value.checked ?? []} updatedAt={value.updatedAt ?? setting.data?.updated_at} checkedBy={value.checkedBy} /></>;
 }

@@ -6,6 +6,8 @@ import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
 import { PaystackTestButton } from "./paystack-test-button";
 import { EmailTestButton } from "./email-test-button";
 import { emailDiagnostics } from "@/src/lib/email-config";
+import { contentConfig } from "@/src/lib/content-config";
+import { getContentIndexingReadiness } from "@/src/lib/content-indexing";
 
 function configurationStatus(value: string | undefined) {
   return value?.trim() ? "Configured" : "Missing";
@@ -79,11 +81,24 @@ export default async function AdminDiagnosticsPage() {
   const siteUrlValidation = validateConfiguredSiteUrl();
   const paystackDiagnostics = getPaystackEnvironmentDiagnostics();
   const email = emailDiagnostics();
+  const indexing = await getContentIndexingReadiness();
   const callbackUrl = siteUrlValidation.valid
     ? `${siteUrlValidation.siteUrl}/payment/callback`
     : `Unavailable: ${siteUrlValidation.reason}`;
 
   const diagnostics = [
+    { label: "Canonical domain", value: siteConfig.domain, isSecret: false },
+    { label: "Canonical HTTPS", value: yesNo(siteConfig.url.startsWith("https://")), isSecret: false },
+    { label: "Google verification configured", value: configurationStatus(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION), isSecret: false },
+    { label: "Bing verification configured", value: configurationStatus(process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION), isSecret: false },
+    { label: "Robots content state", value: contentConfig.indexingEnabled ? "Index/follow" : "Noindex content gate", isSecret: false },
+    { label: "Content indexing", value: contentConfig.indexingEnabled ? "Enabled" : "Disabled", isSecret: false },
+    { label: "Sitemap article count", value: String(indexing.sitemapArticleCount), isSecret: false },
+    { label: "RSS", value: indexing.rssEnabled ? "Enabled" : "Disabled", isSecret: false },
+    { label: "Eligible published articles", value: String(indexing.eligibleArticleCount), isSecret: false },
+    { label: "Noindex eligible articles", value: String(indexing.noindexArticleCount), isSecret: false },
+    { label: "Empty active categories", value: String(indexing.emptyCategoryCount), isSecret: false },
+    { label: "Empty active tags", value: String(indexing.emptyTagCount), isSecret: false },
     {
       label: "Configured site name",
       value: siteConfig.name,

@@ -4,6 +4,7 @@ import { getPublishedPostBySlug } from "@/src/lib/content";
 import { getPublicProductBySlug } from "@/src/lib/products";
 import { createContentAdminSupabaseClient } from "@/src/lib/supabase/content-admin-server";
 import { hasAdminSupabaseConfig } from "@/src/lib/supabase/config";
+import { CONSENT_COOKIE_NAME, parseConsentCookie } from "@/src/lib/consent-cookie";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const [post, product] = await Promise.all([getPublishedPostBySlug(postSlug), getPublicProductBySlug(productSlug)]);
   if (!post || !product) return new NextResponse("Referral unavailable.", { status: 404 });
   const destination = `/shop/${product.slug}`;
-  const consent = request.nextUrl.searchParams.get("consent") === "1";
-  if (consent && hasAdminSupabaseConfig()) {
+  const consent = parseConsentCookie(request.cookies.get(CONSENT_COOKIE_NAME)?.value);
+  if (consent.analytics && hasAdminSupabaseConfig()) {
     try {
       const supabase = createContentAdminSupabaseClient();
       await supabase.from("content_product_clicks").insert({ post_id: post.id, product_id: product.id, destination_path: destination, consent_recorded: true });

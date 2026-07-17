@@ -1,5 +1,6 @@
 import type { Product } from "@/src/types";
 import { marketingConfig, siteConfig } from "@/src/config/site";
+import { CONSENT_COOKIE_MAX_AGE, CONSENT_COOKIE_NAME, serializeConsentCookie } from "@/src/lib/consent-cookie";
 
 export type ConsentPreferences = {
   essential: true;
@@ -77,6 +78,10 @@ export function saveConsentPreferences(input: { analytics: boolean; marketing: b
     updatedAt: new Date().toISOString(),
   };
   writeJson(CONSENT_STORAGE_KEY, preferences);
+  if (hasWindow()) {
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${CONSENT_COOKIE_NAME}=${serializeConsentCookie(input)}; Max-Age=${CONSENT_COOKIE_MAX_AGE}; Path=/; SameSite=Lax${secure}`;
+  }
   window.dispatchEvent(new CustomEvent("farm-consent-changed", { detail: preferences }));
   return preferences;
 }

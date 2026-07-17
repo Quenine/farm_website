@@ -60,12 +60,11 @@ export type ContentVideo = {
   chapters: Array<{ label: string; time: string }> | null;
 };
 
-export type AffiliateOffer = {
+export type PublicAffiliateOffer = {
   id: string;
   title: string;
   slug: string;
   short_description: string;
-  destination_url: string;
   image_url: string | null;
   image_alt: string | null;
   button_label: string;
@@ -81,6 +80,14 @@ export type AffiliateOffer = {
   pros?: string[] | null;
   cons?: string[] | null;
 };
+
+export type ServerAffiliateOfferDestination = {
+  id: string;
+  slug: string;
+  destination_url: string;
+};
+
+export type AffiliateOffer = PublicAffiliateOffer;
 
 export type ContentPost = {
   id: string;
@@ -204,7 +211,7 @@ const postSelect = `
   content_post_sources ( citation_label, supporting_note, sort_order, content_sources ( id, title, publisher, url, source_type, publication_date, accessed_at ) ),
   content_videos ( id, platform, external_video_id, embed_url, watch_url, title, description, thumbnail_url, thumbnail_alt, duration_seconds, upload_date, transcript_markdown, chapters ),
   content_post_products ( sort_order, custom_context, products ( id, name, slug, description, price, unit, stock_quantity, minimum_order_quantity ) ),
-  content_post_affiliate_offers ( sort_order, best_for, editorial_verdict, pros, cons, affiliate_offers ( id, title, slug, short_description, destination_url, image_url, image_alt, button_label, display_price, currency, price_last_checked_at, available_regions, recommendation_basis, is_featured, affiliate_partners ( id, name, slug, website_url, default_disclosure ) ) )
+  content_post_affiliate_offers ( sort_order, best_for, editorial_verdict, pros, cons, affiliate_offers ( id, title, slug, short_description, image_url, image_alt, button_label, display_price, currency, price_last_checked_at, available_regions, recommendation_basis, is_featured, is_active, deleted_at, affiliate_partners ( id, name, slug, website_url, default_disclosure, is_active, deleted_at ) ) )
 `;
 
 type RawPost = Record<string, unknown>;
@@ -257,13 +264,13 @@ export function mapPost(row: RawPost): ContentPost {
     offers: offerRows
       .map((offerRow) => {
         const offer = relationOne(offerRow.affiliate_offers as Record<string, unknown> | Record<string, unknown>[] | null);
-        if (!offer) return null;
+        const partner = relationOne(offer?.affiliate_partners as Record<string, unknown> | Record<string, unknown>[] | null);
+        if (!offer || offer.is_active !== true || offer.deleted_at || !partner || partner.is_active !== true || partner.deleted_at) return null;
         return {
           id: String(offer.id),
           title: String(offer.title),
           slug: String(offer.slug),
           short_description: String(offer.short_description ?? ""),
-          destination_url: String(offer.destination_url ?? ""),
           image_url: (offer.image_url as string | null) ?? null,
           image_alt: (offer.image_alt as string | null) ?? null,
           button_label: String(offer.button_label ?? "Check current price"),
@@ -273,7 +280,7 @@ export function mapPost(row: RawPost): ContentPost {
           available_regions: (offer.available_regions as string[] | null) ?? null,
           recommendation_basis: offer.recommendation_basis as RecommendationBasis,
           is_featured: Boolean(offer.is_featured),
-          partner: relationOne(offer.affiliate_partners as AffiliateOffer["partner"] | AffiliateOffer["partner"][] | null),
+          partner: partner as AffiliateOffer["partner"],
           best_for: (offerRow.best_for as string | null) ?? null,
           editorial_verdict: (offerRow.editorial_verdict as string | null) ?? null,
           pros: (offerRow.pros as string[] | null) ?? null,
@@ -346,7 +353,7 @@ export async function getActiveAffiliateOffer(slug: string) {
   const supabase = createContentAdminSupabaseClient();
   const { data, error } = await supabase
     .from("affiliate_offers")
-    .select("id, title, slug, destination_url, is_active, affiliate_partners ( id, name, slug, website_url, is_active )")
+    .select("id, title, slug, destination_url, is_active, deleted_at, affiliate_partners ( id, name, slug, website_url, is_active, deleted_at )")
     .eq("slug", slug)
     .eq("is_active", true)
     .is("deleted_at", null)
@@ -354,8 +361,8 @@ export async function getActiveAffiliateOffer(slug: string) {
   if (shouldHideSupabaseError(error)) return null;
   if (error) throw new Error(`Unable to load affiliate offer: ${error.message}`);
   const partner = relationOne((data as Record<string, unknown> | null)?.affiliate_partners as Record<string, unknown> | Record<string, unknown>[] | null);
-  if (!data || !partner || partner.is_active === false) return null;
-  return data as { id: string; title: string; slug: string; destination_url: string };
+  if (!data || data.deleted_at || !partner || partner.is_active !== true || partner.deleted_at) return null;
+  return data as ServerAffiliateOfferDestination;
 }
 
 export async function getContentAdminSummary() {
