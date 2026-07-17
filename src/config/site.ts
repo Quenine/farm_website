@@ -22,9 +22,14 @@ function phoneDigits(value: string) {
 }
 
 const canonicalSite = assertValidSiteUrl();
+const deploymentName = canonicalSite.hostname.includes("shields")
+  ? "Shields Farms"
+  : canonicalSite.hostname.includes("noble")
+    ? "Noble Farms"
+    : "Farm Commerce";
 
 export const siteConfig = {
-  name: publicEnv("NEXT_PUBLIC_SITE_NAME", "Farm Commerce"),
+  name: publicEnv("NEXT_PUBLIC_SITE_NAME", deploymentName),
   url: canonicalSite.siteUrl,
   domain: canonicalSite.hostname,
   configuredDomain: canonicalSite.domainEnv ?? "",
