@@ -12,11 +12,13 @@
     "content:ui-checks": "node scripts/check-content-admin-ui.mjs",
     "content:publishing-checks": "node scripts/check-content-publishing.mjs",
     "content:e2e": "node scripts/check-content-e2e.mjs"
+    ,"operational:checks": "node scripts/check-operational-batch3.mjs"
   },
   "dependencies": {
     "@paystack/inline-js": "^2.22.9",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
+    "@types/web-push": "^3.6.4",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",
     "next": "16.2.9",
@@ -27,6 +29,7 @@
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {

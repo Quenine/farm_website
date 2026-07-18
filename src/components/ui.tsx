@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { CartLink } from "@/src/components/cart/cart-link";
 import { CookiePreferencesLink } from "@/src/components/marketing-runtime";
+import { InstallAppButton } from "@/src/components/pwa-runtime";
 import { AddToCartButton } from "@/src/components/product/add-to-cart-button";
 import { ProductMediaThumbnail } from "@/src/components/product/product-media";
 import { contentPublicConfig, siteConfig, siteContact } from "@/src/config/site";
@@ -105,6 +106,7 @@ export function Footer() {
             <Link href="/privacy-policy" className="hover:text-white">Privacy policy</Link>
             <Link href="/terms" className="hover:text-white">Terms of use</Link>
             <CookiePreferencesLink />
+            <InstallAppButton />
           </div>
         </div>
         <div>
@@ -160,7 +162,7 @@ export function ProductCard({ product }: { product: Product }) {
   const isOrderable = isProductOrderable(product);
 
   return (
-    <article className="flex h-full flex-col rounded-lg border border-green-900/10 bg-white p-5 shadow-sm">
+    <article className="flex h-full min-w-0 flex-col rounded-lg border border-green-900/10 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-5 aspect-[4/3] overflow-hidden rounded-lg bg-[linear-gradient(135deg,#ecfccb,#fef3c7)] text-green-950">
         <ProductMediaThumbnail product={product} />
       </div>
@@ -169,7 +171,7 @@ export function ProductCard({ product }: { product: Product }) {
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">
             {product.category}
           </p>
-          <h2 className="mt-2 text-xl font-bold text-green-950">{product.name}</h2>
+          <h2 className="mt-2 break-words text-lg font-bold text-green-950 sm:text-xl">{product.name}</h2>
         </div>
         <span className="rounded-full bg-lime-100 px-3 py-1 text-xs font-bold text-green-800">
           {product.badge}

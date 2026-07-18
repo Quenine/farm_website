@@ -12,6 +12,7 @@ import {
   formatPaymentStatus,
 } from "@/src/lib/order-format";
 import type { Order } from "@/src/types";
+import { PushOptIn } from "@/src/components/push-opt-in";
 
 export function TrackOrderForm() {
   const [reference, setReference] = useState("");
@@ -121,6 +122,7 @@ function TrackedOrder({ order }: { order: Order }) {
       <div className="rounded-lg border border-green-100 bg-white p-4 text-sm leading-6 text-stone-700 shadow-sm">
         Need help with this order? Call or WhatsApp <a href={siteContact.whatsappHref} className="font-bold text-green-800">{siteConfig.phone}</a> or email <a href={siteContact.supportEmailHref} className="font-bold text-green-800">{siteConfig.supportEmail}</a>.
       </div>
+      <PushOptIn context="customer" order={{ reference: order.reference, phone: order.customerPhone }} />
       <div>
         <h2 className="text-lg font-bold text-green-950">Order items</h2>
         <div className="mt-3 divide-y divide-stone-100 rounded-lg border border-stone-200">

@@ -17,6 +17,7 @@ import {
 import { AdminHeader, AdminTable } from "@/src/components/admin";
 import { formatNaira } from "@/src/lib/format";
 import { productPriceLabel } from "@/src/lib/product-pricing";
+import { getProductCampaignReadiness } from "@/src/lib/product-campaign-readiness";
 import type { Product, ProductMedia } from "@/src/types";
 
 const emptyProduct: Product = {
@@ -26,6 +27,7 @@ const emptyProduct: Product = {
   unit: "kg",
   stock: "0 kg available",
   stockCount: 0,
+  stockAlertThreshold: null,
   minimumOrder: 1,
   minimumUnit: "kg",
   quantityStep: 1,
@@ -101,6 +103,7 @@ export function AdminProductsClient({
   const [orderableFilter, setOrderableFilter] = useState("all");
   const [mediaFilter, setMediaFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
+  const [campaignFilter, setCampaignFilter] = useState("all");
   const [sort, setSort] = useState("newest");
   const [isPending, startTransition] = useTransition();
 
@@ -120,6 +123,13 @@ export function AdminProductsClient({
       if (orderableFilter === "not-orderable" && product.isOrderableOnline) return false;
       if (mediaFilter === "missing" && (product.media?.length ?? 0) > 0) return false;
       if (stockFilter === "low" && product.stockCount > 5) return false;
+      const campaign = getProductCampaignReadiness(product);
+      if (campaignFilter === "ready" && campaign.state !== "ready") return false;
+      if (campaignFilter === "missing-image" && !campaign.missing.includes("Primary image")) return false;
+      if (campaignFilter === "missing-price" && !campaign.missing.includes("Valid price or price-request state")) return false;
+      if (campaignFilter === "unavailable" && !campaign.missing.includes("Available stock")) return false;
+      if (campaignFilter === "delivery" && !campaign.missing.includes("Delivery or pickup method")) return false;
+      if (campaignFilter === "inactive" && campaign.state !== "not_campaignable") return false;
       return true;
     });
     return [...result].sort((a, b) => {
@@ -128,7 +138,7 @@ export function AdminProductsClient({
       if (sort === "stock") return a.stockCount - b.stockCount;
       return (b.id ?? b.slug).localeCompare(a.id ?? a.slug);
     });
-  }, [categoryFilter, items, mediaFilter, orderableFilter, pricingFilter, search, sort, statusFilter, stockFilter]);
+  }, [campaignFilter, categoryFilter, items, mediaFilter, orderableFilter, pricingFilter, search, sort, statusFilter, stockFilter]);
 
   const resetFilters = () => {
     setSearch("");
@@ -138,6 +148,7 @@ export function AdminProductsClient({
     setOrderableFilter("all");
     setMediaFilter("all");
     setStockFilter("all");
+    setCampaignFilter("all");
     setSort("newest");
   };
 
@@ -236,6 +247,7 @@ export function AdminProductsClient({
         price: saved.price,
         unit: saved.unit,
         stockCount: saved.stockCount,
+        stockAlertThreshold: saved.stockAlertThreshold ?? null,
         minimumOrder: saved.minimumOrder,
         quantityStep: saved.quantityStep ?? 1,
         quantityInputType: saved.quantityInputType ?? "whole",
@@ -345,6 +357,15 @@ export function AdminProductsClient({
           <option value="all">All stock levels</option>
           <option value="low">Low stock (5 or less)</option>
         </ProductFilter>
+        <ProductFilter label="Campaign readiness" value={campaignFilter} onChange={setCampaignFilter}>
+          <option value="all">All readiness states</option>
+          <option value="ready">Campaign-ready</option>
+          <option value="missing-image">Missing image</option>
+          <option value="missing-price">Missing price</option>
+          <option value="unavailable">Unavailable</option>
+          <option value="delivery">Delivery incomplete</option>
+          <option value="inactive">Draft/inactive</option>
+        </ProductFilter>
         <ProductFilter label="Sort" value={sort} onChange={setSort}>
           <option value="newest">Newest</option>
           <option value="name">Name</option>
@@ -378,6 +399,7 @@ export function AdminProductsClient({
           "Stock",
           "Featured",
           "Status",
+          "Campaign",
           "Actions",
         ]}
         rows={filteredItems.map((product) => [
@@ -389,6 +411,10 @@ export function AdminProductsClient({
           product.stock,
           product.isFeatured ? `Yes (${product.featuredSortOrder ?? 100})` : "No",
           product.availability,
+          <span key="campaign" className="block max-w-56 text-xs">
+            <strong>{getProductCampaignReadiness(product).state === "ready" ? "Ready" : getProductCampaignReadiness(product).state === "not_campaignable" ? "Not campaignable" : "Needs attention"}</strong>
+            {getProductCampaignReadiness(product).missing.length ? <span className="mt-1 block text-stone-600">{getProductCampaignReadiness(product).missing.join(", ")}</span> : null}
+          </span>,
           <div key="actions" className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -428,6 +454,7 @@ export function AdminProductsClient({
               <ProductInput label="Price" type="number" min={0} value={form.price} onChange={(price) => setForm({ ...form, price: Number(price) })} />
               <ProductInput label="Unit" value={form.unit} onChange={(unit) => setForm({ ...form, unit })} />
               <ProductInput label="Stock count" type="number" min={0} value={form.stockCount} onChange={(stockCount) => setForm({ ...form, stockCount: Number(stockCount) })} />
+              <ProductInput label="Low-stock alert threshold (optional)" type="number" min={0} value={form.stockAlertThreshold ?? ""} onChange={(value) => setForm({ ...form, stockAlertThreshold: value === "" ? null : Number(value) })} />
               <ProductInput label="Minimum order" type="number" min={0.01} step={0.01} value={form.minimumOrder} onChange={(minimumOrder) => setForm({ ...form, minimumOrder: Number(minimumOrder) })} />
               <ProductInput label="Quantity step" type="number" min={0.01} step={0.01} value={form.quantityStep ?? 1} onChange={(quantityStep) => setForm({ ...form, quantityStep: Number(quantityStep) })} />
               <label className="grid gap-2 text-sm font-semibold text-stone-800">

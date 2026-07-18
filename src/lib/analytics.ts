@@ -87,7 +87,20 @@ export function saveConsentPreferences(input: { analytics: boolean; marketing: b
 }
 
 export function analyticsAllowed() {
-  return Boolean(marketingConfig.enabled && marketingConfig.gaMeasurementId && getConsentPreferences()?.analytics);
+  return Boolean(marketingConfig.enabled && googleIntegration().valid && getConsentPreferences()?.analytics && !isAdminPath());
+}
+
+export function googleIntegration() {
+  const configured = [marketingConfig.googleTagId, marketingConfig.gtmContainerId, marketingConfig.gaMeasurementId].filter(Boolean);
+  if (configured.length !== 1) return { type: configured.length > 1 ? "conflict" : "none", id: configured[0] ?? "", valid: false } as const;
+  const id = configured[0];
+  if (/^(G|GT)-[A-Z0-9]+$/i.test(id)) return { type: "google_tag", id, valid: true } as const;
+  if (/^GTM-[A-Z0-9]+$/i.test(id)) return { type: "tag_manager", id, valid: true } as const;
+  return { type: "unknown", id, valid: false } as const;
+}
+
+function isAdminPath() {
+  return hasWindow() && window.location.pathname.startsWith("/admin");
 }
 
 export function marketingAllowed() {
@@ -105,10 +118,17 @@ function appendScript(id: string, src: string) {
 
 export function ensureGaLoaded() {
   if (!analyticsAllowed()) return;
-  const id = marketingConfig.gaMeasurementId;
+  const integration = googleIntegration();
+  const id = integration.id;
   if (!id || loadedGaId === id) return;
-  appendScript("farm-ga4", `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`);
   window.dataLayer = window.dataLayer || [];
+  if (integration.type === "tag_manager") {
+    window.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+    appendScript("farm-google-tag", "https://www.googletagmanager.com/gtm.js?id=" + encodeURIComponent(id));
+    loadedGaId = id;
+    return;
+  }
+  appendScript("farm-google-tag", "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id));
   window.gtag = window.gtag || function gtagShim(...args: unknown[]) { window.dataLayer?.push(args); };
   window.gtag("js", new Date());
   window.gtag("config", id, { send_page_view: false, anonymize_ip: true });
@@ -128,8 +148,10 @@ export function ensureMetaPixelLoaded() {
 export function trackGaEvent(name: string, params: Record<string, unknown> = {}) {
   try {
     ensureGaLoaded();
-    if (!analyticsAllowed() || !window.gtag) return;
-    window.gtag("event", name, params);
+    if (!analyticsAllowed()) return;
+    const integration = googleIntegration();
+    if (integration.type === "tag_manager") window.dataLayer?.push({ event: name, ...params });
+    else if (window.gtag) window.gtag("event", name, params);
   } catch {
     // Tracking must never interrupt commerce.
   }
@@ -219,6 +241,10 @@ export function trackSearch(searchTerm: string) {
 export function trackLead(label: string) {
   trackGaEvent("generate_lead", { method: label });
   trackPixelEvent("Lead", { content_name: label });
+}
+
+export function trackSafeEvent(name: string, params: Record<string, string | number | boolean> = {}) {
+  trackGaEvent(name, params);
 }
 
 export function trackShare(method: string, item?: AnalyticsItem) {

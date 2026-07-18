@@ -30,6 +30,7 @@ const productSchema = z
     price: z.number().nonnegative(),
     unit: z.string().trim().min(1).max(40),
     stockCount: z.number().nonnegative(),
+    stockAlertThreshold: z.number().nonnegative().nullable().optional(),
     minimumOrder: z.number().positive(),
     quantityStep: z.number().positive().default(1),
     quantityInputType: z.preprocess(

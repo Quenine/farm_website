@@ -33,6 +33,7 @@ export type Product = {
   unit: string;
   stock: string;
   stockCount: number;
+  stockAlertThreshold?: number | null;
   minimumOrder: number;
   minimumUnit: string;
   quantityStep?: number;

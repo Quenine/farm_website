@@ -6,6 +6,7 @@ import { siteConfig } from "@/src/config/site";
 import { emailConfig } from "@/src/lib/email-config";
 import { sendEmail } from "@/src/lib/notifications";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createOperationalNotification } from "@/src/lib/operational-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +104,8 @@ export async function POST(request: Request) {
     logStorage("insert", inserted.error?.code);
     return json(storageUnavailable, 503);
   }
+  const businessSupply = parsed.data.inquiry_type === "bulk_business_supply";
+  await createOperationalNotification({ type: "inquiry", severity: businessSupply ? "warning" : "info", event: "new", title: businessSupply ? "Business Supply inquiry needs review" : "New Contact inquiry", message: "A new inquiry is ready for admin review.", targetUrl: "/admin/inquiries", entityType: "contact_inquiry", entityId: inserted.data.id });
 
   let adminNotified = false;
   let customerAcknowledged = false;
@@ -124,6 +127,7 @@ export async function POST(request: Request) {
   } else {
     console.error("[Contact Email Unavailable]", { stage: "configuration", provider: emailConfig.provider || "missing", reason: "provider_or_sender_not_ready" });
   }
+  if (!adminNotified) await createOperationalNotification({ type: "system", severity: "warning", event: "contact-email-failed", title: "Contact email delivery unavailable", message: "An inquiry was saved but its operational email needs review.", targetUrl: "/admin/inquiries", entityType: "contact_inquiry", entityId: inserted.data.id });
 
   try {
     const timestampUpdate = await supabase.from("contact_inquiries").update({

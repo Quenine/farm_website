@@ -52,9 +52,17 @@ export const siteConfig = {
 export const marketingConfig = {
   enabled: publicBool("NEXT_PUBLIC_MARKETING_ENABLED", false),
   gaMeasurementId: publicEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", ""),
+  googleTagId: publicEnv("NEXT_PUBLIC_GOOGLE_TAG_ID", ""),
+  gtmContainerId: publicEnv("NEXT_PUBLIC_GTM_CONTAINER_ID", ""),
   metaPixelId: publicEnv("NEXT_PUBLIC_META_PIXEL_ID", ""),
   primaryRegion: publicEnv("NEXT_PUBLIC_MARKETING_PRIMARY_REGION", ""),
   businessSupplyEnabled: publicBool("NEXT_PUBLIC_BUSINESS_SUPPLY_ENABLED", true),
+};
+
+export const operationalFeatures = {
+  pwaEnabled: publicBool("NEXT_PUBLIC_PWA_ENABLED", false),
+  webPushEnabled: publicBool("NEXT_PUBLIC_WEB_PUSH_ENABLED", false),
+  vapidPublicKey: publicEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", ""),
 };
 
 export const contentPublicConfig = {

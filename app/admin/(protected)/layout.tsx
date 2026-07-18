@@ -1,4 +1,4 @@
-import { AdminShell } from "@/src/components/admin";
+import { AdminShell } from "@/src/components/admin-shell";
 import { requireAdmin } from "@/src/lib/admin-auth";
 
 export default async function ProtectedAdminLayout({

@@ -8,6 +8,7 @@ import { EmailTestButton } from "./email-test-button";
 import { emailDiagnostics } from "@/src/lib/email-config";
 import { contentConfig } from "@/src/lib/content-config";
 import { getContentIndexingReadiness } from "@/src/lib/content-indexing";
+import { googleIntegration } from "@/src/lib/analytics";
 
 function configurationStatus(value: string | undefined) {
   return value?.trim() ? "Configured" : "Missing";
@@ -92,11 +93,16 @@ export default async function AdminDiagnosticsPage() {
   const paystackDiagnostics = getPaystackEnvironmentDiagnostics();
   const email = emailDiagnostics();
   const indexing = await getContentIndexingReadiness();
+  const google = googleIntegration();
   const callbackUrl = siteUrlValidation.valid
     ? `${siteUrlValidation.siteUrl}/payment/callback`
     : `Unavailable: ${siteUrlValidation.reason}`;
 
   const diagnostics = [
+    { label: "Google integration type", value: google.type, isSecret: false },
+    { label: "Google public ID configured", value: google.id ? "Configured, not externally verified" : "Missing", isSecret: false },
+    { label: "Analytics admin exclusion", value: "Active", isSecret: false },
+    { label: "Ecommerce analytics events", value: "Implemented", isSecret: false },
     { label: "Canonical domain", value: siteConfig.domain, isSecret: false },
     { label: "Canonical HTTPS", value: yesNo(siteConfig.url.startsWith("https://")), isSecret: false },
     { label: "Google verification configured", value: configurationStatus(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION), isSecret: false },

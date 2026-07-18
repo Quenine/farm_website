@@ -1,0 +1,5 @@
+import "server-only";
+import { requireAdmin } from "@/src/lib/admin-auth";
+import { siteConfig } from "@/src/config/site";
+import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+export async function loadAdminNotifications(limit=20){const user=await requireAdmin();const supabase=createAdminSupabaseClient();const [{data:items,error},{data:reads}]=await Promise.all([supabase.from("app_notifications").select("id,type,severity,title,message,target_url,created_at").eq("site",siteConfig.domain).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order("created_at",{ascending:false}).limit(Math.min(100,limit)),supabase.from("app_notification_reads").select("notification_id,read_at,archived_at").eq("admin_user_id",user.id)]);if(error)return {items:[],unread:0};const map=new Map((reads??[]).map((row)=>[row.notification_id,row]));const safe=(items??[]).map((item)=>({...item,read:Boolean(map.get(item.id)?.read_at),archived:Boolean(map.get(item.id)?.archived_at)})).filter((item)=>!item.archived);return {items:safe,unread:safe.filter((item)=>!item.read).length};}

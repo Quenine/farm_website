@@ -7,6 +7,8 @@ import { ProductMarketingActions } from "@/src/components/product/product-market
 import { InfoRow, PageShell } from "@/src/components/ui";
 import { formatNaira } from "@/src/lib/format";
 import { getPublicProductBySlug } from "@/src/lib/products";
+import type { Metadata } from "next";
+import { siteConfig } from "@/src/config/site";
 import {
   isProductOrderable,
   productAvailabilityMessage,
@@ -15,6 +17,20 @@ import {
 } from "@/src/lib/product-pricing";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getPublicProductBySlug(slug);
+  if (!product) return {};
+  const description = product.description.slice(0, 160);
+  return {
+    title: product.name + " | " + siteConfig.name,
+    description,
+    alternates: { canonical: siteConfig.url + "/shop/" + product.slug },
+    robots: { index: product.status === "active", follow: true },
+    openGraph: { title: product.name, description, images: product.primaryMedia?.url ? [{ url: product.primaryMedia.url, alt: product.primaryMedia.altText || product.name }] : [] },
+  };
+}
 
 export default async function ProductDetailPage({
   params,
@@ -29,9 +45,29 @@ export default async function ProductDetailPage({
   }
   const priceLabel = productPriceLabel(product);
   const isOrderable = isProductOrderable(product);
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description,
+    image: product.primaryMedia?.url ? [product.primaryMedia.url] : undefined,
+    offers: product.pricingMode === "fixed" && product.price > 0 ? {
+      "@type": "Offer",
+      priceCurrency: "NGN",
+      price: product.price,
+      availability: product.stockCount > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      url: siteConfig.url + "/shop/" + product.slug,
+    } : undefined,
+  };
+  const breadcrumbJsonLd = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Shop", item: siteConfig.url + "/shop" },
+    { "@type": "ListItem", position: 2, name: product.name, item: siteConfig.url + "/shop/" + product.slug },
+  ] };
 
   return (
     <PageShell>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd).replaceAll("<", "\u003c") }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd).replaceAll("<", "\u003c") }} />
       <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <Link
           href="/shop"

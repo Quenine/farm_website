@@ -15,6 +15,7 @@ import {
   MapPinned,
   Megaphone,
   PackageCheck,
+  Bell,
   Settings,
 } from "lucide-react";
 import type { ContentFeatures } from "@/src/lib/content-features";
@@ -25,6 +26,7 @@ function buildAdminNav(features: ContentFeatures): AdminNavItem[] {
     { href: "/admin", label: "Dashboard", icon: BarChart3 },
     { href: "/admin/products", label: "Products", icon: PackageCheck },
     { href: "/admin/orders", label: "Orders", icon: ClipboardList },
+    { href: "/admin/notifications", label: "Notifications", icon: Bell },
     { href: "/admin/inquiries", label: "Inquiries", icon: Mail },
     { href: "/admin/inventory", label: "Inventory", icon: Boxes },
     { href: "/admin/delivery-rates", label: "Delivery Rates", icon: MapPin },

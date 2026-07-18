@@ -7,6 +7,7 @@ import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/src/lib/supabase/server";
 import { formatProductUnit, normalizeProductUnitKey, pluralizeProductUnit } from "@/src/lib/units";
 import type { DeliveryClass, Product, ProductMedia } from "@/src/types";
+import { createOperationalNotification } from "@/src/lib/operational-notifications";
 
 type ProductMediaRow = {
   id: string;
@@ -29,6 +30,7 @@ type ProductRow = {
   price: number | string;
   unit: string;
   stock_quantity: number | string;
+  stock_alert_threshold: number | string | null;
   minimum_order_quantity: number | string;
   quantity_step: number | string | null;
   quantity_input_type: "whole" | "decimal" | null;
@@ -63,6 +65,7 @@ export type AdminProductInput = {
   price: number;
   unit: string;
   stockCount: number;
+  stockAlertThreshold?: number | null;
   minimumOrder: number;
   quantityStep: number;
   quantityInputType: "whole" | "decimal";
@@ -93,6 +96,7 @@ const productColumns = `
   price,
   unit,
   stock_quantity,
+  stock_alert_threshold,
   minimum_order_quantity,
   quantity_step,
   quantity_input_type,
@@ -226,6 +230,7 @@ export function mapProductRow(row: ProductRow): Product {
         ? "Availability depends on quantity, season, and logistics"
         : `${stockCount} ${unitLabel} available`,
     stockCount,
+    stockAlertThreshold: row.stock_alert_threshold === null ? null : Number(row.stock_alert_threshold),
     minimumOrder,
     quantityStep: Number.isFinite(quantityStep) && quantityStep > 0 ? quantityStep : 1,
     quantityInputType,
@@ -351,6 +356,7 @@ export async function saveAdminProduct(input: AdminProductInput) {
   await requireAdmin();
   const supabase = createAdminSupabaseClient();
   const categoryId = await getCategoryId(input.category);
+  const previous = input.id ? await supabase.from("products").select("stock_quantity,stock_alert_threshold").eq("id", input.id).maybeSingle() : null;
   const payload = {
     name: input.name,
     slug: input.slug,
@@ -359,6 +365,7 @@ export async function saveAdminProduct(input: AdminProductInput) {
     price: input.price,
     unit: normalizeProductUnitKey(input.unit),
     stock_quantity: input.stockCount,
+    stock_alert_threshold: input.stockAlertThreshold ?? null,
     minimum_order_quantity: input.minimumOrder,
     quantity_step: input.quantityStep,
     quantity_input_type: input.quantityInputType,
@@ -394,6 +401,11 @@ export async function saveAdminProduct(input: AdminProductInput) {
 
   const { data, error } = await query;
   if (error) throw new Error(`Unable to save product: ${error.message}`);
+  const threshold = input.stockAlertThreshold;
+  const previousStock = Number(previous?.data?.stock_quantity ?? Number.POSITIVE_INFINITY);
+  if (data && input.status === "active" && threshold !== null && threshold !== undefined && input.stockCount <= threshold && previousStock > threshold) {
+    await createOperationalNotification({ type: "inventory", severity: input.stockCount <= 0 ? "critical" : "warning", event: input.stockCount <= 0 ? "out-of-stock" : "threshold", title: input.stockCount <= 0 ? input.name + " is out of stock" : input.name + " reached its alert threshold", message: "Review this product's inventory before accepting more orders.", targetUrl: "/admin/products?product=" + data.id, entityType: "product", entityId: data.id });
+  }
   return mapProductRow(data as unknown as ProductRow);
 }
 

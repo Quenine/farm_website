@@ -9,6 +9,7 @@ import { requireAdmin } from "@/src/lib/admin-auth";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
 import type { DatabaseOrderStatus, DeliveryMethod, Order, OrderItem } from "@/src/types";
 import type { DeliveryProductForCalculation } from "@/src/lib/delivery-calculator";
+import { createOperationalNotification, sendCustomerOrderPush } from "@/src/lib/operational-notifications";
 
 type OrderRow = {
   id: string;
@@ -516,6 +517,10 @@ export async function updateAdminOrderStatus(orderId: string, status: DatabaseOr
             : "Unknown notification error",
       });
     }
+    const safeEvents: Partial<Record<DatabaseOrderStatus, { severity: "info"|"success"|"warning"; title: string }>> = { processing:{severity:"info",title:"Order moved to processing"},out_for_delivery:{severity:"info",title:"Order moved out for delivery"},delivered:{severity:"success",title:"Order delivered"},cancelled:{severity:"warning",title:"Order cancelled"} };
+    const event=safeEvents[status];
+    if(event) await createOperationalNotification({type:status==="out_for_delivery"||status==="delivered"?"delivery":"order",severity:event.severity,event:status,title:event.title,message:"An order status changed and may need operational follow-up.",targetUrl:`/admin/orders?order=${orderId}`,entityType:"order",entityId:orderId});
+    await sendCustomerOrderPush(orderId,status,String((data as Record<string,unknown>).order_reference??""));
   }
 
   return mapOrderRow(data as unknown as OrderRow);

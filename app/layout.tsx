@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CartProvider } from "@/src/components/cart/cart-provider";
 import { MarketingRuntime } from "@/src/components/marketing-runtime";
+import { PwaRuntime } from "@/src/components/pwa-runtime";
 import { siteConfig } from "@/src/config/site";
 import { rssDiscoveryEnabled } from "@/src/lib/content-config";
 import { getSiteUrl } from "@/src/lib/site-url";
@@ -54,7 +55,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full bg-[#fbf7ed] text-stone-950">
-        <CartProvider>{children}<MarketingRuntime /></CartProvider>
+        <CartProvider>{children}<MarketingRuntime /><PwaRuntime /></CartProvider>
       </body>
     </html>
   );

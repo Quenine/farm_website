@@ -12,6 +12,7 @@ import {
 import { sendPaidOrderNotifications } from "@/src/lib/notifications";
 import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { createOperationalNotification } from "@/src/lib/operational-notifications";
 
 type ProcessResult = {
   orderId: string;
@@ -397,7 +398,8 @@ export async function processVerifiedPaystackTransaction(
   };
 
   if (!result.already_processed) {
-    await sendPaidOrderNotifications(order.id);
+    try { await sendPaidOrderNotifications(order.id); } catch { console.error("[Paid Order Email Failed]", { orderId: order.id, reason: "provider_unavailable_or_rejected" }); }
+    await createOperationalNotification({ type: result.needs_review ? "payment" : "order", severity: result.needs_review ? "critical" : "success", event: result.needs_review ? "manual-review" : "paid", title: result.needs_review ? "Payment requires manual review" : "New paid order received", message: result.needs_review ? "A paid order needs owner review before fulfilment." : "A paid order is ready for review.", targetUrl: `/admin/orders?order=${order.id}`, entityType: "order", entityId: order.id });
   }
 
   return result.needs_review

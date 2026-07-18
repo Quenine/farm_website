@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
+const migration = read("database/20260718_operational_notifications.sql");
+const service = read("src/lib/operational-notifications.ts");
+const pushRoute = read("app/api/push/subscriptions/route.ts");
+const worker = read("public/sw.js");
+const manifest = read("app/manifest.ts");
+const shop = read("app/shop/shop-filters.tsx");
+const analytics = read("src/lib/analytics.ts");
+const sitemap = read("app/sitemap.ts");
+const contact = read("app/api/contact/inquiries/route.ts");
+const noble = read(".env.example");
+
+assert.match(migration, /unique\(site, dedupe_key\)/);
+assert.match(migration, /stock_alert_threshold/);
+assert.match(service, /createOperationalNotification/);
+assert.doesNotMatch(service, /customer_email|delivery_address|customer_phone/i);
+assert.match(pushRoute, /getAuthenticatedAdmin/);
+assert.match(pushRoute, /sameOrigin/);
+assert.match(worker, /notificationclick/);
+assert.match(worker, /\/admin|\/checkout|\/track-order/);
+assert.match(manifest, /standalone/);
+assert.match(manifest, /pwa-maskable-512/);
+assert.match(shop, /mobile-shop-search/);
+assert.match(shop, /aria-modal="true"/);
+assert.match(analytics, /getConsentPreferences/);
+assert.match(analytics, /startsWith\("\/admin"\)/);
+assert.match(analytics, /farm_tracked_purchases_v1/);
+assert.match(sitemap, /item\.status === "active"/);
+assert.match(contact, /createOperationalNotification/);
+assert.match(noble, /NEXT_PUBLIC_PWA_ENABLED="false"/);
+assert.match(noble, /NEXT_PUBLIC_WEB_PUSH_ENABLED="false"/);
+console.log("Operational Batch 3 focused checks passed.");

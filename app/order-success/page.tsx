@@ -13,6 +13,7 @@ import {
 } from "@/src/lib/order-format";
 import { getOrderSuccess } from "@/src/lib/orders";
 import type { DeliveryMethod } from "@/src/types";
+import { PushOptIn } from "@/src/components/push-opt-in";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,7 @@ export default async function OrderSuccessPage({
               Continue shopping
             </Link>
           </div>
+          <div className="mt-6"><PushOptIn context="customer" order={{ reference: order.reference, phone: order.customerPhone }} /></div>
         </div>
       </section>
     </PageShell>

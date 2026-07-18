@@ -5,12 +5,24 @@ import { siteConfig, siteContact } from "@/src/config/site";
 import { PageShell, ProductCard, SectionHeader } from "@/src/components/ui";
 import { getPublicProducts } from "@/src/lib/products";
 import type { Product } from "@/src/types";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 
 type ShopPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+export async function generateMetadata({ searchParams }: ShopPageProps): Promise<Metadata> {
+  const query = await searchParams;
+  const filtered = Object.values(query).some((value) => Array.isArray(value) ? value.length > 0 : Boolean(value));
+  return {
+    title: "Shop | " + siteConfig.name,
+    description: "Shop active farm products from " + siteConfig.name + ".",
+    alternates: { canonical: siteConfig.url + "/shop" },
+    robots: filtered ? { index: false, follow: true } : { index: true, follow: true },
+  };
+}
 
 type SortOption = "price-asc" | "featured" | "newest" | "price-desc" | "name-asc";
 
@@ -113,7 +125,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
         />
 
         {filteredProducts.length > 0 ? (
-          <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-4 min-[390px]:grid-cols-2 lg:grid-cols-3">
             {filteredProducts.map((product) => (
               <ProductCard key={product.slug} product={product} />
             ))}

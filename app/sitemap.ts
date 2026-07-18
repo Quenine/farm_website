@@ -3,6 +3,7 @@ import type { MetadataRoute } from "next";
 import { contentConfig } from "@/src/lib/content-config";
 import { getSiteUrl } from "@/src/lib/site-url";
 import { getIndexableContentData } from "@/src/lib/content-indexing";
+import { getPublicProducts } from "@/src/lib/products";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
@@ -20,6 +21,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: route === "" || route === "/shop" ? "daily" : "monthly",
     priority: route === "" ? 1 : route === "/shop" ? 0.9 : 0.6,
   }));
+  const products = await getPublicProducts();
+  for (const product of products.filter((item) => item.status === "active")) {
+    result.push({ url: siteUrl + "/shop/" + product.slug, lastModified: new Date(), changeFrequency: "weekly", priority: 0.8 });
+  }
   if (contentConfig.hubEnabled && contentConfig.indexingEnabled) {
     const data = await getIndexableContentData();
     for (const post of data.posts) result.push({ url: `${siteUrl}/blog/${post.slug}`, lastModified: new Date(post.updated_at), changeFrequency: "weekly", priority: 0.75 });
