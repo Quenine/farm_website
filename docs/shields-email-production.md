@@ -1,25 +1,35 @@
 # Shields Farms production email
 
-## Inbound email
+## Incoming: Namecheap Email Forwarding
 
-Application code does not create inboxes. Configure domain mailboxes or forwarding so `info@shieldsfarms.store`, `support@shieldsfarms.store`, and `orders@shieldsfarms.store` reach the private operational inbox. Test each address externally before launch.
+Incoming mail uses Namecheap Email Forwarding. The info@shieldsfarms.store, support@shieldsfarms.store, and orders@shieldsfarms.store addresses forward to the private operational Gmail inbox.
 
-## Outbound email
+The application does not change Namecheap Mail Settings. Brevo transactional sending does not require an MX change for standard sender authentication.
 
-Verify `shieldsfarms.store` with the selected Gmail or Resend configuration. Add the provider-issued SPF and DKIM records, complete provider domain verification, and add a DMARC policy appropriate to the rollout. Provider-generated DNS values must come from the provider dashboard and must not be copied from this document.
+## Outgoing: Brevo transactional API
 
-Configure these Vercel variables:
+Set EMAIL_PROVIDER=brevo and configure the server-only BREVO_API_KEY. The application sends through the Brevo HTTPS transactional endpoint. Resend and Gmail SMTP remain supported alternatives; provider selection is explicit and each deployment should configure only the intended provider and corresponding credential.
 
-```env
-NEXT_PUBLIC_BUSINESS_EMAIL=info@shieldsfarms.store
-NEXT_PUBLIC_SUPPORT_EMAIL=support@shieldsfarms.store
-NEXT_PUBLIC_ORDERS_EMAIL=orders@shieldsfarms.store
-ADMIN_NOTIFICATION_EMAIL=<private inbox>
-CONTACT_INBOX_EMAIL=<private inbox>
-EMAIL_FROM_GENERAL=Shields Farms <info@shieldsfarms.store>
-EMAIL_FROM_SUPPORT=Shields Farms Support <support@shieldsfarms.store>
-EMAIL_FROM_ORDERS=Shields Farms Orders <orders@shieldsfarms.store>
-EMAIL_REPLY_TO_SUPPORT=support@shieldsfarms.store
-```
+Authenticate shieldsfarms.store in Brevo using:
 
-Keep the private recipients server-only. After deployment, use protected Admin Diagnostics to send a test email, submit one contact inquiry, confirm the private notification, confirm the customer acknowledgement, and verify Reply-To. Then place a controlled order and confirm the orders sender. Never expose or log private recipient values.
+- The Brevo verification TXT record.
+- The DKIM TXT or CNAME records shown by Brevo.
+- A suitable DMARC TXT record.
+
+Exact DNS host names and values must come from the Brevo dashboard. Do not invent or copy sample DNS values, and do not replace the Namecheap forwarding MX configuration.
+
+## Vercel environment
+
+    NEXT_PUBLIC_BUSINESS_EMAIL=info@shieldsfarms.store
+    NEXT_PUBLIC_SUPPORT_EMAIL=support@shieldsfarms.store
+    NEXT_PUBLIC_ORDERS_EMAIL=orders@shieldsfarms.store
+    ADMIN_NOTIFICATION_EMAIL=<private inbox>
+    CONTACT_INBOX_EMAIL=<private inbox>
+    EMAIL_PROVIDER=brevo
+    BREVO_API_KEY=<server-only Brevo API key>
+    EMAIL_FROM_GENERAL=Shields Farms <info@shieldsfarms.store>
+    EMAIL_FROM_SUPPORT=Shields Farms Support <support@shieldsfarms.store>
+    EMAIL_FROM_ORDERS=Shields Farms Orders <orders@shieldsfarms.store>
+    EMAIL_REPLY_TO_SUPPORT=support@shieldsfarms.store
+
+Keep private recipients and API credentials server-only. After Brevo authenticates the domain, use protected Admin Diagnostics to send a test email. Then submit a controlled contact inquiry and order, confirm private and customer messages, and verify Reply-To. Never expose or log private recipients or provider credentials.

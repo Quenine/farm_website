@@ -206,9 +206,16 @@ Need help? Call or WhatsApp ${siteConfig.phone}, or email ${siteConfig.supportEm
 }
 
 function selectedEmailProvider() {
-  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
-  if (provider) return provider;
-  return process.env.RESEND_API_KEY?.trim() ? "resend" : "";
+  return process.env.EMAIL_PROVIDER?.trim().toLowerCase() ?? "";
+}
+
+export function parseEmailSender(value: string): { name: string; email: string } | null {
+  const trimmed = value.trim();
+  const named = trimmed.match(/^\s*([^<>]+?)\s*<\s*([^<>\s]+@[^<>\s]+)\s*>\s*$/);
+  const email = (named?.[2] ?? trimmed).trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  const name = named?.[1]?.trim().replace(/^["']|["']$/g, "") || email.split("@")[0];
+  return { name: name.slice(0, 160), email };
 }
 
 function gmailSmtpSecure() {
@@ -281,6 +288,44 @@ async function sendResendEmail({ to, subject, html, from: requestedFrom, replyTo
   return true;
 }
 
+async function sendBrevoEmail({ to, subject, html, from: requestedFrom, replyTo }: EmailPayload) {
+  const apiKey = process.env.BREVO_API_KEY?.trim();
+  const sender = parseEmailSender(requestedFrom || emailConfig.fromGeneral);
+  if (!apiKey || !sender || !to.trim()) return false;
+  try {
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        sender,
+        to: [{ email: to.trim() }],
+        subject,
+        htmlContent: html,
+        ...(replyTo?.trim() ? { replyTo: { email: replyTo.trim() } } : {}),
+      }),
+    });
+    if (response.status !== 201) {
+      await response.text().catch(() => "");
+      const category = response.status === 401 || response.status === 403 ? "authentication" : response.status === 429 ? "rate_limit" : response.status >= 500 ? "provider_unavailable" : "request_rejected";
+      console.error("[Email Provider Rejected]", { provider: "brevo", status: response.status, category });
+      return false;
+    }
+    const result = await response.json().catch(() => null) as { messageId?: unknown } | null;
+    if (typeof result?.messageId !== "string" || !result.messageId.trim()) {
+      console.error("[Email Provider Rejected]", { provider: "brevo", status: response.status, category: "missing_message_id" });
+      return false;
+    }
+    return true;
+  } catch {
+    console.error("[Email Provider Rejected]", { provider: "brevo", status: 0, category: "network_failure" });
+    return false;
+  }
+}
+
 export async function sendEmail(payload: EmailPayload) {
   const provider = selectedEmailProvider();
 
@@ -290,6 +335,10 @@ export async function sendEmail(payload: EmailPayload) {
 
   if (provider === "resend") {
     return sendResendEmail(payload);
+  }
+
+  if (provider === "brevo") {
+    return sendBrevoEmail(payload);
   }
 
   return false;

@@ -40,7 +40,17 @@ function emailProviderConfigured() {
   if (provider === "resend") {
     return Boolean(process.env.RESEND_API_KEY?.trim() && process.env.FROM_EMAIL?.trim());
   }
-  return Boolean(process.env.RESEND_API_KEY?.trim() && process.env.FROM_EMAIL?.trim());
+  if (provider === "brevo") {
+    return Boolean(process.env.BREVO_API_KEY?.trim() && (process.env.EMAIL_FROM_GENERAL?.trim() || process.env.FROM_EMAIL?.trim()));
+  }
+  return false;
+}
+
+function providerLabel(provider: string) {
+  if (provider === "brevo") return "Brevo";
+  if (provider === "resend") return "Resend";
+  if (provider === "gmail") return "Gmail";
+  return "Missing";
 }
 
 function selectedWhatsAppProvider() {
@@ -203,7 +213,7 @@ export default async function AdminDiagnosticsPage() {
     },
     {
       label: "Email provider selected",
-      value: email.provider,
+      value: providerLabel(email.provider),
       isSecret: false,
     },
     {
@@ -214,6 +224,11 @@ export default async function AdminDiagnosticsPage() {
     {
       label: "Gmail configured",
       value: yesNo(gmailConfigured()),
+      isSecret: true,
+    },
+    {
+      label: "Brevo API key configured",
+      value: yesNo(email.brevoApiKey),
       isSecret: true,
     },
     {

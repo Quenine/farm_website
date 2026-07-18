@@ -7,7 +7,7 @@ const fallbackFrom = value("FROM_EMAIL");
 const fallbackReplyTo = value("REPLY_TO_EMAIL");
 
 export const emailConfig = {
-  provider: (value("EMAIL_PROVIDER") || (value("RESEND_API_KEY") ? "resend" : "")).toLowerCase(),
+  provider: value("EMAIL_PROVIDER").toLowerCase(),
   publicBusinessEmail: siteConfig.email,
   publicSupportEmail: siteConfig.supportEmail,
   publicOrdersEmail: siteConfig.ordersEmail,
@@ -32,5 +32,6 @@ export function emailDiagnostics() {
     replyTo: Boolean(emailConfig.replyToSupport), adminRecipient: Boolean(emailConfig.adminNotificationEmail), contactInbox: Boolean(emailConfig.contactInboxEmail),
     publicBusiness: Boolean(emailConfig.publicBusinessEmail), publicSupport: Boolean(emailConfig.publicSupportEmail), publicOrders: Boolean(emailConfig.publicOrdersEmail),
     domainMatches: senderDomainMatches(), notificationsEnabled: emailConfig.notificationsEnabled,
+    brevoApiKey: Boolean(value("BREVO_API_KEY")),
   };
 }

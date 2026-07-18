@@ -37,6 +37,8 @@ const indexing = file("src/lib/content-indexing.ts");
 const indexNow = file("src/lib/indexnow.ts");
 const checklist = file("app/admin/(protected)/launch-checklist/page.tsx");
 const checklistActions = file("app/admin/(protected)/launch-checklist/actions.ts");
+const emailExample = file(".env.shields.example");
+const emailDocs = file("docs/shields-email-production.md");
 const definitions = (await import('../src/lib/content-admin-entities.mjs')).adminEntityDefinitions;
 
 check("Add Affiliate Offer opens a visible picker", editor.includes("setOfferPickerOpen(true)") && editor.includes("Search offers") && editor.includes("Filter by partner"));
@@ -113,6 +115,18 @@ check("IndexNow is disabled unless every gate is true", indexNow.includes("if (!
 check("Readiness requires five articles and precise blockers", indexing.includes("data.posts.length < 5") && indexing.includes("blockers.push") && indexing.includes("readyForContentIndexing"));
 check("Readiness detects broken or retired affiliate tokens", indexing.includes("affiliateTokens") && indexing.includes("broken or retired"));
 check("Checklist is persisted per brand with admin identity and reset", checklist.includes("ChecklistClient") && checklistActions.includes("requireAdmin()") && checklistActions.includes("siteConfig.domain") && checklistActions.includes("resetLaunchChecklistAction"));
+check("Explicit Brevo provider selects Brevo", notifications.includes('provider === "brevo"') && notifications.includes("sendBrevoEmail(payload)") && emailConfig.includes('provider: value("EMAIL_PROVIDER")'));
+check("Missing Brevo API key fails safely", notifications.includes("if (!apiKey || !sender || !to.trim()) return false"));
+check("Named and plain sender parsing are supported", notifications.includes("parseEmailSender") && notifications.includes("named?.[2] ?? trimmed") && notifications.includes("email.split"));
+check("Brevo key remains server-side in request headers", notifications.includes('"api-key": apiKey') && !contactForm.includes("BREVO_API_KEY") && adminDiagnostics.includes("yesNo(email.brevoApiKey)"));
+check("Brevo sends HTML content and Reply-To", notifications.includes("htmlContent: html") && notifications.includes("replyTo: { email: replyTo.trim() }"));
+check("Brevo requires HTTP 201 and messageId", notifications.includes("response.status !== 201") && notifications.includes("result?.messageId"));
+check("Brevo rejection is controlled and sanitized", notifications.includes('provider: "brevo"') && notifications.includes("request_rejected") && !notifications.includes("Brevo email failed"));
+check("Provider rejection preserves Contact persistence", contactAction.indexOf('.insert({ ...inquiry') < contactAction.indexOf("sendEmail({") && contactAction.includes("saved: true"));
+check("Order notification failure cannot mark delivery sent", notifications.includes("if (sent) await markChannelSent") && notifications.includes("if (sent) {"));
+check("Resend and Gmail remain supported", notifications.includes('provider === "resend"') && notifications.includes('provider === "gmail"'));
+check("Email examples select Brevo and retain alternatives", emailExample.includes('EMAIL_PROVIDER="brevo"') && emailExample.includes('BREVO_API_KEY=""') && emailExample.includes("RESEND_API_KEY") && emailExample.includes("GMAIL_SMTP_HOST"));
+check("Namecheap forwarding remains independent of Brevo MX", emailDocs.includes("Namecheap Email Forwarding") && emailDocs.includes("does not require an MX change") && emailDocs.includes("do not replace the Namecheap forwarding MX"));
 
 const baseUrl = process.env.CONTENT_E2E_BASE_URL;
 if (baseUrl) {

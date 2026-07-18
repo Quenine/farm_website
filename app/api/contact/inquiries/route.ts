@@ -106,7 +106,7 @@ export async function POST(request: Request) {
 
   let adminNotified = false;
   let customerAcknowledged = false;
-  if (emailConfig.provider === "resend" && emailConfig.contactInboxEmail && emailConfig.fromSupport) {
+  if (["brevo", "resend", "gmail"].includes(emailConfig.provider) && emailConfig.contactInboxEmail && emailConfig.fromSupport) {
     adminNotified = await attemptEmail("admin_notification", () => sendEmail({
       to: emailConfig.contactInboxEmail,
       from: emailConfig.fromSupport,
