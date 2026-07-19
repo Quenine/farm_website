@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { CartLink } from "@/src/components/cart/cart-link";
 import { CookiePreferencesLink } from "@/src/components/marketing-runtime";
 import { InstallAppButton } from "@/src/components/pwa-runtime";
+import { PublicMobileMenu } from "@/src/components/public-mobile-menu";
 import { AddToCartButton } from "@/src/components/product/add-to-cart-button";
 import { ProductMediaThumbnail } from "@/src/components/product/product-media";
 import { contentPublicConfig, siteConfig, siteContact } from "@/src/config/site";
@@ -31,7 +32,7 @@ export function PublicHeader() {
             <span className="block text-lg font-bold leading-5 text-green-950">
               {siteConfig.name}
             </span>
-            <span className="text-xs font-medium text-stone-600">
+            <span className="hidden text-xs font-medium text-stone-600 min-[390px]:block">
               {siteConfig.tagline}
             </span>
           </span>
@@ -58,16 +59,8 @@ export function PublicHeader() {
             Track Order
           </Link>
         </nav>
-        <CartLink />
+        <div className="flex shrink-0 items-center gap-2"><CartLink /><PublicMobileMenu /></div>
       </div>
-      <nav className="mx-auto flex max-w-7xl gap-4 overflow-x-auto px-4 pb-3 text-sm font-semibold text-stone-700 md:hidden" aria-label="Mobile public navigation">
-        <Link href="/shop" className="shrink-0 hover:text-green-800">Shop</Link>
-        <Link href="/business-supply" className="shrink-0 hover:text-green-800">Business Supply</Link>
-        {contentPublicConfig.hubEnabled ? <Link href="/blog" className="shrink-0 hover:text-green-800">Blog</Link> : null}
-<Link href="/about" className="shrink-0 hover:text-green-800">About</Link>
-        <Link href="/contact" className="shrink-0 hover:text-green-800">Contact</Link>
-        <Link href="/track-order" className="shrink-0 hover:text-green-800">Track Order</Link>
-      </nav>
     </header>
   );
 }
@@ -163,7 +156,7 @@ export function ProductCard({ product }: { product: Product }) {
 
   return (
     <article className="flex h-full min-w-0 flex-col rounded-lg border border-green-900/10 bg-white p-4 shadow-sm sm:p-5">
-      <div className="mb-5 aspect-[4/3] overflow-hidden rounded-lg bg-[linear-gradient(135deg,#ecfccb,#fef3c7)] text-green-950">
+      <div className="mb-4 aspect-[4/3] overflow-hidden rounded-lg bg-[linear-gradient(135deg,#ecfccb,#fef3c7)] text-green-950">
         <ProductMediaThumbnail product={product} />
       </div>
       <div className="flex items-start justify-between gap-3">
@@ -173,33 +166,22 @@ export function ProductCard({ product }: { product: Product }) {
           </p>
           <h2 className="mt-2 break-words text-lg font-bold text-green-950 sm:text-xl">{product.name}</h2>
         </div>
-        <span className="rounded-full bg-lime-100 px-3 py-1 text-xs font-bold text-green-800">
+        <span className="hidden rounded-full bg-lime-100 px-3 py-1 text-xs font-bold text-green-800 sm:inline">
           {product.badge}
         </span>
       </div>
-      <p className="mt-4 text-sm leading-6 text-stone-600">{product.description}</p>
-      <div className="mt-5 grid gap-3 text-sm text-stone-700">
-        <InfoRow
-          label="Price"
-          value={priceLabel ?? `${formatNaira(product.price)} / ${product.unit}`}
-        />
-        {product.pricingMode === "quote_required" ? null : (
-          <>
-            <InfoRow label="Stock" value={product.stock} />
-            <InfoRow
-              label="Minimum"
-              value={`${product.minimumOrder} ${product.minimumUnit}`}
-            />
-          </>
-        )}
-        <InfoRow label="Status" value={product.availability} />
+      <p className="mt-3 line-clamp-3 text-sm leading-6 text-stone-600">{product.description}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+        <strong className="text-lg text-green-950">{priceLabel ?? `${formatNaira(product.price)} / ${product.unit}`}</strong>
+        <span className="rounded-full bg-green-50 px-3 py-1 font-semibold text-green-800">{product.availability}</span>
       </div>
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+      {product.pricingMode!=="quote_required"&&product.minimumOrder>1?<p className="mt-2 text-xs text-stone-500">Minimum {product.minimumOrder} {product.minimumUnit}</p>:null}
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <Link
           href={`/shop/${product.slug}`}
           className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-green-800 px-4 text-sm font-bold text-green-900 transition hover:bg-green-50"
         >
-          View
+          View details
           <ArrowRight size={16} />
         </Link>
         {isOrderable ? (

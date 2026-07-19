@@ -26,7 +26,10 @@ export const metadata: Metadata = {
     ...(verificationValue("NEXT_PUBLIC_BING_SITE_VERIFICATION") ? { other: { "msvalidate.01": verificationValue("NEXT_PUBLIC_BING_SITE_VERIFICATION")! } } : {}),
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: siteConfig.logoPath, sizes: "32x32", type: "image/png" },
+    ],
+    shortcut: siteConfig.logoPath,
     apple: siteConfig.logoPath,
   },
   openGraph: {

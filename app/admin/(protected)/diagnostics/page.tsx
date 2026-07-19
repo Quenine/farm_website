@@ -100,9 +100,11 @@ export default async function AdminDiagnosticsPage() {
 
   const diagnostics = [
     { label: "Google integration type", value: google.type, isSecret: false },
+    { label: "Google detected prefix", value: "prefix" in google ? google.prefix : "None or invalid", isSecret: false },
     { label: "Google public ID configured", value: google.id ? "Configured, not externally verified" : "Missing", isSecret: false },
     { label: "Analytics admin exclusion", value: "Active", isSecret: false },
     { label: "Ecommerce analytics events", value: "Implemented", isSecret: false },
+    { label: "External Google verification", value: "Accept analytics consent publicly, open Tag Assistant or Analytics Realtime, test the production domain, and allow reporting time.", isSecret: false },
     { label: "Canonical domain", value: siteConfig.domain, isSecret: false },
     { label: "Canonical HTTPS", value: yesNo(siteConfig.url.startsWith("https://")), isSecret: false },
     { label: "Google verification configured", value: configurationStatus(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION), isSecret: false },

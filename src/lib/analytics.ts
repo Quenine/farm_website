@@ -94,8 +94,8 @@ export function googleIntegration() {
   const configured = [marketingConfig.googleTagId, marketingConfig.gtmContainerId, marketingConfig.gaMeasurementId].filter(Boolean);
   if (configured.length !== 1) return { type: configured.length > 1 ? "conflict" : "none", id: configured[0] ?? "", valid: false } as const;
   const id = configured[0];
-  if (/^(G|GT)-[A-Z0-9]+$/i.test(id)) return { type: "google_tag", id, valid: true } as const;
-  if (/^GTM-[A-Z0-9]+$/i.test(id)) return { type: "tag_manager", id, valid: true } as const;
+  if (/^(G|GT|AW)-[A-Z0-9]+$/i.test(id)) return { type: "google_tag", id, valid: true, prefix: id.split("-")[0].toUpperCase() } as const;
+  if (/^GTM-[A-Z0-9]+$/i.test(id)) return { type: "tag_manager", id, valid: true, prefix: "GTM" } as const;
   return { type: "unknown", id, valid: false } as const;
 }
 

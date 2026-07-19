@@ -36,7 +36,7 @@ export function TrackOrderForm() {
   };
 
   return (
-    <div className="mt-8 rounded-lg bg-white p-6 shadow-sm">
+    <div className="mt-8 min-w-0 overflow-hidden rounded-lg bg-white p-4 shadow-sm sm:p-6">
       <form
         onSubmit={submit}
         className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end"
@@ -78,7 +78,7 @@ export function TrackOrderForm() {
 function TrackedOrder({ order }: { order: Order }) {
   return (
     <div className="mt-8 grid gap-6">
-      <div className="grid gap-3 rounded-lg bg-green-50 p-5 text-sm text-green-950 md:grid-cols-2">
+      <div className="grid min-w-0 gap-3 rounded-lg bg-green-50 p-4 text-sm text-green-950 md:grid-cols-2">
         <Detail label="Order reference" value={order.reference} />
         <Detail label="Order status" value={formatOrderStatus(order.orderStatus)} />
         <Detail
@@ -129,7 +129,7 @@ function TrackedOrder({ order }: { order: Order }) {
           {order.items.map((item) => (
             <div
               key={item.id}
-              className="flex flex-wrap justify-between gap-3 p-4 text-sm"
+              className="grid min-w-0 gap-3 p-4 text-sm min-[390px]:grid-cols-[minmax(0,1fr)_auto]"
             >
               <div>
                 <p className="font-bold text-stone-950">{item.productName}</p>
@@ -184,9 +184,9 @@ function TrackingInput({
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4 border-b border-green-200 pb-2">
+    <div className="grid min-w-0 gap-1 border-b border-green-200 pb-2 min-[390px]:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
       <span className="text-green-800">{label}</span>
-      <strong className="text-right">{value}</strong>
+      <strong className="break-words text-left min-[390px]:text-right [overflow-wrap:anywhere]">{value}</strong>
     </div>
   );
 }

@@ -4,13 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
-
-export async function updateInquiryStatusAction(id: string, status: string) {
-  await requireAdmin();
-  const parsedId = z.string().uuid().parse(id);
-  const parsedStatus = z.enum(["new","in_progress","resolved","spam"]).parse(status);
-  const result = await createAdminSupabaseClient().from("contact_inquiries").update({ status: parsedStatus, updated_at: new Date().toISOString() }).eq("id", parsedId);
-  if (result.error) return { success: false, message: result.error.message };
-  revalidatePath("/admin/inquiries");
-  return { success: true, message: `Inquiry marked ${parsedStatus.replaceAll("_", " ")}.` };
-}
+import { sendEmail } from "@/src/lib/notifications";
+import { emailConfig } from "@/src/lib/email-config";
+import { siteConfig, siteContact } from "@/src/config/site";
+import { createOperationalNotification } from "@/src/lib/operational-notifications";
+export async function updateInquiryStatusAction(id:string,status:string){await requireAdmin();const parsedId=z.string().uuid().parse(id);const parsedStatus=z.enum(["new","in_progress","resolved","spam"]).parse(status);const result=await createAdminSupabaseClient().from("contact_inquiries").update({status:parsedStatus,updated_at:new Date().toISOString()}).eq("id",parsedId).neq("status",parsedStatus).select("id,email").maybeSingle();if(result.error)return{success:false,message:result.error.message};if(!result.data)return{success:true,message:"Inquiry is already marked "+parsedStatus.replaceAll("_"," ")+"."};if(parsedStatus==="in_progress"||parsedStatus==="resolved"){const reviewing=parsedStatus==="in_progress";try{const sent=await sendEmail({to:result.data.email,from:emailConfig.fromSupport,replyTo:emailConfig.replyToSupport,subject:reviewing?"We’re reviewing your "+siteConfig.name+" inquiry":"Your "+siteConfig.name+" inquiry has been resolved",html:reviewing?"<p>We are reviewing your inquiry. You will receive a further response where necessary.</p>":"<p>Your inquiry has been marked resolved.</p><p>If you need further help, email "+siteConfig.supportEmail+" or contact us through <a href='"+siteContact.whatsappHref+"'>WhatsApp</a>.</p>"});if(!sent)throw new Error("provider_unavailable")}catch{await createOperationalNotification({type:"system",severity:"warning",event:"inquiry-status-email-failed-"+parsedStatus,title:"Inquiry status email unavailable",message:"An inquiry status was saved but its customer update needs review.",targetUrl:"/admin/inquiries",entityType:"contact_inquiry",entityId:parsedId})}}revalidatePath("/admin/inquiries");return{success:true,message:"Inquiry marked "+parsedStatus.replaceAll("_"," ")+"."}}

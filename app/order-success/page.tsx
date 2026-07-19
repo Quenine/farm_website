@@ -41,7 +41,7 @@ export default async function OrderSuccessPage({
         items={order.items.map((item) => ({ item_id: item.productId ?? item.productName, item_name: item.productName, item_variant: item.unit, price: item.unitPrice, quantity: item.quantity }))}
       />
       <section className="mx-auto grid min-h-[60vh] max-w-3xl place-items-center px-4 py-16 sm:px-6 lg:px-8">
-        <div className="w-full rounded-lg bg-white p-8 shadow-sm">
+        <div className="min-w-0 w-full overflow-hidden rounded-lg bg-white p-4 shadow-sm sm:p-8">
           <div className="text-center">
             <CheckCircle2 className="mx-auto text-green-700" size={56} />
             <h1 className="mt-5 text-4xl font-bold text-green-950">
@@ -115,9 +115,9 @@ function formatDeliveryMethod(method: DeliveryMethod) {
 
 function Summary({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4 border-b border-stone-200 pb-2">
+    <div className="grid min-w-0 gap-1 border-b border-stone-200 pb-2 min-[390px]:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
       <span className="text-stone-500">{label}</span>
-      <strong className="text-right text-stone-950">{value}</strong>
+      <strong className="break-words text-left text-stone-950 min-[390px]:text-right [overflow-wrap:anywhere]">{value}</strong>
     </div>
   );
 }

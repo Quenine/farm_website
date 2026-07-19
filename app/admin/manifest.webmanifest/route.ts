@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server";
+import { siteConfig } from "@/src/config/site";
+export function GET(){return NextResponse.json({name:siteConfig.name+" Admin",short_name:"Farms Admin",description:"Authenticated operational administration for "+siteConfig.name+".",id:"/shields-farms-admin",start_url:"/admin",scope:"/admin",display:"standalone",theme_color:"#052e16",background_color:"#f5f5f4",icons:[{src:"/images/pwa-icon-192.png",sizes:"192x192",type:"image/png"},{src:"/images/pwa-icon-512.png",sizes:"512x512",type:"image/png"},{src:"/images/pwa-maskable-512.png",sizes:"512x512",type:"image/png",purpose:"maskable"}]},{headers:{"Content-Type":"application/manifest+json","Cache-Control":"private, no-cache"}})}

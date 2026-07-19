@@ -99,13 +99,6 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
           title={`Shop ${siteConfig.name} produce`}
           body={`Browse eggs, broilers, fresh crop produce, and selected farm inputs from ${siteConfig.name}. Product availability, quantity, and delivery options may vary by item and location.`}
         />
-        <div className="mt-6 rounded-lg bg-green-50 p-5 text-green-950">
-          <h2 className="text-lg font-bold">Fresh crop produce supply</h2>
-          <p className="mt-2 text-sm font-semibold leading-6 text-green-900">
-            {siteConfig.name} supplies fresh produce, poultry, eggs, and farm inputs with clear checkout pricing where available. Use the filters below to find products by category, unit, price, and availability.
-          </p>
-        </div>
-
         <ShopAnalytics products={filteredProducts} search={search} />
         <ShopFilters
           key={filterKey}
@@ -125,7 +118,7 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
         />
 
         {filteredProducts.length > 0 ? (
-          <div className="mt-6 grid grid-cols-1 gap-4 min-[390px]:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredProducts.map((product) => (
               <ProductCard key={product.slug} product={product} />
             ))}
