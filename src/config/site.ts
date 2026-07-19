@@ -49,6 +49,17 @@ export const siteConfig = {
   logoPath: publicEnv("NEXT_PUBLIC_LOGO_PATH", "/images/noble-farms-logo.png"),
 };
 
+const iconBrand = siteConfig.domain.includes("noble") || siteConfig.logoPath.includes("noble") ? "noble" : "shields";
+export const brandIcons = {
+  favicon32: `/images/${iconBrand}-favicon-32.png`,
+  favicon48: `/images/${iconBrand}-favicon-48.png`,
+  apple: `/images/${iconBrand}-apple-touch-icon.png`,
+  pwa192: `/images/${iconBrand}-pwa-icon-192.png`,
+  pwa512: `/images/${iconBrand}-pwa-icon-512.png`,
+  maskable512: `/images/${iconBrand}-pwa-maskable-512.png`,
+  badge96: `/images/${iconBrand}-pwa-badge-96.png`,
+};
+
 export const marketingConfig = {
   enabled: publicBool("NEXT_PUBLIC_MARKETING_ENABLED", false),
   gaMeasurementId: publicEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", ""),

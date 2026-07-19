@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   captureAttributionFromLocation,
   CONSENT_STORAGE_KEY,
@@ -18,12 +19,14 @@ function defaultDraft(): ConsentPreferences {
 type ConsentView = "banner" | "modal" | "hidden";
 
 export function MarketingRuntime() {
+  const pathname = usePathname();
   const [hydrated, setHydrated] = useState(false);
   const [preferences, setPreferences] = useState<ConsentPreferences | null>(null);
   const [view, setView] = useState<ConsentView>("hidden");
   const [draft, setDraft] = useState<ConsentPreferences>(() => defaultDraft());
   const manageButtonRef = useRef<HTMLButtonElement | null>(null);
   const saveButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lastPageView = useRef("");
 
   useEffect(() => {
     window.queueMicrotask(() => {
@@ -33,7 +36,6 @@ export function MarketingRuntime() {
       setView(latest ? "hidden" : "banner");
       setHydrated(true);
       captureAttributionFromLocation();
-      trackPageView();
     });
 
     const openPreferences = () => {
@@ -47,7 +49,6 @@ export function MarketingRuntime() {
     const onConsentChanged = () => {
       const stored = getConsentPreferences();
       setPreferences(stored);
-      if (stored?.analytics || stored?.marketing) trackPageView();
     };
     window.addEventListener("farm-open-cookie-preferences", openPreferences);
     window.addEventListener("farm-consent-changed", onConsentChanged);
@@ -56,6 +57,14 @@ export function MarketingRuntime() {
       window.removeEventListener("farm-consent-changed", onConsentChanged);
     };
   }, []);
+
+  useEffect(() => {
+    if (!hydrated || !preferences?.analytics || pathname.startsWith("/admin")) return;
+    const path = `${pathname}${window.location.search}`;
+    if (lastPageView.current === path) return;
+    lastPageView.current = path;
+    trackPageView(path);
+  }, [hydrated, pathname, preferences?.analytics]);
 
   useEffect(() => {
     if (view !== "modal") return;
@@ -74,7 +83,6 @@ export function MarketingRuntime() {
     setPreferences(next);
     setDraft(next);
     setView("hidden");
-    if (analytics || marketing) trackPageView();
   };
 
   if (!hydrated || view === "hidden") return null;

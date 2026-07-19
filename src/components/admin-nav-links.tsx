@@ -45,7 +45,7 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AdminNavLinks({ features }: { features: ContentFeatures }) {
+export function AdminNavLinks({ features, onNavigate }: { features: ContentFeatures; onNavigate?: () => void }) {
   const pathname = usePathname();
   const nav = buildAdminNav(features);
 
@@ -57,6 +57,7 @@ export function AdminNavLinks({ features }: { features: ContentFeatures }) {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={`flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-semibold transition ${
               active

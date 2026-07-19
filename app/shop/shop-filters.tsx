@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { trackSafeEvent, trackSearch } from "@/src/lib/analytics";
 
@@ -59,6 +60,7 @@ export function ShopFilters({ categories, units, totalCount, shownCount, initial
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
 
   const update = (key: keyof ShopFilterValues, value: string) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -82,14 +84,16 @@ export function ShopFilters({ categories, units, totalCount, shownCount, initial
 
   const clear = () => {
     setValues(defaultValues);
-    startTransition(() => router.push(pathname));
+    setOpen(false);
+    startTransition(() => router.push("/shop"));
+    requestAnimationFrame(() => searchInput.current?.focus());
   };
   useEffect(()=>{if(!open)return;const previous=document.body.style.overflow;document.body.style.overflow="hidden";const first=sheet.current?.querySelector<HTMLElement>("select,input,button");first?.focus();const key=(event:KeyboardEvent)=>{if(event.key==="Escape"){setOpen(false);opener.current?.focus();}if(event.key==="Tab"&&sheet.current){const nodes=[...sheet.current.querySelectorAll<HTMLElement>("button,input,select")].filter((node)=>!node.hasAttribute("disabled"));if(!nodes.length)return;const firstNode=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===firstNode){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();firstNode.focus();}}};window.addEventListener("keydown",key);return()=>{document.body.style.overflow=previous;window.removeEventListener("keydown",key)}},[open]);
   const active=[values.category,values.availability!=="all"?values.availability:"",values.unit,values.minPrice?`Min ₦${values.minPrice}`:"",values.maxPrice?`Max ₦${values.maxPrice}`:""].filter(Boolean);
 
   return (
     <>
-      <form onSubmit={submit} className="mt-6 flex gap-2 lg:hidden"><label className="sr-only" htmlFor="mobile-shop-search">Search products</label><input id="mobile-shop-search" value={values.search} onChange={(event)=>update("search",event.target.value)} placeholder="Search products" className="h-12 min-w-0 flex-1 rounded-full border bg-white px-4"/><button className="rounded-full bg-green-800 px-4 text-sm font-bold text-white">Search</button></form>
+      <form onSubmit={submit} className="mt-6 flex gap-2 lg:hidden"><label className="sr-only" htmlFor="mobile-shop-search">Search products</label><div className="relative min-w-0 flex-1"><input ref={searchInput} id="mobile-shop-search" value={values.search} onChange={(event)=>update("search",event.target.value)} placeholder="Search products" className="h-12 w-full rounded-full border bg-white px-4 pr-12"/>{values.search?<button type="button" onClick={clear} aria-label="Clear search and filters" className="absolute right-1 top-1 grid size-10 place-items-center rounded-full text-stone-600 hover:bg-stone-100"><X size={18}/></button>:null}</div><button className="rounded-full bg-green-800 px-4 text-sm font-bold text-white">Search</button></form>
       <div className="mt-3 flex gap-2 lg:hidden"><button ref={opener} type="button" onClick={()=>setOpen(true)} className="h-11 flex-1 rounded-full border border-green-800 font-bold text-green-950">Filters{active.length?` (${active.length})`:""}</button><button type="button" onClick={()=>setOpen(true)} className="h-11 flex-1 rounded-full border border-green-800 font-bold text-green-950">Sort</button></div>
       {active.length?<div className="mt-3 flex flex-wrap gap-2 lg:hidden">{active.map((value)=><span key={value} className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-900">{value}</span>)}<button type="button" onClick={clear} className="text-xs font-bold text-red-700 underline">Clear all</button></div>:null}
       <form onSubmit={submit} className="mt-6 hidden gap-3 rounded-lg border border-green-900/10 bg-white p-4 shadow-sm lg:grid lg:grid-cols-6">

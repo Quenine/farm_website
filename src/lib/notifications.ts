@@ -43,9 +43,28 @@ type EmailPayload = {
   to: string;
   subject: string;
   html: string;
+  text?: string;
   from?: string;
   replyTo?: string;
 };
+
+function transactionalText(payload: EmailPayload) {
+  if (payload.text?.trim()) return payload.text.trim();
+  return payload.html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>|<\/div>|<\/li>|<\/h[1-6]>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#39;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
 
 type CustomerStatusNotificationStatus =
   | "packed"
@@ -233,7 +252,7 @@ function normalizeStatusForCustomerNotification(
     : null;
 }
 
-async function sendGmailEmail({ to, subject, html, from: requestedFrom, replyTo: requestedReplyTo }: EmailPayload) {
+async function sendGmailEmail({ to, subject, html, text, from: requestedFrom, replyTo: requestedReplyTo }: EmailPayload) {
   const host = process.env.GMAIL_SMTP_HOST?.trim() || "smtp.gmail.com";
   const port = Number(process.env.GMAIL_SMTP_PORT?.trim() || 465);
   const user = process.env.GMAIL_USER?.trim();
@@ -260,13 +279,14 @@ async function sendGmailEmail({ to, subject, html, from: requestedFrom, replyTo:
     to,
     subject,
     html,
+    text,
     ...(replyTo ? { replyTo } : {}),
   });
 
   return true;
 }
 
-async function sendResendEmail({ to, subject, html, from: requestedFrom, replyTo }: EmailPayload) {
+async function sendResendEmail({ to, subject, html, text, from: requestedFrom, replyTo }: EmailPayload) {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = requestedFrom || emailConfig.fromGeneral;
   if (!apiKey || !from || !to.trim()) return false;
@@ -277,7 +297,7 @@ async function sendResendEmail({ to, subject, html, from: requestedFrom, replyTo
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ from, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
+    body: JSON.stringify({ from, to, subject, html, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
 
   if (!response.ok) {
@@ -288,7 +308,7 @@ async function sendResendEmail({ to, subject, html, from: requestedFrom, replyTo
   return true;
 }
 
-async function sendBrevoEmail({ to, subject, html, from: requestedFrom, replyTo }: EmailPayload) {
+async function sendBrevoEmail({ to, subject, html, text, from: requestedFrom, replyTo }: EmailPayload) {
   const apiKey = process.env.BREVO_API_KEY?.trim();
   const sender = parseEmailSender(requestedFrom || emailConfig.fromGeneral);
   if (!apiKey || !sender || !to.trim()) return false;
@@ -305,6 +325,7 @@ async function sendBrevoEmail({ to, subject, html, from: requestedFrom, replyTo 
         to: [{ email: to.trim() }],
         subject,
         htmlContent: html,
+        textContent: text,
         ...(replyTo?.trim() ? { replyTo: { email: replyTo.trim() } } : {}),
       }),
     });
@@ -327,6 +348,7 @@ async function sendBrevoEmail({ to, subject, html, from: requestedFrom, replyTo 
 }
 
 export async function sendEmail(payload: EmailPayload) {
+  payload = { ...payload, text: transactionalText(payload) };
   const provider = selectedEmailProvider();
 
   if (provider === "gmail") {

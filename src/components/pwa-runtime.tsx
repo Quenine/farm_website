@@ -1,9 +1,101 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
+
 import { useEffect, useState } from "react";
 import { operationalFeatures, siteConfig } from "@/src/config/site";
 import { trackSafeEvent } from "@/src/lib/analytics";
-declare global { interface Window { deferredPwaPrompt?: Event & { prompt:()=>Promise<void>; userChoice:Promise<{outcome:string}> }; } }
-type InstallContext="public"|"admin";
-export function PwaRuntime(){const[show,setShow]=useState(false);const[context,setContext]=useState<InstallContext>("public");const[ready,setReady]=useState(false);const standalone=ready&&window.matchMedia("(display-mode: standalone)").matches;const ios=ready&&/iphone|ipad|ipod/i.test(navigator.userAgent);const safari=ready&&/safari/i.test(navigator.userAgent)&&!/crios|fxios|edgios/i.test(navigator.userAgent);useEffect(()=>{setReady(true);if(!operationalFeatures.pwaEnabled)return;navigator.serviceWorker?.register("/sw.js").catch(()=>{});const visits=Number(localStorage.getItem("farm_pwa_visits")||0)+1;localStorage.setItem("farm_pwa_visits",String(visits));const prompt=(event:Event)=>{event.preventDefault();window.deferredPwaPrompt=event as Window["deferredPwaPrompt"]};const open=(event:Event)=>{const detail=(event as CustomEvent<{context?:InstallContext}>).detail;setContext(detail?.context==="admin"?"admin":"public");setShow(true)};const installed=()=>{setShow(false);trackSafeEvent("pwa_installed")};window.addEventListener("beforeinstallprompt",prompt);window.addEventListener("farm-open-install",open);window.addEventListener("appinstalled",installed);return()=>{window.removeEventListener("beforeinstallprompt",prompt);window.removeEventListener("farm-open-install",open);window.removeEventListener("appinstalled",installed)}},[]);if(!ready||!show)return null;const install=async()=>{trackSafeEvent("pwa_install_prompt_shown",{context});if(window.deferredPwaPrompt){await window.deferredPwaPrompt.prompt();const choice=await window.deferredPwaPrompt.userChoice;if(choice.outcome==="accepted")setShow(false);window.deferredPwaPrompt=undefined}};return <div className="fixed inset-0 z-[80] grid place-items-end bg-black/40 p-3 sm:place-items-center" onMouseDown={(event)=>{if(event.target===event.currentTarget)setShow(false)}}><section role="dialog" aria-modal="true" aria-labelledby="install-title" className="w-full max-w-md rounded-xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><h2 id="install-title" className="text-xl font-bold text-green-950">{standalone?"App already installed":context==="admin"?"Install "+siteConfig.name+" Admin":"Install "+siteConfig.name}</h2>{standalone?<p className="mt-2 text-sm text-stone-600">You are already using the installed app.</p>:ios?<div className="mt-3 text-sm leading-7 text-stone-700">{!safari?<p className="mb-3 rounded-lg bg-amber-50 p-3 font-semibold text-amber-900">For reliable installation, open this page in Safari.</p>:null}<ol className="ml-5 list-decimal"><li>Tap Share.</li><li>Choose Add to Home Screen.</li><li>Tap Add.</li></ol></div>:window.deferredPwaPrompt?<p className="mt-2 text-sm text-stone-600">Install for faster access from your Home Screen.</p>:<p className="mt-2 text-sm text-stone-600">Installation is not offered by this browser right now. Use your browser menu and choose Install app or Add to Home Screen.</p>}<div className="mt-5 flex flex-wrap gap-2">{!standalone&&!ios&&window.deferredPwaPrompt?<button type="button" onClick={install} className="min-h-11 rounded-full bg-green-800 px-5 text-sm font-bold text-white">Install</button>:null}<button type="button" onClick={()=>setShow(false)} className="min-h-11 rounded-full border px-5 text-sm font-bold">Close</button></div>{context==="admin"?<p className="mt-3 text-xs text-stone-500">Some browsers support only one installed identity per site. Admin access always remains authenticated.</p>:null}</section></div>}
-export function InstallAppButton({label="Install app",context="public",afterClick}:{label?:string;context?:InstallContext;afterClick?:()=>void}){return <button type="button" onClick={()=>{window.dispatchEvent(new CustomEvent("farm-open-install",{detail:{context}}));afterClick?.()}} className="min-h-11 text-left hover:text-white">{label}</button>}
+
+type InstallContext = "public" | "admin";
+type DeferredPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+declare global {
+  interface Window {
+    deferredPwaPrompt?: DeferredPrompt;
+    pendingPwaInstallContext?: InstallContext;
+  }
+}
+
+export function PwaRuntime() {
+  const [show, setShow] = useState(false);
+  const [context, setContext] = useState<InstallContext>("public");
+  const [ready, setReady] = useState(false);
+  const [promptReady, setPromptReady] = useState(false);
+  const standalone = ready && window.matchMedia("(display-mode: standalone)").matches;
+  const ios = ready && /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const safari = ready && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent);
+
+  useEffect(() => {
+    setReady(true);
+    const beforeInstall = (event: Event) => {
+      event.preventDefault();
+      window.deferredPwaPrompt = event as DeferredPrompt;
+      setPromptReady(true);
+    };
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<{ context?: InstallContext }>).detail;
+      setContext(detail?.context === "admin" ? "admin" : "public");
+      setShow(true);
+    };
+    const installed = () => {
+      setShow(false);
+      window.deferredPwaPrompt = undefined;
+      setPromptReady(false);
+      trackSafeEvent("pwa_installed");
+    };
+    window.addEventListener("beforeinstallprompt", beforeInstall);
+    window.addEventListener("farm-open-install", open);
+    window.addEventListener("appinstalled", installed);
+    if (window.pendingPwaInstallContext) {
+      setContext(window.pendingPwaInstallContext);
+      window.pendingPwaInstallContext = undefined;
+      queueMicrotask(() => setShow(true));
+    }
+    if (operationalFeatures.pwaEnabled) {
+      navigator.serviceWorker?.register("/sw.js").catch(() => {});
+    }
+    return () => {
+      window.removeEventListener("beforeinstallprompt", beforeInstall);
+      window.removeEventListener("farm-open-install", open);
+      window.removeEventListener("appinstalled", installed);
+    };
+  }, []);
+
+  if (!ready || !show) return null;
+  const install = async () => {
+    const prompt = window.deferredPwaPrompt;
+    if (!prompt) return;
+    trackSafeEvent("pwa_install_prompt_shown", { context });
+    await prompt.prompt();
+    const choice = await prompt.userChoice;
+    if (choice.outcome === "accepted") setShow(false);
+    window.deferredPwaPrompt = undefined;
+    setPromptReady(false);
+  };
+
+  return <div className="fixed inset-0 z-[80] grid place-items-end bg-black/40 p-3 sm:place-items-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setShow(false); }}>
+    <section role="dialog" aria-modal="true" aria-labelledby="install-title" className="w-full max-w-md rounded-xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl">
+      <h2 id="install-title" className="text-xl font-bold text-green-950">{standalone ? "App already installed" : context === "admin" ? `Install ${siteConfig.name} Admin` : `Install ${siteConfig.name}`}</h2>
+      {!operationalFeatures.pwaEnabled ? <p className="mt-2 text-sm text-stone-600">App installation is not enabled for this deployment.</p>
+        : standalone ? <p className="mt-2 text-sm text-stone-600">You are already using the installed app.</p>
+        : ios ? <div className="mt-3 text-sm leading-7 text-stone-700">
+          {!safari ? <p className="mb-3 rounded-lg bg-amber-50 p-3 font-semibold text-amber-900">For reliable installation, open this page in Safari.</p> : null}
+          <ol className="ml-5 list-decimal"><li>Tap the Share button.</li><li>Scroll and choose Add to Home Screen.</li><li>Confirm the app name and icon.</li><li>Tap Add.</li><li>Open the app from your Home Screen.</li></ol>
+        </div>
+        : promptReady ? <p className="mt-2 text-sm text-stone-600">Install for faster access from your Home Screen.</p>
+        : <p className="mt-2 text-sm text-stone-600">Installation is not offered by this browser right now. Use the browser menu and choose Install app or Add to Home Screen.</p>}
+      <div className="mt-5 flex flex-wrap gap-2">
+        {operationalFeatures.pwaEnabled && !standalone && !ios && promptReady ? <button type="button" onClick={install} className="min-h-11 rounded-full bg-green-800 px-5 text-sm font-bold text-white">Install</button> : null}
+        <button type="button" onClick={() => setShow(false)} className="min-h-11 rounded-full border px-5 text-sm font-bold">Close</button>
+      </div>
+      {context === "admin" ? <p className="mt-3 text-xs text-stone-500">Some browsers support only one installed identity per site. Admin access always remains authenticated.</p> : null}
+    </section>
+  </div>;
+}
+
+export function InstallAppButton({ label = "Install app", context = "public", afterClick }: { label?: string; context?: InstallContext; afterClick?: () => void }) {
+  if (!operationalFeatures.pwaEnabled) return null;
+  return <button type="button" onClick={() => {
+    window.pendingPwaInstallContext = context;
+    window.dispatchEvent(new CustomEvent("farm-open-install", { detail: { context } }));
+    afterClick?.();
+  }} className="min-h-11 text-left hover:text-white">{label}</button>;
+}

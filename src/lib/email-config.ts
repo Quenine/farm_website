@@ -26,6 +26,7 @@ export function senderDomainMatches(expected = "shieldsfarms.store") {
 }
 
 export function emailDiagnostics() {
+  const expectedDomain = siteConfig.url.replace(/^https?:\/\//, "").split("/")[0].replace(/^www\./, "");
   return {
     provider: emailConfig.provider || "Missing",
     generalSender: Boolean(emailConfig.fromGeneral), supportSender: Boolean(emailConfig.fromSupport), ordersSender: Boolean(emailConfig.fromOrders),
@@ -33,5 +34,9 @@ export function emailDiagnostics() {
     publicBusiness: Boolean(emailConfig.publicBusinessEmail), publicSupport: Boolean(emailConfig.publicSupportEmail), publicOrders: Boolean(emailConfig.publicOrdersEmail),
     domainMatches: senderDomainMatches(), notificationsEnabled: emailConfig.notificationsEnabled,
     brevoApiKey: Boolean(value("BREVO_API_KEY")),
+    senderDomainAligned: senderDomainMatches(expectedDomain),
+    htmlAndTextSupported: true,
+    externalDomainAuthenticationRequired: true,
+    inboxPlacementGuaranteed: false,
   };
 }

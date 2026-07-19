@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { CartProvider } from "@/src/components/cart/cart-provider";
 import { MarketingRuntime } from "@/src/components/marketing-runtime";
 import { PwaRuntime } from "@/src/components/pwa-runtime";
-import { siteConfig } from "@/src/config/site";
+import { brandIcons, siteConfig } from "@/src/config/site";
 import { rssDiscoveryEnabled } from "@/src/lib/content-config";
 import { getSiteUrl } from "@/src/lib/site-url";
 import "./globals.css";
@@ -27,10 +27,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: siteConfig.logoPath, sizes: "32x32", type: "image/png" },
+      { url: brandIcons.favicon32, sizes: "32x32", type: "image/png" },
+      { url: brandIcons.favicon48, sizes: "48x48", type: "image/png" },
     ],
-    shortcut: siteConfig.logoPath,
-    apple: siteConfig.logoPath,
+    shortcut: brandIcons.favicon32,
+    apple: brandIcons.apple,
   },
   openGraph: {
     type: "website",

@@ -1,6 +1,6 @@
 ﻿import { connection } from "next/server";
 import { AdminHeader } from "@/src/components/admin";
-import { siteConfig } from "@/src/config/site";
+import { marketingConfig, operationalFeatures, siteConfig } from "@/src/config/site";
 import { getPaystackEnvironmentDiagnostics } from "@/src/lib/paystack";
 import { validateConfiguredSiteUrl } from "@/src/lib/site-url";
 import { PaystackTestButton } from "./paystack-test-button";
@@ -102,6 +102,8 @@ export default async function AdminDiagnosticsPage() {
     { label: "Google integration type", value: google.type, isSecret: false },
     { label: "Google detected prefix", value: "prefix" in google ? google.prefix : "None or invalid", isSecret: false },
     { label: "Google public ID configured", value: google.id ? "Configured, not externally verified" : "Missing", isSecret: false },
+    { label: "Marketing runtime enabled", value: yesNo(marketingConfig.enabled), isSecret: false },
+    { label: "Google initial and client pageviews", value: "Consent-gated; once per public route", isSecret: false },
     { label: "Analytics admin exclusion", value: "Active", isSecret: false },
     { label: "Ecommerce analytics events", value: "Implemented", isSecret: false },
     { label: "External Google verification", value: "Accept analytics consent publicly, open Tag Assistant or Analytics Realtime, test the production domain, and allow reporting time.", isSecret: false },
@@ -280,6 +282,12 @@ export default async function AdminDiagnosticsPage() {
     { label: "Public support email configured", value: email.publicSupport ? "Ready" : "Missing", isSecret: false },
     { label: "Public orders email configured", value: email.publicOrders ? "Ready" : "Missing", isSecret: false },
     { label: "Sender domain matches shieldsfarms.store", value: email.domainMatches ? "Ready" : "Misconfigured", isSecret: false },
+    { label: "Sender domain aligned to deployment", value: email.senderDomainAligned ? "Ready" : "Misconfigured", isSecret: false },
+    { label: "Transactional multipart bodies", value: email.htmlAndTextSupported ? "HTML and plain text" : "Missing", isSecret: false },
+    { label: "Inbox placement", value: email.inboxPlacementGuaranteed ? "Guaranteed" : "Not guaranteed; externally verify SPF, DKIM and DMARC", isSecret: false },
+    { label: "PWA feature flag", value: operationalFeatures.pwaEnabled ? "Enabled" : "Disabled; install controls hidden", isSecret: false },
+    { label: "PWA manifest identities", value: "Public /manifest.webmanifest; Admin /admin/manifest.webmanifest", isSecret: false },
+    { label: "Web push public key", value: operationalFeatures.vapidPublicKey ? "Configured" : "Missing", isSecret: true },
   );
 
   return (
