@@ -19,8 +19,8 @@ import type { Product } from "@/src/types";
 export function PublicHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-green-900/10 bg-[#fbf7ed]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:px-6 lg:px-8">
+        <Link href="/" className="flex min-w-0 items-center gap-2">
           <span className="grid size-11 place-items-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-green-900/10">
             <img
               src={siteConfig.logoPath}
@@ -28,11 +28,11 @@ export function PublicHeader() {
               className="h-9 w-9 object-contain"
             />
           </span>
-          <span>
-            <span className="block text-lg font-bold leading-5 text-green-950">
+          <span className="min-w-0">
+            <span className="block truncate text-base font-bold leading-5 text-green-950 min-[390px]:text-lg">
               {siteConfig.name}
             </span>
-            <span className="hidden text-xs font-medium text-stone-600 min-[390px]:block">
+            <span className="hidden truncate text-xs font-medium text-stone-600 min-[430px]:block">
               {siteConfig.tagline}
             </span>
           </span>

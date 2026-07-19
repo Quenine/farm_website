@@ -39,7 +39,6 @@ export const CONSENT_STORAGE_KEY = "farm_marketing_consent_v1";
 export const ATTRIBUTION_STORAGE_KEY = "farm_marketing_attribution_v1";
 
 const campaignKeys = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "utm_id"] as const;
-let loadedGaId: string | null = null;
 let loadedPixelId: string | null = null;
 const firedPurchases = new Set<string>();
 
@@ -116,25 +115,6 @@ function appendScript(id: string, src: string) {
   document.head.appendChild(script);
 }
 
-export function ensureGaLoaded() {
-  if (!analyticsAllowed()) return;
-  const integration = googleIntegration();
-  const id = integration.id;
-  if (!id || loadedGaId === id) return;
-  window.dataLayer = window.dataLayer || [];
-  if (integration.type === "tag_manager") {
-    window.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
-    appendScript("farm-google-tag", "https://www.googletagmanager.com/gtm.js?id=" + encodeURIComponent(id));
-    loadedGaId = id;
-    return;
-  }
-  appendScript("farm-google-tag", "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id));
-  window.gtag = window.gtag || function gtagShim(...args: unknown[]) { window.dataLayer?.push(args); };
-  window.gtag("js", new Date());
-  window.gtag("config", id, { send_page_view: false, anonymize_ip: true });
-  loadedGaId = id;
-}
-
 export function ensureMetaPixelLoaded() {
   if (!marketingAllowed()) return;
   const id = marketingConfig.metaPixelId;
@@ -147,11 +127,14 @@ export function ensureMetaPixelLoaded() {
 
 export function trackGaEvent(name: string, params: Record<string, unknown> = {}) {
   try {
-    ensureGaLoaded();
     if (!analyticsAllowed()) return;
     const integration = googleIntegration();
-    if (integration.type === "tag_manager") window.dataLayer?.push({ event: name, ...params });
-    else if (window.gtag) window.gtag("event", name, params);
+    if (integration.type === "google_tag" && window.gtag) {
+      window.gtag("event", name, params);
+      const safe = { name, at: new Date().toISOString() };
+      window.sessionStorage.setItem("farm_last_safe_analytics_event", JSON.stringify(safe));
+      window.dispatchEvent(new CustomEvent("farm-analytics-event", { detail: safe }));
+    }
   } catch {
     // Tracking must never interrupt commerce.
   }

@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 import {
   captureAttributionFromLocation,
   CONSENT_STORAGE_KEY,
   getConsentPreferences,
   saveConsentPreferences,
-  trackPageView,
   type ConsentPreferences,
 } from "@/src/lib/analytics";
 import { CONSENT_COOKIE_NAME } from "@/src/lib/consent-cookie";
@@ -19,14 +17,12 @@ function defaultDraft(): ConsentPreferences {
 type ConsentView = "banner" | "modal" | "hidden";
 
 export function MarketingRuntime() {
-  const pathname = usePathname();
   const [hydrated, setHydrated] = useState(false);
   const [preferences, setPreferences] = useState<ConsentPreferences | null>(null);
   const [view, setView] = useState<ConsentView>("hidden");
   const [draft, setDraft] = useState<ConsentPreferences>(() => defaultDraft());
   const manageButtonRef = useRef<HTMLButtonElement | null>(null);
   const saveButtonRef = useRef<HTMLButtonElement | null>(null);
-  const lastPageView = useRef("");
 
   useEffect(() => {
     window.queueMicrotask(() => {
@@ -57,14 +53,6 @@ export function MarketingRuntime() {
       window.removeEventListener("farm-consent-changed", onConsentChanged);
     };
   }, []);
-
-  useEffect(() => {
-    if (!hydrated || !preferences?.analytics || pathname.startsWith("/admin")) return;
-    const path = `${pathname}${window.location.search}`;
-    if (lastPageView.current === path) return;
-    lastPageView.current = path;
-    trackPageView(path);
-  }, [hydrated, pathname, preferences?.analytics]);
 
   useEffect(() => {
     if (view !== "modal") return;
