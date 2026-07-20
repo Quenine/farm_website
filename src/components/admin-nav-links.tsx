@@ -33,7 +33,7 @@ function buildAdminNav(features: ContentFeatures): AdminNavItem[] {
     { href: "/admin/delivery-coverage", label: "Delivery Coverage", icon: MapPinned },
     ...(features.contentHubEnabled ? [{ href: "/admin/content", label: "Content", icon: FileText }] : []),
     ...(features.affiliateContentEnabled ? [{ href: "/admin/affiliate", label: "Affiliate", icon: Handshake }] : []),
-    { href: "/admin/marketing/campaigns", label: "Marketing", icon: Megaphone },
+    { href: "/admin/marketing/overview", label: "Marketing", icon: Megaphone },
     { href: "/admin/launch-checklist", label: "Launch Checklist", icon: ListChecks },
     { href: "/admin/diagnostics", label: "Diagnostics", icon: CircleGauge },
     { href: "/admin/settings", label: "Settings", icon: Settings },

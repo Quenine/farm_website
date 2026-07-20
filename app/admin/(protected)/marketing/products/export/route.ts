@@ -1,0 +1,4 @@
+import {NextResponse} from "next/server";
+import {loadProductPerformance} from "@/src/lib/marketing-command-centre";
+const cell=(value:unknown)=>`"${String(value??"").replaceAll('"','""')}"`;
+export async function GET(){const products=await loadProductPerformance();const rows=[["Product","Availability","Paid quantity","Paid revenue","Paid orders","Average quantity per paid order","Content product clicks","Current stock","Campaign ready"],...products.map((p)=>[p.name,p.status,p.paidQuantity,p.paidRevenue,p.paidOrders,p.averageQuantity,p.contentClicks,p.stock_quantity,p.is_orderable_online||p.pricing_mode==="quote_required"?"Ready":"Review"])];return new NextResponse(rows.map((row)=>row.map(cell).join(",")).join("\r\n"),{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":'attachment; filename="product-performance.csv"',"cache-control":"private, no-store"}})}
