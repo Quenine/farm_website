@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ProductDetailActions } from "@/src/components/product/product-detail-actions";
-import { ProductMediaGallery } from "@/src/components/product/product-media";
+import { ProductGallery } from "@/src/components/product/product-gallery";
 import { ProductMarketingActions } from "@/src/components/product/product-marketing-actions";
 import { InfoRow, PageShell } from "@/src/components/ui";
 import { formatNaira } from "@/src/lib/format";
@@ -77,7 +77,7 @@ export default async function ProductDetailPage({
           Back to shop
         </Link>
         <div className="mt-6 grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <ProductMediaGallery product={product} />
+          <ProductGallery product={product} />
           <div className="rounded-lg bg-white p-6 shadow-sm">
             <p className="text-sm font-bold uppercase tracking-[0.16em] text-green-700">
               {productAvailabilityMessage(product)}

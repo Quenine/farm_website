@@ -2,6 +2,8 @@ import "server-only";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { createAdminSupabaseClient } from "@/src/lib/supabase/admin";
+import { getAdminProducts } from "@/src/lib/products";
+import { getProductCampaignReadiness } from "@/src/lib/product-campaign-readiness";
 
 export type RangeKey =
   | "today"
@@ -208,14 +210,9 @@ export async function loadMarketingOverview(key: RangeKey) {
 export async function loadProductPerformance() {
   await requireAdmin();
   const db = createAdminSupabaseClient();
-  const [productsResult, ordersResult, itemsResult, clicksResult] =
+  const [{ products }, ordersResult, itemsResult, clicksResult, campaignsResult, campaignClicksResult] =
     await Promise.all([
-      db
-        .from("products")
-        .select(
-          "id,name,slug,status,stock_quantity,is_orderable_online,pricing_mode,categories(name)",
-        )
-        .order("name"),
+      getAdminProducts(),
       db
         .from("orders")
         .select(
@@ -228,15 +225,24 @@ export async function loadProductPerformance() {
         .select("order_id,product_id,quantity,total_price")
         .limit(5000),
       db.from("content_product_clicks").select("product_id").limit(5000),
+      db.from("marketing_campaigns").select("id,target_path").limit(1000),
+      db.from("marketing_campaign_clicks").select("campaign_id").limit(10000),
     ]);
   const paidIds = new Set((ordersResult.data ?? []).map((x) => x.id));
-  return (productsResult.data ?? []).map((product) => {
+  const attributedPaidIds = new Set((ordersResult.data ?? []).filter((order) => order.first_touch_attribution || order.last_touch_attribution).map((order) => order.id));
+  return products.map((product) => {
     const items = (itemsResult.data ?? []).filter(
       (x) => x.product_id === product.id && paidIds.has(x.order_id),
     );
     const orderCount = new Set(items.map((x) => x.order_id)).size;
+    const readiness = getProductCampaignReadiness(product);
+    const campaignIds = new Set((campaignsResult.data ?? []).filter((campaign) => campaign.target_path === `/shop/${product.slug}`).map((campaign) => campaign.id));
     return {
-      ...product,
+      id: product.id!, name: product.name, slug: product.slug, category: product.category,
+      status: product.status ?? "inactive", availability: product.availability,
+      price: product.price, unit: product.unit, stock_quantity: product.stockCount,
+      campaignReadiness: readiness.state,
+      campaignReadinessIssues: readiness.missing,
       paidQuantity: items.reduce((s, x) => s + Number(x.quantity), 0),
       paidRevenue: items.reduce((s, x) => s + Number(x.total_price), 0),
       paidOrders: orderCount,
@@ -246,9 +252,17 @@ export async function loadProductPerformance() {
       contentClicks: (clicksResult.data ?? []).filter(
         (x) => x.product_id === product.id,
       ).length,
+      campaignClicks: (campaignClicksResult.data ?? []).filter((click) => campaignIds.has(click.campaign_id)).length,
+      attributedPaidRevenue: items.filter((item) => attributedPaidIds.has(item.order_id)).reduce((sum, item) => sum + Number(item.total_price), 0),
       ga: null,
     };
   });
+}
+
+export type ProductPerformanceFilters = { search?: string; category?: string; availability?: string; readiness?: string };
+export function filterProductPerformance<T extends { name:string; slug:string; category:string; status:string; availability:string; campaignReadiness:string }>(products:T[], filters:ProductPerformanceFilters) {
+  const search=filters.search?.trim().toLowerCase();
+  return products.filter((product)=>(!search||product.name.toLowerCase().includes(search)||product.slug.toLowerCase().includes(search))&&(!filters.category||product.category===filters.category)&&(!filters.availability||product.status===filters.availability||product.availability===filters.availability)&&(!filters.readiness||product.campaignReadiness===filters.readiness));
 }
 
 export async function loadMarketingTable(table: string, select = "*") {
