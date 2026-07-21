@@ -2,6 +2,7 @@ import { AdminHeader } from "@/src/components/admin";
 import { MarketingNav } from "@/src/components/marketing-command-ui";
 import { loadMarketingTable } from "@/src/lib/marketing-command-centre";
 import { SocialEntryForm } from "@/src/components/marketing-entry-forms";
+import Link from "next/link";
 export const dynamic = "force-dynamic";
 export default async function Page() {
   const data = await loadMarketingTable(
@@ -60,9 +61,7 @@ export default async function Page() {
                     "direct_message_leads",
                     "attributed_orders",
                   ].map((key) => (
-                    <td key={key} className="p-3">
-                      {String(x[key] ?? "—")}
-                    </td>
+                    <td key={key} className="p-3">{key==="platform"?<Link href={`/admin/marketing/social/${x.id}`} className="font-bold text-green-800 underline-offset-4 hover:underline">{String(x[key]??"—")}</Link>:String(x[key]??"—")}</td>
                   ))}
                 </tr>
               ))}
