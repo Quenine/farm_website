@@ -1,5 +1,5 @@
 # Shields Farms launch reset
-
+The app_settings table may legitimately contain zero rows. Launch readiness requires the table and its schema to remain present, not a fabricated settings record.
 This controlled, one-time cleanup does not run automatically. Review it and
 manually confirm it in the Shields Supabase SQL editor.
 

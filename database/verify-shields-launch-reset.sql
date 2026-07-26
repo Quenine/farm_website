@@ -28,7 +28,11 @@ with checks(check_name, passed, detail) as (
     ('categories exist', (select count(*) > 0 from public.categories), (select count(*)::text from public.categories)),
     ('delivery configuration exists', ((select count(*) from public.delivery_rates) + (select count(*) from public.product_delivery_rates)) > 0, 'delivery rates'),
     ('Admin profile exists', (select count(*) > 0 from public.profiles where role = 'admin'), (select count(*)::text from public.profiles where role = 'admin')),
-    ('app settings exist', (select count(*) > 0 from public.app_settings), (select count(*)::text from public.app_settings)),
+    (
+  'app settings table exists',
+  to_regclass('public.app_settings') is not null,
+  (select count(*)::text || ' rows' from public.app_settings)
+),
     ('Paystack payment function exists', to_regprocedure('public.process_paystack_payment(uuid,text,numeric,timestamptz,jsonb)') is not null, 'process_paystack_payment'),
     ('required marketing RPCs exist',
       to_regprocedure('public.transition_marketing_prospect(uuid,text,text,uuid)') is not null
@@ -67,7 +71,7 @@ with readiness as (
     and (select count(*) > 0 from public.products)
     and (select count(*) > 0 from public.categories)
     and (select count(*) > 0 from public.profiles where role = 'admin')
-    and (select count(*) > 0 from public.app_settings)
+    and to_regclass('public.app_settings') is not null
     and to_regprocedure('public.process_paystack_payment(uuid,text,numeric,timestamptz,jsonb)') is not null
     as database_ready
 )
