@@ -6,7 +6,7 @@ begin;
 
 do $guard$
 declare
-  v_confirmation text := 'REPLACE_ME';
+  v_confirmation text := 'RESET_SHIELDS_FARMS_LAUNCH_2026_07_26';
   v_reset_test_subscribers boolean := true; -- OPTION: false preserves subscribers.
 begin
   if v_confirmation <> 'RESET_SHIELDS_FARMS_LAUNCH_2026_07_26' then
