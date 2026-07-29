@@ -166,7 +166,7 @@ Extend the existing prospect activity vocabulary for scout state, outreach, supp
 
 ### `sales-scout` domain service
 
-Owns normalization, dedupe candidate queries, score calculation, eligibility, state transitions, follow-up scheduling, and handover rules. Pure scoring/normalization functions should be independently testable.
+Owns normalization, dedupe candidate queries, score calculation, eligibility, state transitions, follow-up scheduling, and handover rules. The generic `ng-city-b2b-v1` scorer receives campaign city and country; Lagos is only the first campaign. Pure scoring/normalization functions should be independently testable.
 
 ### Existing prospect service
 
@@ -217,6 +217,8 @@ interface ProspectDiscoveryProvider {
 
 Providers return candidates, never persist prospects or send messages. A separate ingestion service validates, normalizes, deduplicates, records provenance, and requires human review. The initial adapter is `manual`, accepting admin-entered public facts. Future adapters require an explicit terms/privacy review, bounded rate limits, retry/error behavior, and source-specific verification before implementation.
 
+Discovery and review may be high-throughput, but sending remains individually human-reviewed and manual. Any response-channel copy must read the official WhatsApp from `siteConfig.whatsappPhone`, never a Sales Scout hardcoded number.
+
 ## Paid-order attribution integration
 
 The safest integration point is immediately after the existing idempotent payment processor returns a verified paid result, or an idempotent reconciliation command invoked from the same callback/webhook paths:
@@ -252,4 +254,3 @@ Do not infer identity by name alone. A normalized phone/email match may be shown
 - AI/vector scoring for a deterministic MVP
 - Background cron for follow-up sending; due dates and a queue page are enough
 - Direct platform APIs before the manual workflow proves useful and an approved provider exists
-

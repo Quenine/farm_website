@@ -14,7 +14,8 @@
     "content:e2e": "node scripts/check-content-e2e.mjs",
     "operational:checks": "node scripts/check-operational-batch3.mjs",
     "operational:browser": "playwright test",
-    "marketing:checks": "node scripts/check-commercial-operations-batch4.mjs"
+    "marketing:checks": "node scripts/check-commercial-operations-batch4.mjs",
+    "sales-scout:checks": "node --experimental-strip-types --test tests/sales-scout-domain.test.ts"
   },
   "dependencies": {
     "@next/third-parties": "^16.2.9",

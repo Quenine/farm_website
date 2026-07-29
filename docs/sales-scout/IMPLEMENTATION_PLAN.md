@@ -2,6 +2,8 @@
 
 This plan is dependency-ordered. Each batch is intentionally deployable and verifiable independently. File names are expected areas, not a commitment to exact naming. Database changes must be repeat-safe and applied only to the Shields Farms Supabase project after backup and review.
 
+Execution-order update: after Batch 2 persistence, implement the discovery-provider contract and first approved adapter next, before UI workflow batches. The former Batch 8 section remains the detailed scope but is executed immediately after the persistence foundation.
+
 ## Batch 0 — Architecture decision record and rollout guard
 
 ### Scope
@@ -41,7 +43,7 @@ Run the applicable existing marketing verification SQL manually in the Shields S
 
 - Add typed constants and pure functions for scout, outreach, and handover statuses.
 - Implement Nigerian phone, social handle, email, website, and business-name normalization.
-- Implement deterministic `lagos-b2b-v1` scoring and eligibility.
+- Implement deterministic `ng-city-b2b-v1` scoring and eligibility using caller-supplied campaign city and country.
 - Implement follow-up due-date and attempt-cap policy.
 - Unit-test boundary cases without database access.
 
@@ -408,4 +410,3 @@ Run new SQL verification in the target Shields environment and record the result
 ## Recommended first implementation batch
 
 After the planning-only run, start with **Batch 0**, then **Batch 1**. Batch 0 resolves the only deployment/schema assumptions that could make later work unsafe. Batch 1 proves the scoring, normalization, duplicate keys, and follow-up policy as pure code before any migration or UI commitment.
-

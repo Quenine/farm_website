@@ -2,9 +2,9 @@
 
 ## Objective
 
-Sales Scout is an owner-only workflow inside the existing Marketing Command Centre for finding and qualifying Lagos food businesses, preparing personalized social outreach, recording human-sent messages and replies, handing interested prospects to the owner, and attributing verified paid orders to the prospecting effort.
+Sales Scout is an owner-only workflow inside the existing Marketing Command Centre for finding and qualifying food businesses city by city across Nigeria, preparing personalized social outreach, recording human-sent messages and replies, handing interested prospects to the owner, and attributing verified paid orders to the prospecting effort. Lagos is the first campaign.
 
-The MVP optimizes for a small, auditable workflow rather than outreach volume. It is not a social automation product.
+The MVP supports high-throughput prospect discovery and review in an auditable workflow while keeping every send human-controlled. It is not a social automation product.
 
 ## Users
 
@@ -17,7 +17,7 @@ The MVP optimizes for a small, auditable workflow rather than outreach volume. I
 - Categories: Restaurant, Caterer, Hotel, Supermarket, Food Vendor
 - Primary outreach platform: Instagram
 - Additional discovery sources: Google, Facebook, TikTok, X, YouTube
-- Official WhatsApp: 07032821293
+- Official WhatsApp: use `siteConfig.whatsappPhone` as the application source of truth
 - Offer context: all products are currently available
 - Delivery statement: nationwide, subject to quantity, logistics, quotation, and confirmation
 
@@ -108,19 +108,19 @@ Each message attempt has its own state.
 
 ### Qualification and deterministic lead score
 
-The score is 0–100 and stores `score`, `score_version`, and a factor breakdown. MVP rule `lagos-b2b-v1`:
+The score is 0–100 and stores `score`, `score_version`, and a factor breakdown. MVP rule `ng-city-b2b-v1` receives the campaign city and country:
 
 - Category is one of the five campaign categories: +20
-- Verified Lagos location/service area: +20
+- Verified presence or service in the selected campaign city: +20
 - Active public business profile with activity within 90 days: +15
 - Public evidence of recurring food procurement/use (menu, catering, hospitality, grocery, food production): +20
 - At least one usable public contact route (social DM, business phone, email, or website form): +10
 - Estimated demand indicator: high +15, medium +10, low +5, unknown +0
 - Profile appears inactive/closed: −40
-- Outside the campaign geography with no Lagos service evidence: −25
+- Outside the campaign geography with no selected-city service evidence: −25
 - Consumer-only/non-business account: −30
 
-Clamp the result to 0–100. `qualified` requires score ≥60, a category, Lagos evidence, a usable contact route, and no do-not-contact flag. The admin may disqualify at any score but may not override a sub-60 prospect to `qualified` in MVP; facts should be corrected and the deterministic score recomputed.
+Clamp the result to 0–100. `qualified` requires score ≥60, an allowed category, selected campaign-city presence or service evidence, a usable contact route, and no do-not-contact flag. The admin may disqualify at any score but may not override a sub-60 prospect to `qualified` in MVP; facts should be corrected and the deterministic score recomputed.
 
 ### Duplicate detection
 
@@ -182,5 +182,4 @@ These are operational counts, not claims of platform delivery or causality. Paid
 - Frequency cap and prospect-wide suppression enforced at the server/data boundary.
 - Preserve source URL, evidence timestamp, score explanation, sent text, reply summary, and actor/timestamps for auditability.
 - External discovery adapters must respect provider terms, robots/access rules where applicable, rate limits, and data provenance. A provider being technically accessible does not authorize collection.
-- Official WhatsApp is presented as a voluntary response/handover channel, not used for automated unsolicited messaging.
-
+- The official WhatsApp from `siteConfig.whatsappPhone` is presented as a voluntary response/handover channel, not used for automated unsolicited messaging.
