@@ -8,6 +8,8 @@ do $$
 declare
   v_missing text;
   v_table text;
+  v_role text;
+  v_privilege text;
   v_function regprocedure;
   v_legacy uuid;
   v_prospect uuid;
@@ -54,13 +56,32 @@ begin
     if not coalesce((select relrowsecurity from pg_class where oid=to_regclass('public.'||v_table)),false) then
       raise exception 'RLS is not enabled: %',v_table;
     end if;
-    if has_table_privilege('anon','public.'||v_table,'select,insert,update,delete')
-       or has_table_privilege('authenticated','public.'||v_table,'select,insert,update,delete') then
-      raise exception 'browser role has table privilege: %',v_table;
+    if exists (
+      select 1 from pg_policies
+      where schemaname='public' and tablename=v_table
+    ) then
+      raise exception 'unexpected policy exists: %',v_table;
     end if;
-    if not has_table_privilege('service_role','public.'||v_table,'select,insert,update,delete') then
-      raise exception 'service_role lacks table privilege: %',v_table;
-    end if;
+    foreach v_privilege in array array['select','insert','update','delete'] loop
+      if exists (
+        select 1
+        from pg_class c
+        cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+        where c.oid=to_regclass('public.'||v_table)
+          and acl.grantee=0
+          and acl.privilege_type=upper(v_privilege)
+      ) then
+        raise exception 'PUBLIC has unexpected % privilege on %',v_privilege,v_table;
+      end if;
+      foreach v_role in array array['anon','authenticated'] loop
+        if has_table_privilege(v_role,'public.'||v_table,v_privilege) then
+          raise exception '% has unexpected % privilege on %',v_role,v_privilege,v_table;
+        end if;
+      end loop;
+      if not has_table_privilege('service_role','public.'||v_table,v_privilege) then
+        raise exception 'service_role lacks % privilege on %',v_privilege,v_table;
+      end if;
+    end loop;
   end loop;
 
   if not exists (
@@ -102,7 +123,12 @@ begin
        not like '%search_path=public,pg_temp%' then
       raise exception 'function lacks safe search path: %',v_function;
     end if;
-    if has_function_privilege('public',v_function,'execute')
+    if exists (
+         select 1
+         from pg_proc p
+         cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+         where p.oid=v_function and acl.grantee=0 and acl.privilege_type='EXECUTE'
+       )
        or has_function_privilege('anon',v_function,'execute')
        or has_function_privilege('authenticated',v_function,'execute') then
       raise exception 'untrusted role can execute: %',v_function;
@@ -181,6 +207,18 @@ begin
   values (v_prospect,v_channel,1,'initial','approved','draft','approved',
     'human',now(),gen_random_uuid())
   returning id into v_outreach;
+  begin
+    perform public.confirm_sales_scout_outreach_sent(
+      v_outreach,'must remain approved','verify account',now(),null,null);
+    raise exception 'null actor was accepted for send confirmation';
+  exception when sqlstate '22023' then
+    if sqlerrm<>'actor id is required for send confirmation' then
+      raise exception 'unexpected null-actor error: %',sqlerrm;
+    end if;
+  end;
+  if (select status from public.marketing_prospect_outreaches where id=v_outreach)<>'approved' then
+    raise exception 'rejected null-actor call changed outreach status';
+  end if;
   perform public.confirm_sales_scout_outreach_sent(
     v_outreach,'final sent text','verify account',now(),v_actor,null);
 

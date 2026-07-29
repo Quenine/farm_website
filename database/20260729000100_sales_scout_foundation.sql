@@ -425,6 +425,9 @@ declare
   v_attempt_count integer;
   v_activity_id uuid;
 begin
+  if p_actor_id is null then
+    raise exception using errcode='22023',message='actor id is required for send confirmation';
+  end if;
   if nullif(trim(p_sent_text),'') is null or nullif(trim(p_sender_account_label),'') is null then
     raise exception using errcode='22023',message='final sent text and sender account label are required';
   end if;
@@ -435,6 +438,7 @@ begin
   if not found then raise exception using errcode='P0002',message='outreach not found'; end if;
   select * into v_outreach from public.marketing_prospect_outreaches
   where id=p_outreach_id for update;
+  if not found then raise exception using errcode='P0002',message='outreach not found'; end if;
   if v_prospect.scout_status in ('do_not_contact','disqualified','converted','closed')
      or v_prospect.do_not_contact_at is not null then
     raise exception using errcode='22023',message='prospect is not eligible for outreach';

@@ -49,6 +49,8 @@
 - Discovery and UI remain unimplemented.
 - No paid-attribution automation exists; commerce behaviour is unchanged.
 - SQL behavioural verification still requires a human-run non-production database.
+- The migration is designed to be rerun safely, but static inspection is not equivalent to executing it twice.
+- Actual rerun safety must be tested by applying the migration twice in the non-production Supabase project.
 
 ## Next batch prerequisites
 
