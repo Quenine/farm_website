@@ -14,6 +14,8 @@
 - Hardened channel insertion so uniqueness conflicts cannot leave a new prospect
   without channels; concurrent exact identities are requeried deterministically.
 - Added atomic qualification persistence and its `scout_scored` activity.
+- Corrected the missing channel-insert statement terminator.
+- Added database uniqueness protection for non-null Scout provider identities.
 
 ## Persistence contract
 
@@ -45,6 +47,7 @@
 - PostgreSQL verification was not executed by Codex; it still requires the approved
   database application workflow.
 - Migration `00200` has not been applied remotely.
+- PostgreSQL behavioural verification remains pending.
 
 ## Deferred
 

@@ -1,5 +1,11 @@
 begin;
 
+create unique index if not exists marketing_prospects_scout_provider_identity_uidx
+  on public.marketing_prospects(discovery_source, discovery_source_id)
+  where scout_status is not null
+    and discovery_source is not null
+    and discovery_source_id is not null;
+
 create or replace function public.capture_sales_scout_candidate(
   p_payload jsonb,
   p_resolution text,
@@ -163,7 +169,7 @@ begin
       v_channel->>'identityKey', nullif(v_channel->>'profileUrl', ''),
       v_is_primary, p_payload->>'provider', nullif(v_channel->>'sourceId', ''),
       coalesce(v_channel->'evidence', '{}'::jsonb), p_actor_id
-    )
+    );
     v_inserted := v_inserted + 1;
     v_has_primary := v_has_primary or v_is_primary;
   end loop;

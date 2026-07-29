@@ -54,6 +54,17 @@ begin
     end if;
   end loop;
 
+  if not exists (
+    select 1
+    from pg_class index_relation
+    join pg_index index_definition on index_definition.indexrelid = index_relation.oid
+    where index_relation.relname = 'marketing_prospects_scout_provider_identity_uidx'
+      and index_relation.relnamespace = 'public'::regnamespace
+      and index_definition.indisunique
+  ) then
+    raise exception 'Sales Scout provider identity unique index is missing or not unique';
+  end if;
+
   insert into public.marketing_campaigns (
     id, name, slug, channel, source, medium, campaign_name, target_path
   ) values
@@ -178,6 +189,24 @@ begin
     raise exception 'scout_captured activity is missing or duplicated';
   end if;
 
+  begin
+    insert into public.marketing_prospects (
+      business_name, stage, campaign_id, scout_status,
+      discovery_source, discovery_source_id, created_by
+    ) values (
+      'Duplicate provider identity', 'identified', v_campaign_id, 'new',
+      'manual', 'verify-provider-1', v_actor
+    );
+    raise exception 'duplicate Scout provider identity unexpectedly succeeded';
+  exception when unique_violation then
+    null;
+  end;
+  if (select count(*) from public.marketing_prospects
+      where scout_status is not null and discovery_source = 'manual'
+        and discovery_source_id = 'verify-provider-1') <> 1 then
+    raise exception 'provider identity uniqueness did not preserve one Scout prospect';
+  end if;
+
   select count(*) into v_count from public.marketing_prospect_activities
   where prospect_id = v_created_id;
   v_result := public.capture_sales_scout_candidate(v_payload, 'create_new', null, v_actor);
@@ -191,6 +220,32 @@ begin
     or (select count(*) from public.marketing_prospect_activities
       where prospect_id = v_created_id) <> v_count then
     raise exception 'repeated candidate changed persisted state: %', v_result;
+  end if;
+
+  v_payload := jsonb_set(v_payload, '{channels}', jsonb_build_array(
+    jsonb_build_object(
+      'platform', 'facebook', 'handleOrValue', '@provider_repeat_different',
+      'identityKey', 'provider_repeat_different', 'isPrimary', true,
+      'sourceId', 'provider-repeat-channel-1', 'evidence', '{}'::jsonb
+    ),
+    jsonb_build_object(
+      'platform', 'website', 'handleOrValue', 'https://provider-repeat.example/',
+      'identityKey', 'provider-repeat.example', 'isPrimary', false,
+      'sourceId', 'provider-repeat-channel-2', 'evidence', '{}'::jsonb
+    )
+  ));
+  v_result := public.capture_sales_scout_candidate(v_payload, 'create_new', null, v_actor);
+  if v_result->>'outcome' <> 'exact_existing'
+    or (v_result->>'prospect_id')::uuid <> v_created_id
+    or (v_result->>'channels_inserted')::integer <> 0
+    or (select count(*) from public.marketing_prospects
+      where scout_status is not null and discovery_source = 'manual'
+        and discovery_source_id = 'verify-provider-1') <> 1
+    or (select count(*) from public.marketing_prospect_channels
+      where prospect_id = v_created_id) <> 2
+    or (select count(*) from public.marketing_prospect_activities
+      where prospect_id = v_created_id) <> v_count then
+    raise exception 'provider-level repeat changed persisted state: %', v_result;
   end if;
 
   insert into public.marketing_prospects (
