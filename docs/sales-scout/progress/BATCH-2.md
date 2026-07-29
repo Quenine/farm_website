@@ -41,8 +41,11 @@
 
 ## Production status
 
-- Migration was not applied remotely.
-- Production backup has not been confirmed by Codex.
+- Owner-reported validation on 29 July 2026: the rollback dry run passed; the
+  migration was applied twice; verification passed after each application.
+- Owner reported that Shields Farms was updated and Noble Farms was untouched.
+- These production actions and results were reported by the owner and were not
+  executed or independently witnessed by Codex.
 
 ## Known limitations
 

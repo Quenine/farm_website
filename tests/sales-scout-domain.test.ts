@@ -13,6 +13,10 @@ import {
   calculateNextFollowUpDueDate, canAttemptOutreach, hasReachedMaximumAttempts,
   isFutureOutreachCancelled, sentAttemptCount,
 } from "../src/lib/sales-scout/follow-ups.ts";
+import { isSalesScoutDeploymentEnabled } from "../src/lib/sales-scout/access-policy.ts";
+import { createManualDiscoveryProvider, createManualDiscoveryResult } from "../src/lib/sales-scout/discovery/manual.ts";
+import { findSoftMatchWarnings, prepareDiscoveryCandidate } from "../src/lib/sales-scout/ingestion.ts";
+import { discoveryCandidateSchema } from "../src/lib/sales-scout/schemas.ts";
 
 test("domain constants contain approved immutable values", () => {
   assert.deepEqual(scoutStatuses, ["new", "researching", "qualified", "disqualified", "engaged", "converted", "closed", "do_not_contact"]);
@@ -129,4 +133,74 @@ test("reply, do-not-contact, and terminal statuses cancel future outreach", () =
     assert.equal(isFutureOutreachCancelled({ scoutStatus, doNotContact: false, hasReply: false }), true);
     assert.equal(canAttemptOutreach({ sequence: 1, attempts: [], scoutStatus, doNotContact: false, hasReply: false }).reason, "suppressed");
   }
+});
+
+const campaign = {
+  campaignId: "11111111-1111-4111-8111-111111111111", city: "Lagos", state: "Lagos", country: "Nigeria",
+  targetCategories: ["Restaurant", "Caterer", "Hotel", "Supermarket", "Food Vendor"],
+};
+const candidate = {
+  sourceUrl: "https://www.instagram.com/scout_kitchen/", observedAt: "2026-07-29T12:00:00+01:00",
+  campaignId: campaign.campaignId, businessName: "Scout Kitchen Limited", businessCategory: "Restaurant",
+  city: "Lagos", state: "Lagos", country: "Nigeria", serviceAreaCities: [],
+  mostRecentPublicActivityAt: "2026-07-20T12:00:00+01:00",
+  recurringProduceDemandEvidence: "Public menu shows recurring fresh-produce use.",
+  demandBand: "medium" as const, isInactiveOrClosed: false, isConsumerOnly: false,
+  channels: [{ platform: "instagram" as const, handleOrValue: "@Scout_Kitchen",
+    profileUrl: "https://www.instagram.com/scout_kitchen/", isPrimary: true, sourceId: "manual-row-1",
+    evidence: { label: "public profile" } }],
+};
+
+test("manual discovery reports row-level schema errors without network work", async () => {
+  const result = createManualDiscoveryResult([{ ...candidate }, { ...candidate, sourceUrl: "", observedAt: "not-a-time", channels: [] }]);
+  assert.equal(result.ok, false);
+  assert.equal(result.candidates.length, 1);
+  if (!result.ok) {
+    assert.ok(result.errors.some((issue) => issue.candidateIndex === 1 && issue.field === "sourceUrl"));
+    assert.ok(result.errors.some((issue) => issue.candidateIndex === 1 && issue.field === "observedAt"));
+    assert.ok(result.errors.some((issue) => issue.candidateIndex === 1 && issue.field === "channels"));
+  }
+  const provider = createManualDiscoveryProvider([candidate]);
+  assert.equal(provider.name, "manual");
+  assert.equal((await provider.discover()).ok, true);
+});
+
+test("candidate preparation normalizes, collapses duplicates, and scores campaign-city presence", () => {
+  const prepared = prepareDiscoveryCandidate({ ...candidate, provider: "manual", channels: [
+    candidate.channels[0], { ...candidate.channels[0], handleOrValue: "scout_kitchen", isPrimary: false },
+  ] }, campaign);
+  assert.equal(prepared.channels.length, 1);
+  assert.equal(prepared.channels[0].identityKey, "scout_kitchen");
+  assert.equal(prepared.channels[0].isPrimary, true);
+  assert.deepEqual(prepared.exactLookupKeys, ["instagram:scout_kitchen"]);
+  assert.equal(prepared.score.qualified, true);
+  assert.ok(prepared.score.factors.some((factor) => factor.key === "campaign_city_presence" && factor.applied));
+});
+
+test("candidate preparation rejects conflicting primary identities", () => {
+  assert.throws(() => prepareDiscoveryCandidate({ ...candidate, provider: "manual", channels: [
+    candidate.channels[0], { ...candidate.channels[0], handleOrValue: "@different_scout",
+      profileUrl: "https://www.instagram.com/different_scout/", sourceId: "manual-row-2" },
+  ] }, campaign), /conflicting primary channels/);
+});
+
+test("soft duplicate warnings are deterministic and do not silently merge", () => {
+  const prepared = prepareDiscoveryCandidate({ ...candidate, provider: "manual" }, campaign);
+  assert.deepEqual(findSoftMatchWarnings(prepared, [{ id: "22222222-2222-4222-8222-222222222222",
+    businessName: "Scout Kitchen Ltd", businessCategory: "Restaurant", city: "Lagos", country: "Nigeria" }]),
+  [{ prospectId: "22222222-2222-4222-8222-222222222222", reason: "same_name_location" }]);
+});
+
+test("candidate schema rejects server-owned fields", () => {
+  for (const serverOwned of [{ actorId: "33333333-3333-4333-8333-333333333333" }, { score: 100 },
+    { doNotContactAt: "2026-07-29T12:00:00+01:00" }]) {
+    assert.equal(discoveryCandidateSchema.safeParse({ ...candidate, provider: "manual", ...serverOwned }).success, false);
+  }
+});
+
+test("rollout policy requires the private flag and an exact Shields hostname", () => {
+  assert.equal(isSalesScoutDeploymentEnabled({ enabledFlag: true, canonicalHostname: "shieldsfarms.store" }), true);
+  assert.equal(isSalesScoutDeploymentEnabled({ enabledFlag: true, canonicalHostname: "www.shieldsfarms.store" }), true);
+  assert.equal(isSalesScoutDeploymentEnabled({ enabledFlag: false, canonicalHostname: "shieldsfarms.store" }), false);
+  assert.equal(isSalesScoutDeploymentEnabled({ enabledFlag: true, canonicalHostname: "noblefarms.example" }), false);
 });
