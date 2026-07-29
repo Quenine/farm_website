@@ -75,6 +75,7 @@ Do not add a job queue, workflow engine, vector database, external CRM, backgrou
 ### Reused entities
 
 - `marketing_campaigns` 1 → many `marketing_prospects`
+- `marketing_campaigns` 1 → 0..1 `marketing_sales_scout_campaigns`; the extension stores city, categories, review target, delivery summary, and Scout lifecycle without overloading the generic web/UTM campaign row.
 - `contact_inquiries` 0..1 → many/linked prospect workflow (existing optional link)
 - `marketing_prospects` 1 → many `marketing_prospect_activities`
 - `orders` 1 → many `order_items`; `orders` 1 → many `payments`

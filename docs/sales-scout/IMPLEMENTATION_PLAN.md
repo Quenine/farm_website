@@ -81,6 +81,7 @@ npx tsc --noEmit
 ### Scope
 
 - Extend `marketing_prospects` with scout, score, geography, suppression, provenance, and handover fields.
+- Add one-to-one `marketing_sales_scout_campaigns` configuration keyed by the existing generic `marketing_campaigns` identity; do not add Scout-only lifecycle fields to the shared campaign table.
 - Create `marketing_prospect_channels`, `marketing_prospect_outreaches`, and `marketing_prospect_attributions`.
 - Add indexes, exact unique keys, check constraints, timestamps, RLS/revokes/service-role grants, and comments.
 - Extend prospect activity types/metadata for scout events.
