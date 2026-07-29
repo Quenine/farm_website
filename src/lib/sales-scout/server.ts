@@ -230,14 +230,23 @@ export async function captureSalesScoutCandidate(input: {
   };
 }
 
-export async function updateSalesScoutQualificationFacts(raw: unknown) {
+export type QualificationUpdateDto = {
+  prospectId: string;
+  score: number;
+  ruleVersion: string;
+  activityId: string;
+};
+
+export async function updateSalesScoutQualificationFacts(
+  raw: unknown,
+): Promise<QualificationUpdateDto> {
   const actor = await authorizeSalesScout();
   const facts = qualificationFactsSchema.parse(raw);
   const database = createAdminSupabaseClient();
   const [campaign, prospectResult, channelsResult] = await Promise.all([
     loadCampaign(database, facts.campaignId),
     database.from("marketing_prospects")
-      .select("id,do_not_contact_at,scout_status,stage")
+      .select("id,do_not_contact_at")
       .eq("id", facts.prospectId).maybeSingle(),
     database.from("marketing_prospect_channels")
       .select("platform").eq("prospect_id", facts.prospectId).eq("is_active", true).limit(50),
@@ -265,41 +274,16 @@ export async function updateSalesScoutQualificationFacts(raw: unknown) {
     doNotContact: Boolean(prospectResult.data.do_not_contact_at),
     scoredAt,
   });
-  const update = await database.from("marketing_prospects").update({
-    business_category: facts.businessCategory,
-    city: facts.city,
-    state: facts.state,
-    country: facts.country,
-    service_area_cities: facts.serviceAreaCities,
-    profile_last_activity_at: facts.mostRecentPublicActivityAt,
-    has_recurring_produce_demand: Boolean(facts.recurringProduceDemandEvidence),
-    recurring_demand_evidence: facts.recurringProduceDemandEvidence,
-    demand_band: facts.demandBand,
-    appears_inactive_or_closed: facts.isInactiveOrClosed,
-    is_consumer_only: facts.isConsumerOnly,
-    source_url: facts.sourceUrl,
-    location_evidence: facts.locationEvidence,
-    score: score.score,
-    score_version: score.ruleVersion,
-    score_factors: score.factors,
-    scored_at: score.scoredAt,
-    updated_at: new Date().toISOString(),
-  }).eq("id", facts.prospectId);
-  if (update.error) fail("SCOUT_FACTS_UPDATE", update.error);
-  const activity = await database.rpc("record_marketing_prospect_activity", {
-    p_prospect_id: facts.prospectId,
-    p_activity_type: "sales_scout",
-    p_summary: "Sales Scout qualification facts and score updated.",
-    p_occurred_at: score.scoredAt,
-    p_next_follow_up_at: null,
+  const { data, error } = await database.rpc("update_sales_scout_qualification_facts", {
+    p_payload: { ...facts, score },
     p_actor_id: actor.id,
-    p_metadata: { event: "scout_scored", score: score.score, score_version: score.ruleVersion },
   });
-  if (activity.error) fail("SCOUT_FACTS_ACTIVITY", activity.error);
+  if (error) fail("SCOUT_FACTS_RPC", error);
+  const result = data as Record<string, unknown>;
   return {
-    prospectId: facts.prospectId,
-    score,
-    scoutStatus: prospectResult.data.scout_status,
+    prospectId: String(result.prospect_id),
+    score: Number(result.score),
+    ruleVersion: String(result.rule_version),
+    activityId: String(result.activity_id),
   };
 }
-

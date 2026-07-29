@@ -174,7 +174,17 @@ test("candidate preparation normalizes, collapses duplicates, and scores campaig
   assert.equal(prepared.channels[0].isPrimary, true);
   assert.deepEqual(prepared.exactLookupKeys, ["instagram:scout_kitchen"]);
   assert.equal(prepared.score.qualified, true);
+  assert.equal(prepared.score.ruleVersion, "ng-city-b2b-v1");
+  assert.equal(Array.isArray(prepared.score.factors), true);
   assert.ok(prepared.score.factors.some((factor) => factor.key === "campaign_city_presence" && factor.applied));
+});
+
+test("candidate preparation rejects a campaign mismatch before persistence", () => {
+  assert.throws(() => prepareDiscoveryCandidate({
+    ...candidate,
+    provider: "manual",
+    campaignId: "44444444-4444-4444-8444-444444444444",
+  }, campaign), /does not match the selected campaign/);
 });
 
 test("candidate preparation rejects conflicting primary identities", () => {
