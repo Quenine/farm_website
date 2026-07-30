@@ -435,9 +435,12 @@ export async function updateSalesScoutCampaignStatus(raw: unknown) {
   const existing = await database.from("marketing_sales_scout_campaigns").select("campaign_id").eq("campaign_id", payload.campaignId).maybeSingle();
   if (existing.error) fail("SCOUT_CAMPAIGN_STATUS_LOOKUP", existing.error);
   if (!existing.data) throw new SalesScoutOperationError("SCOUT_CAMPAIGN_NOT_FOUND", "Sales Scout campaign not found.");
-  const update = await database.from("marketing_sales_scout_campaigns").update({ status: payload.status, updated_at: new Date().toISOString() }).eq("campaign_id", payload.campaignId);
+  const update = await database.from("marketing_sales_scout_campaigns")
+    .update({ status: payload.status, updated_at: new Date().toISOString() })
+    .eq("campaign_id", payload.campaignId).select("campaign_id,status").maybeSingle();
   if (update.error) fail("SCOUT_CAMPAIGN_STATUS", update.error);
-  return loadCampaign(database, payload.campaignId);
+  if (!update.data) throw new SalesScoutOperationError("SCOUT_CAMPAIGN_NOT_FOUND", "Sales Scout campaign not found.");
+  return { campaignId: String(update.data.campaign_id), status: update.data.status as SalesScoutCampaignDto["status"] };
 }
 
 export async function loadSalesScoutProspectDetail(id: string) {

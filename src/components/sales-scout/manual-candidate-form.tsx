@@ -4,16 +4,16 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { captureManualCandidateAction, previewManualCandidateAction } from "@/app/admin/(protected)/marketing/sales-scout/actions";
 import type { DuplicatePreviewDto, SalesScoutCampaignDto } from "@/src/lib/sales-scout/server";
-import { formatLocalDateTimeInput, isLatestPreviewRequest } from "@/src/lib/sales-scout/review";
+import { formatLocalDateTimeInput, isLatestPreviewRequest, selectInitialCampaignId } from "@/src/lib/sales-scout/review";
 import { CandidatePreview } from "@/src/components/sales-scout/candidate-preview";
 
 type Channel = { platform: string; value: string; url: string; primary: boolean; sourceId: string; evidence: string };
 const blank = (primary=false): Channel => ({ platform:"instagram",value:"",url:"",primary,sourceId:"",evidence:"" });
 const input="h-11 w-full rounded-lg border px-3";
 
-export function ManualCandidateForm({ campaigns }: { campaigns: SalesScoutCampaignDto[] }) {
+export function ManualCandidateForm({ campaigns, initialCampaignId }: { campaigns: SalesScoutCampaignDto[]; initialCampaignId?: string }) {
   const router=useRouter(); const [pending,start]=useTransition();
-  const [campaignId,setCampaignId]=useState(campaigns[0]?.campaignId ?? "");
+  const [campaignId,setCampaignId]=useState(()=>selectInitialCampaignId(campaigns,initialCampaignId)??campaigns[0]?.campaignId??"");
   const campaign=campaigns.find((item)=>item.campaignId===campaignId) ?? campaigns[0];
   const [channels,setChannels]=useState<Channel[]>([blank(true)]);
   const [city,setCity]=useState(campaign?.city??""); const [state,setState]=useState(campaign?.state??""); const [country,setCountry]=useState(campaign?.country??"");

@@ -18,7 +18,7 @@ import { isSalesScoutDeploymentEnabled } from "../src/lib/sales-scout/access-pol
 import { createManualDiscoveryProvider, createManualDiscoveryResult } from "../src/lib/sales-scout/discovery/manual.ts";
 import { findSoftMatchWarnings, prepareDiscoveryCandidate } from "../src/lib/sales-scout/ingestion.ts";
 import { discoveryCandidateSchema } from "../src/lib/sales-scout/schemas.ts";
-import { campaignStatusSchema, doNotContactSchema, formatSalesScoutTimelineEvent, allowedResolutionChoices, parseQueueFilters, reviewTransitionSchema, formatLocalDateTimeInput, mergeLocationEvidenceNote, invalidatesPreview, oldestUnreviewedStatuses, isCaptureResolutionAllowed, isLatestPreviewRequest, formatMatchLabel } from "../src/lib/sales-scout/review.ts";
+import { campaignStatusSchema, doNotContactSchema, formatSalesScoutTimelineEvent, allowedResolutionChoices, parseQueueFilters, reviewTransitionSchema, formatLocalDateTimeInput, mergeLocationEvidenceNote, invalidatesPreview, oldestUnreviewedStatuses, isCaptureResolutionAllowed, isLatestPreviewRequest, formatMatchLabel, campaignStatusActions, campaignActionLabel, isCandidateEntryAvailable, selectInitialCampaignId, deriveCandidateSetupState } from "../src/lib/sales-scout/review.ts";
 import { qualificationFactsSchema } from "../src/lib/sales-scout/schemas.ts";
 
 test("domain constants contain approved immutable values", () => {
@@ -293,4 +293,40 @@ test("Batch 4B static capture, preview, and SQL security guards remain present",
     "public.transition_sales_scout_review_status(jsonb,uuid)",
   ]) assert.match(verification,new RegExp(signature.replace(/[()]/g,"\\$&")));
   assert.match(verification,/sqlerrm <> 'existing Scout prospect belongs to a different Scout campaign'/);
+});
+
+test("campaign controls expose action-oriented labels and valid transitions", () => {
+  assert.deepEqual(campaignStatusActions("draft"),["active","completed"]);
+  assert.deepEqual(campaignStatusActions("active"),["paused","completed"]);
+  assert.deepEqual(campaignStatusActions("paused"),["active","completed"]);
+  assert.deepEqual(campaignStatusActions("completed"),["active"]);
+  assert.equal(campaignActionLabel("active","draft"),"Activate campaign");
+  assert.equal(campaignActionLabel("paused","active"),"Pause campaign");
+  assert.equal(campaignActionLabel("completed","active"),"Complete campaign");
+  assert.equal(campaignActionLabel("active","draft","candidate_setup"),"Activate and continue");
+  assert.equal(campaignActionLabel("active","completed","candidate_setup"),"Reactivate campaign");
+});
+
+test("candidate entry and initial campaign selection require active status", () => {
+  assert.equal(isCandidateEntryAvailable("active"),true);
+  for(const status of ["draft","paused","completed"] as const) assert.equal(isCandidateEntryAvailable(status),false);
+  const campaigns=[
+    {campaignId:"draft",status:"draft" as const},
+    {campaignId:"active-one",status:"active" as const},
+    {campaignId:"active-two",status:"active" as const},
+  ];
+  assert.equal(selectInitialCampaignId(campaigns,"active-two"),"active-two");
+  assert.equal(selectInitialCampaignId(campaigns,"draft"),"active-one");
+  assert.equal(selectInitialCampaignId(campaigns),"active-one");
+});
+
+test("candidate setup state never silently accepts an inactive requested campaign", () => {
+  const campaigns=[{campaignId:"draft",status:"draft" as const},{campaignId:"active",status:"active" as const}];
+  const inactive=deriveCandidateSetupState(campaigns,"draft");
+  assert.equal(inactive.kind,"setup");
+  assert.equal(inactive.initialCampaignId,null);
+  assert.equal(inactive.requestedCampaign?.campaignId,"draft");
+  assert.equal(deriveCandidateSetupState([{campaignId:"paused",status:"paused" as const}]).kind,"setup");
+  assert.equal(deriveCandidateSetupState([]).kind,"missing");
+  assert.deepEqual(deriveCandidateSetupState(campaigns,"active"),{kind:"ready",initialCampaignId:"active",requestedCampaign:campaigns[1]});
 });

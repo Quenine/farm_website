@@ -108,3 +108,50 @@ export function isLatestPreviewRequest(requestToken: number, currentToken: numbe
 export function formatMatchLabel(match: { businessName: string; city: string | null }) {
   return match.city ? `${match.businessName} - ${match.city}` : match.businessName;
 }
+
+export type CampaignStatus = (typeof campaignStatuses)[number];
+export type CampaignActionContext = "queue" | "candidate_setup";
+
+export function campaignStatusActions(status: CampaignStatus): CampaignStatus[] {
+  if (status === "active") return ["paused", "completed"];
+  if (status === "completed") return ["active"];
+  return ["active", "completed"];
+}
+
+export function campaignActionLabel(
+  target: CampaignStatus,
+  current: CampaignStatus,
+  context: CampaignActionContext = "queue",
+) {
+  if (target === "active") {
+    if (context === "candidate_setup") return current === "completed" ? "Reactivate campaign" : "Activate and continue";
+    return "Activate campaign";
+  }
+  return target === "paused" ? "Pause campaign" : "Complete campaign";
+}
+
+export function selectInitialCampaignId(
+  campaigns: readonly { campaignId: string; status: CampaignStatus }[],
+  requestedCampaignId?: string,
+) {
+  const active=campaigns.filter((campaign)=>campaign.status === "active");
+  if (requestedCampaignId && active.some((campaign)=>campaign.campaignId === requestedCampaignId)) return requestedCampaignId;
+  return active[0]?.campaignId ?? null;
+}
+
+export function deriveCandidateSetupState<T extends { campaignId: string; status: CampaignStatus }>(
+  campaigns: readonly T[],
+  requestedCampaignId?: string,
+) {
+  if (!campaigns.length) return { kind: "missing" as const, initialCampaignId: null, requestedCampaign: null };
+  const requested=requestedCampaignId?campaigns.find((campaign)=>campaign.campaignId===requestedCampaignId)??null:null;
+  if (requested && requested.status !== "active") return { kind: "setup" as const, initialCampaignId: null, requestedCampaign: requested };
+  const initialCampaignId=selectInitialCampaignId(campaigns,requestedCampaignId);
+  return initialCampaignId
+    ? { kind: "ready" as const, initialCampaignId, requestedCampaign: requested }
+    : { kind: "setup" as const, initialCampaignId: null, requestedCampaign: requested };
+}
+
+export function isCandidateEntryAvailable(status: CampaignStatus) {
+  return status === "active";
+}

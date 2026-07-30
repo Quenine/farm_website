@@ -3,7 +3,7 @@
 ## Delivered
 
 - Owner-reported Batch 3 production validation is recorded in `BATCH-3.md`.
-- Added repeat-safe, still-unapplied migration `database/20260730000100_sales_scout_review_workflow.sql`.
+- Sales Scout database migrations are owner-reported as present in Shields production; Batch 4C made no SQL changes.
 - Generic `campaign_id` remains untouched; nullable `scout_campaign_id` is authoritative for Sales Scout and is backfilled only from valid Scout campaign extensions.
 - Existing CRM records can be enrolled without fragmenting commercial history, and exact matches can enrich the existing record with genuinely new public channels.
 - Added an atomic, service-role-only review transition with persisted qualification guards and audited status changes.
@@ -17,22 +17,25 @@
 - Replaced raw preview JSON with structured candidate, channel, qualification, exact-match, and soft-match sections.
 - Observation time initializes from browser-local time after mount; request tokens prevent stale asynchronous previews from restoring capture controls.
 - Rollback-only SQL verification now checks all three migration functions consistently and proves genuine campaign separation/conflict behavior with exact messages.
+- Added an explicit campaign-activation first-use flow: inactive campaigns no longer expose a dead Add candidate link.
+- Campaign controls now use action-oriented labels, show current status, confirm completion, return feedback, and refresh affected routes immediately.
+- Candidate setup lists configured campaigns when none is active and supports Activate and continue/Reactivate campaign without navigating in circles.
+- Active queue links preserve campaign selection in the candidate form; activation remains manual and starts neither discovery nor outreach.
 
 ## Boundaries
 
 - No social outreach was sent or implemented.
 - No automated discovery was performed.
 - No order attribution was added.
-- Migration `00300` was not applied remotely.
+- Batch 4C did not add or modify SQL and ran no database commands.
 - Vercel environment settings were not changed.
 - Browser tests requiring authenticated local Supabase data remain guarded unless `SALES_SCOUT_BROWSER_FIXTURE=true` is configured against a non-production fixture.
 
 ## Verification
 
-- Sales Scout checks: 28 passed; marketing checks, scoped ESLint, TypeScript,
+- Sales Scout checks: 31 passed; marketing checks, scoped ESLint, TypeScript,
   production build, static SQL audit, migration parity, and diff check passed.
-- The targeted Playwright run was not executed: the configuration requires its own port-3210 server and does not support reusing the identified repository server on port 3000; starting another server would hit the existing workspace lock.
-  Authenticated database cases also remain guarded by the documented local fixture.
+- The targeted Playwright run was not executed: `SALES_SCOUT_BROWSER_FIXTURE` and `SALES_SCOUT_BROWSER_DRAFT_FIXTURE` were not configured. The authenticated cases remain guarded for a non-production fixture.
 - PostgreSQL behavioural verification remains pending; static inspection and rollback-only SQL fixtures are not execution against PostgreSQL.
 
 ## Next batch

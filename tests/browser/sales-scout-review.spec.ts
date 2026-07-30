@@ -6,10 +6,12 @@ test("signed-out Sales Scout route is protected", async ({ page }) => {
 });
 
 const fixtureReady = process.env.SALES_SCOUT_BROWSER_FIXTURE === "true";
+const draftFixture = process.env.SALES_SCOUT_BROWSER_DRAFT_FIXTURE === "true";
 test.describe("guarded Sales Scout admin fixture", () => {
   test.skip(!fixtureReady, "Requires a local authenticated Supabase admin fixture; production data is never used.");
 
   test("enabled Shields admin sees guided review workspace without outreach controls", async ({ page }) => {
+    test.skip(draftFixture, "Draft fixture exercises activation before candidate entry.");
     await page.goto("/admin/marketing/sales-scout");
     await expect(page.getByRole("heading", { name: "Sales Scout" })).toBeVisible();
     await expect(page.getByText(/No social message is sent automatically/)).toBeVisible();
@@ -36,6 +38,24 @@ test.describe("guarded Sales Scout admin fixture", () => {
     }
     await page.getByLabel("Business name").fill("Browser Fixture Kitchen Edited");
     await expect(page.getByRole("button",{name:/^(Create new prospect|Attach to )/})).toHaveCount(0);
+    await expect(page.getByRole("button",{name:/send outreach/i})).toHaveCount(0);
+  });
+
+  test("draft campaign activates explicitly and continues into candidate entry", async ({page})=>{
+    test.skip(!draftFixture,"Requires a non-production authenticated draft-campaign fixture.");
+    await page.goto("/admin/marketing/sales-scout");
+    await expect(page.getByRole("button",{name:"Activate campaign"})).toBeVisible();
+    await expect(page.getByRole("link",{name:"Add candidate"})).toHaveCount(0);
+    await expect(page.getByText("Activate this campaign before adding candidates.")).toBeVisible();
+    await page.goto("/admin/marketing/sales-scout/new");
+    await expect(page.getByRole("heading",{name:"Activate a campaign to start prospecting"})).toBeVisible();
+    const activate=page.getByRole("button",{name:"Activate and continue"}).first();
+    const campaignId=await activate.locator("xpath=..").locator('input[name="campaignId"]').inputValue();
+    await activate.click();
+    await expect(page.getByLabel("Business name")).toBeVisible();
+    await expect(page.locator('select').first()).toHaveValue(campaignId);
+    await page.goto("/admin/marketing/sales-scout");
+    await expect(page.getByRole("link",{name:"Add candidate"})).toBeVisible();
     await expect(page.getByRole("button",{name:/send outreach/i})).toHaveCount(0);
   });
 });

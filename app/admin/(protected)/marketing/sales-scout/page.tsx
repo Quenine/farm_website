@@ -6,6 +6,7 @@ import { requireAdmin } from "@/src/lib/admin-auth";
 import { isSalesScoutEnabled } from "@/src/lib/sales-scout/access";
 import { listAllSalesScoutCampaigns, loadSalesScoutQueue, loadSalesScoutSummary } from "@/src/lib/sales-scout/server";
 import { CampaignStatusControls } from "@/src/components/sales-scout/campaign-status-controls";
+import { isCandidateEntryAvailable } from "@/src/lib/sales-scout/review";
 
 export const dynamic = "force-dynamic";
 type Params = Record<string, string | undefined>;
@@ -32,11 +33,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<Par
   return <>
     <AdminHeader title="Sales Scout" body="Owner-only prospect research and review workspace. No social message is sent automatically." />
     <MarketingNav />
-    <div className="mb-5 flex flex-wrap gap-3"><Link href="/admin/marketing/sales-scout/new" className="inline-flex h-11 items-center rounded-full bg-green-800 px-5 font-bold text-white">Add candidate</Link></div>
-    {selected ? <section className="mb-5 rounded-xl border bg-white p-5">
-      <div className="grid gap-4 lg:grid-cols-[1fr_auto]"><div><h2 className="text-xl font-bold">{selected.name}</h2><p className="text-sm text-stone-600">{selected.city}, {selected.country} - {selected.targetCategories.join(", ")}</p><p className="mt-1 text-sm">Status: <strong>{selected.status}</strong> - Daily review target: {selected.dailyReviewTarget}</p></div>
-      <CampaignStatusControls campaignId={selected.campaignId}/></div>
-    </section> : <p className="mb-5 rounded-xl border bg-white p-5">No Sales Scout campaign is configured.</p>}
+    {selected&&isCandidateEntryAvailable(selected.status)?<div className="mb-5"><Link href={`/admin/marketing/sales-scout/new?campaignId=${selected.campaignId}`} className="inline-flex h-11 items-center rounded-full bg-green-800 px-5 font-bold text-white">Add candidate</Link></div>:null}
+    {selected ? <section className={`mb-5 rounded-xl border p-5 ${selected.status==="active"?"bg-white":"border-amber-300 bg-amber-50"}`}>
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto]"><div><h2 className="text-xl font-bold">{selected.name}</h2><p className="text-sm text-stone-600">{selected.city}, {selected.country} - {selected.targetCategories.join(", ")}</p><p className="mt-1 text-sm">Daily review target: {selected.dailyReviewTarget}</p>
+        {selected.status==="draft"||selected.status==="paused"?<div className="mt-3"><p className="font-bold">Activate this campaign before adding candidates.</p><p className="text-sm text-stone-700">Activating makes it available in the candidate form. It does not send outreach or start automated discovery.</p></div>:selected.status==="completed"?<p className="mt-3 font-bold">This campaign is completed. Reactivate it or select another campaign to add candidates.</p>:null}
+      </div><CampaignStatusControls campaignId={selected.campaignId} currentStatus={selected.status}/></div>
+    </section> : <section className="mb-5 rounded-xl border bg-white p-5"><h2 className="font-bold">No Sales Scout campaign is configured</h2><p className="mt-1 text-sm text-stone-600">Campaign configuration is required before candidates can be added.</p></section>}
+    <section className="mb-5 rounded-xl border bg-stone-50 p-4 text-sm text-stone-600"><p className="font-bold text-stone-800">How Sales Scout works</p><p className="mt-1">1. Activate the campaign. 2. Add or discover candidates. 3. Review qualification evidence. 4. Mark eligible prospects qualified. 5. Outreach remains human-controlled.</p></section>
     <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
       <Kpi label="Total" value={summary.total}/><Kpi label="New" value={summary.new}/><Kpi label="Researching" value={summary.researching}/><Kpi label="Qualified" value={summary.qualified}/><Kpi label="Do-not-contact" value={summary.doNotContact}/><Kpi label="Average score" value={summary.averageScore ?? "-"} note="Qualification rule, not purchase probability"/>
     </section>
