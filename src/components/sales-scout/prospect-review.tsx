@@ -1,0 +1,34 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { doNotContactAction, transitionReviewStatusAction, updateQualificationFactsAction } from "@/app/admin/(protected)/marketing/sales-scout/actions";
+
+const input="h-11 w-full rounded-lg border px-3";
+export function ProspectReviewForms({ prospect }: { prospect: Record<string,unknown> }) {
+  const router=useRouter(); const [pending,start]=useTransition(); const [message,setMessage]=useState("");
+  const id=String(prospect.id), campaignId=String(prospect.campaign_id);
+  const submitStatus=(form:FormData)=>start(async()=>{const result=await transitionReviewStatusAction(form);setMessage(result.message);if(result.ok)router.refresh();});
+  const submitDnc=(form:FormData)=>{if(!confirm("Mark this prospect do not contact? This page cannot remove suppression."))return;start(async()=>{const result=await doNotContactAction(form);setMessage(result.message);if(result.ok)router.refresh();});};
+  const submitFacts=(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();const form=new FormData(event.currentTarget);const facts={prospectId:id,campaignId,businessCategory:form.get("businessCategory"),city:form.get("city"),state:String(form.get("state")||"")||null,country:form.get("country"),serviceAreaCities:String(form.get("serviceAreaCities")||"").split(",").map(x=>x.trim()).filter(Boolean),mostRecentPublicActivityAt:form.get("mostRecentPublicActivityAt")?new Date(String(form.get("mostRecentPublicActivityAt"))).toISOString():null,recurringProduceDemandEvidence:String(form.get("recurringProduceDemandEvidence")||"")||null,demandBand:form.get("demandBand"),isInactiveOrClosed:form.get("isInactiveOrClosed")==="on",isConsumerOnly:form.get("isConsumerOnly")==="on",sourceUrl:form.get("sourceUrl"),locationEvidence:{note:String(form.get("locationEvidence")||"")}};start(async()=>{const data=new FormData();data.set("facts",JSON.stringify(facts));const result=await updateQualificationFactsAction(data);setMessage(result.message);if(result.ok)router.refresh();});};
+  return <div className="grid gap-5 lg:grid-cols-2">
+    <section className="rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Owner review decision</h2><p className="mt-1 text-sm text-stone-600">Qualification is explicit. Updating evidence never changes review status automatically.</p>
+      <div className="mt-4 grid gap-3">{["new","researching","qualified"].map(status=><form key={status} action={submitStatus}><input type="hidden" name="prospectId" value={id}/><input type="hidden" name="targetStatus" value={status}/><button disabled={pending||prospect.scout_status==="do_not_contact"} className="h-11 w-full rounded-full border border-green-800 font-bold capitalize disabled:opacity-50">Mark {status}</button></form>)}
+      {["disqualified","closed"].map(status=><form key={status} action={submitStatus} className="grid gap-2"><input type="hidden" name="prospectId" value={id}/><input type="hidden" name="targetStatus" value={status}/><input name="reason" required maxLength={1000} placeholder={`${status} reason`} className={input}/><button disabled={pending||prospect.scout_status==="do_not_contact"} className="h-11 rounded-full border border-red-700 font-bold capitalize text-red-800 disabled:opacity-50">Mark {status}</button></form>)}</div>
+      <form action={submitDnc} className="mt-5 grid gap-2 border-t pt-5"><h3 className="font-bold text-red-800">Do not contact</h3><input type="hidden" name="prospectId" value={id}/><input name="reason" required placeholder="Required suppression reason" className={input}/><select name="source" required className={input}><option value="owner_request">Owner decision</option><option value="prospect_request">Prospect request</option><option value="platform_signal">Platform signal</option><option value="other">Other</option></select><button disabled={pending||prospect.scout_status==="do_not_contact"} className="h-11 rounded-full bg-red-700 font-bold text-white disabled:opacity-50">Mark do not contact</button></form>
+      {message?<p aria-live="polite" className="mt-3 text-sm font-bold">{message}</p>:null}
+    </section>
+    <form onSubmit={submitFacts} className="grid gap-3 rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Qualification evidence</h2>
+      <label className="font-bold">Category<input name="businessCategory" required defaultValue={String(prospect.business_category??"")} className={`${input} mt-1`}/></label>
+      <div className="grid gap-2 sm:grid-cols-3"><label className="font-bold">City<input name="city" required defaultValue={String(prospect.city??"")} className={`${input} mt-1`}/></label><label className="font-bold">State<input name="state" defaultValue={String(prospect.state??"")} className={`${input} mt-1`}/></label><label className="font-bold">Country<input name="country" required defaultValue={String(prospect.country??"")} className={`${input} mt-1`}/></label></div>
+      <label className="font-bold">Service-area cities<input name="serviceAreaCities" defaultValue={Array.isArray(prospect.service_area_cities)?prospect.service_area_cities.join(", "):""} className={`${input} mt-1`}/></label>
+      <label className="font-bold">Last public activity<input name="mostRecentPublicActivityAt" type="datetime-local" defaultValue={String(prospect.profile_last_activity_at??"").slice(0,16)} className={`${input} mt-1`}/></label>
+      <label className="font-bold">Recurring-demand evidence<textarea name="recurringProduceDemandEvidence" defaultValue={String(prospect.recurring_demand_evidence??"")} className="mt-1 min-h-24 w-full rounded-lg border p-3"/></label>
+      <label className="font-bold">Demand band<select name="demandBand" defaultValue={String(prospect.demand_band??"unknown")} className={`${input} mt-1`}>{["unknown","low","medium","high"].map(x=><option key={x}>{x}</option>)}</select></label>
+      <label className="font-bold">Public source URL<input name="sourceUrl" type="url" required defaultValue={String(prospect.source_url??"")} className={`${input} mt-1`}/></label>
+      <label className="font-bold">Location evidence<textarea name="locationEvidence" defaultValue={typeof prospect.location_evidence==="object"?JSON.stringify(prospect.location_evidence):""} className="mt-1 min-h-20 w-full rounded-lg border p-3"/></label>
+      <label className="flex gap-2"><input name="isInactiveOrClosed" type="checkbox" defaultChecked={Boolean(prospect.appears_inactive_or_closed)}/>Appears inactive or closed</label><label className="flex gap-2"><input name="isConsumerOnly" type="checkbox" defaultChecked={Boolean(prospect.is_consumer_only)}/>Consumer-only</label>
+      <button disabled={pending} className="h-11 rounded-full bg-green-800 font-bold text-white">Save and recompute score</button>
+    </form>
+  </div>;
+}

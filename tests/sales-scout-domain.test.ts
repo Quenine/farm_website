@@ -17,6 +17,8 @@ import { isSalesScoutDeploymentEnabled } from "../src/lib/sales-scout/access-pol
 import { createManualDiscoveryProvider, createManualDiscoveryResult } from "../src/lib/sales-scout/discovery/manual.ts";
 import { findSoftMatchWarnings, prepareDiscoveryCandidate } from "../src/lib/sales-scout/ingestion.ts";
 import { discoveryCandidateSchema } from "../src/lib/sales-scout/schemas.ts";
+import { campaignStatusSchema, doNotContactSchema, formatSalesScoutTimelineEvent, allowedResolutionChoices, parseQueueFilters, reviewTransitionSchema } from "../src/lib/sales-scout/review.ts";
+import { qualificationFactsSchema } from "../src/lib/sales-scout/schemas.ts";
 
 test("domain constants contain approved immutable values", () => {
   assert.deepEqual(scoutStatuses, ["new", "researching", "qualified", "disqualified", "engaged", "converted", "closed", "do_not_contact"]);
@@ -213,4 +215,34 @@ test("rollout policy requires the private flag and an exact Shields hostname", (
   assert.equal(isSalesScoutDeploymentEnabled({ enabledFlag: true, canonicalHostname: "www.shieldsfarms.store" }), true);
   assert.equal(isSalesScoutDeploymentEnabled({ enabledFlag: false, canonicalHostname: "shieldsfarms.store" }), false);
   assert.equal(isSalesScoutDeploymentEnabled({ enabledFlag: true, canonicalHostname: "noblefarms.example" }), false);
+});
+
+test("queue filters parse and enforce pagination bounds", () => {
+  assert.deepEqual(parseQueueFilters({ page: "2", pageSize: "50", sort: "highest_score", minimumScore: "60" }), { page: 2, pageSize: 50, sort: "highest_score", minimumScore: 60 });
+  assert.equal(parseQueueFilters({}).page, 1);
+  assert.throws(() => parseQueueFilters({ pageSize: "51" }));
+  assert.throws(() => parseQueueFilters({ page: "0" }));
+});
+
+test("review and campaign schemas enforce owner-controlled statuses", () => {
+  assert.equal(reviewTransitionSchema.safeParse({ prospectId: campaign.campaignId, targetStatus: "researching" }).success, true);
+  assert.equal(reviewTransitionSchema.safeParse({ prospectId: campaign.campaignId, targetStatus: "disqualified" }).success, false);
+  assert.equal(reviewTransitionSchema.safeParse({ prospectId: campaign.campaignId, targetStatus: "engaged" }).success, false);
+  assert.equal(campaignStatusSchema.safeParse({ campaignId: campaign.campaignId, status: "paused" }).success, true);
+  assert.equal(campaignStatusSchema.safeParse({ campaignId: campaign.campaignId, status: "deleted" }).success, false);
+});
+
+test("suppression and qualification schemas reject incomplete or server-owned input", () => {
+  assert.equal(doNotContactSchema.safeParse({ prospectId: campaign.campaignId, reason: "", source: "owner" }).success, false);
+  assert.equal(doNotContactSchema.safeParse({ prospectId: campaign.campaignId, reason: "Owner decision", source: "" }).success, false);
+  const facts = { prospectId: campaign.campaignId, campaignId: campaign.campaignId, businessCategory: "Restaurant", city: "Lagos", state: "Lagos", country: "Nigeria", serviceAreaCities: [], mostRecentPublicActivityAt: null, recurringProduceDemandEvidence: null, demandBand: "medium", isInactiveOrClosed: false, isConsumerOnly: false, sourceUrl: "https://example.com", locationEvidence: {} };
+  assert.equal(qualificationFactsSchema.safeParse({ ...facts, score: 100 }).success, false);
+  assert.equal(qualificationFactsSchema.safeParse({ ...facts, actorId: campaign.campaignId }).success, false);
+});
+
+test("timeline labels and duplicate choices are safe and explicit", () => {
+  assert.equal(formatSalesScoutTimelineEvent({ event: "scout_scored", secret: "ignored" }), "Qualification updated");
+  assert.equal(formatSalesScoutTimelineEvent({ event: "unknown_event" }), "Sales Scout activity");
+  assert.deepEqual(allowedResolutionChoices({ exactIds: ["one"], softIds: ["two"] }), [{ choice: "attach_to_existing", prospectId: "one" }]);
+  assert.deepEqual(allowedResolutionChoices({ exactIds: [], softIds: ["two"] }), [{ choice: "create_new" }, { choice: "attach_to_existing", prospectId: "two" }]);
 });

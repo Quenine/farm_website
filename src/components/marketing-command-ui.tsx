@@ -1,5 +1,24 @@
 import Link from "next/link";
-import {formatNaira} from "@/src/lib/format";
-export function MarketingNav(){const links=[["/admin/marketing/overview","Overview"],["/admin/marketing/campaigns","Campaigns"],["/admin/marketing/products","Products"],["/admin/marketing/prospects","Prospects"],["/admin/marketing/content-performance","Content & affiliate"],["/admin/marketing/social","Social"],["/admin/marketing/data-quality","Data quality"],["/admin/marketing/data-quality/self-check","Self-check"]];return <nav className="mb-5 flex gap-2 overflow-x-auto pb-2">{links.map(([href,label])=><Link key={href} href={href} className="whitespace-nowrap rounded-full border bg-white px-4 py-2 text-sm font-bold text-green-950">{label}</Link>)}</nav>}
-export function Kpi({label,value,note}:{label:string;value:string|number;note?:string}){return <article className="rounded-xl border bg-white p-4 shadow-sm"><p className="text-sm font-semibold text-stone-600">{label}</p><p className="mt-2 text-2xl font-black text-green-950">{value}</p>{note?<p className="mt-1 text-xs text-stone-500">{note}</p>:null}</article>}
-export const money=(value:number)=>formatNaira(value);
+import { formatNaira } from "@/src/lib/format";
+import { isSalesScoutEnabled } from "@/src/lib/sales-scout/access";
+
+export function MarketingNav() {
+  const links = [
+    ["/admin/marketing/overview", "Overview"],
+    ["/admin/marketing/campaigns", "Campaigns"],
+    ["/admin/marketing/products", "Products"],
+    ["/admin/marketing/prospects", "Prospects"],
+    ...(isSalesScoutEnabled() ? [["/admin/marketing/sales-scout", "Sales Scout"]] : []),
+    ["/admin/marketing/content-performance", "Content & affiliate"],
+    ["/admin/marketing/social", "Social"],
+    ["/admin/marketing/data-quality", "Data quality"],
+    ["/admin/marketing/data-quality/self-check", "Self-check"],
+  ];
+  return <nav className="mb-5 flex gap-2 overflow-x-auto pb-2">{links.map(([href, label]) =>
+    <Link key={href} href={href} className="whitespace-nowrap rounded-full border bg-white px-4 py-2 text-sm font-bold text-green-950">{label}</Link>)}</nav>;
+}
+
+export function Kpi({ label, value, note }: { label: string; value: string | number; note?: string }) {
+  return <article className="rounded-xl border bg-white p-4 shadow-sm"><p className="text-sm font-semibold text-stone-600">{label}</p><p className="mt-2 text-2xl font-black text-green-950">{value}</p>{note ? <p className="mt-1 text-xs text-stone-500">{note}</p> : null}</article>;
+}
+export const money = (value: number) => formatNaira(value);

@@ -1,0 +1,27 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { AdminHeader } from "@/src/components/admin";
+import { MarketingNav } from "@/src/components/marketing-command-ui";
+import { ProspectReviewForms } from "@/src/components/sales-scout/prospect-review";
+import { requireAdmin } from "@/src/lib/admin-auth";
+import { isSalesScoutEnabled } from "@/src/lib/sales-scout/access";
+import { formatSalesScoutTimelineEvent } from "@/src/lib/sales-scout/review";
+import { loadSalesScoutProspectDetail } from "@/src/lib/sales-scout/server";
+
+export const dynamic="force-dynamic";
+export default async function Page({params}:{params:Promise<{id:string}>}) {
+  await requireAdmin(); if(!isSalesScoutEnabled())notFound();
+  const {id}=await params; let detail;
+  try { detail=await loadSalesScoutProspectDetail(id); } catch { notFound(); }
+  const p=detail.prospect as Record<string,unknown>;
+  return <><AdminHeader title={String(p.business_name)} body="Owner-only qualification review. Score is a deterministic qualification rule, not purchase likelihood or revenue probability."/><MarketingNav/>
+    <div className="mb-4 flex flex-wrap gap-4"><Link href="/admin/marketing/sales-scout" className="font-bold text-green-800">Back to queue</Link><Link href={`/admin/marketing/prospects/${id}`} className="font-bold text-green-800">Open commercial prospect record</Link></div>
+    <section className="mb-5 grid gap-4 rounded-xl border bg-white p-5 md:grid-cols-3"><div><p className="text-sm text-stone-500">Review status</p><p className="text-xl font-bold">{String(p.scout_status)}</p></div><div><p className="text-sm text-stone-500">Commercial stage</p><p className="text-xl font-bold">{String(p.stage)}</p></div><div><p className="text-sm text-stone-500">Qualification score</p><p className="text-xl font-bold">{String(p.score??"Unscored")}</p></div><div><p className="text-sm text-stone-500">Category / location</p><p>{String(p.business_category??"—")} · {[p.city,p.state,p.country].filter(Boolean).join(", ")}</p></div><div><p className="text-sm text-stone-500">Campaign</p><p>{detail.campaign.name} ({detail.campaign.status})</p></div><div><p className="text-sm text-stone-500">Handover</p><p>{String(p.handover_status??"Not set")}</p></div></section>
+    {p.do_not_contact_at?<p className="mb-5 rounded-xl bg-red-100 p-4 font-bold text-red-900">Do not contact: {String(p.do_not_contact_reason??"Reason unavailable")}. Suppression cannot be removed here.</p>:null}
+    <section className="mb-5 grid gap-5 lg:grid-cols-2"><article className="rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Public evidence</h2><dl className="mt-3 grid gap-2 text-sm"><div><dt className="font-bold">Source</dt><dd>{String(p.discovery_source??"—")} · {String(p.discovered_at??"—")}</dd></div><div><dt className="font-bold">Source URL</dt><dd>{p.source_url?<a className="text-green-800 underline" href={String(p.source_url)} target="_blank" rel="noreferrer">Open public source</a>:"—"}</dd></div><div><dt className="font-bold">Last public activity</dt><dd>{String(p.profile_last_activity_at??"—")}</dd></div><div><dt className="font-bold">Service areas</dt><dd>{Array.isArray(p.service_area_cities)?p.service_area_cities.join(", "):"—"}</dd></div><div><dt className="font-bold">Recurring-demand evidence</dt><dd>{String(p.recurring_demand_evidence??"—")}</dd></div></dl></article>
+      <article className="rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Qualification result</h2><p className="mt-2">{detail.qualification.qualified?"Persisted facts currently meet the qualification rule.":"Persisted facts do not currently meet every qualification rule."}</p><ul className="mt-3 list-disc pl-5 text-sm">{detail.qualification.qualificationFailures.map(x=><li key={x}>{x.replaceAll("_"," ")}</li>)}</ul><h3 className="mt-4 font-bold">Score factors</h3><ul className="mt-2 space-y-2 text-sm">{detail.qualification.factors.map(x=><li key={x.key} className="rounded bg-stone-50 p-2"><strong>{x.points>0?"+":""}{x.points}</strong> {x.reason}</li>)}</ul></article></section>
+    <section className="mb-5 rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Channels</h2><div className="mt-3 grid gap-3 sm:grid-cols-2">{detail.channels.map(channel=><article key={channel.id} className={`rounded-lg border p-3 ${channel.is_active?"":"opacity-60"}`}><p className="font-bold">{channel.platform}{channel.is_primary?" · Primary":""}</p><p>{channel.handle_or_value}</p>{channel.profile_url?<a href={channel.profile_url} target="_blank" rel="noreferrer" className="text-sm text-green-800 underline">Open public profile</a>:null}<p className="text-xs text-stone-500">{channel.is_active?"Active":"Inactive"}</p></article>)}</div></section>
+    <ProspectReviewForms prospect={p}/>
+    <section className="mt-5 rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Activity timeline</h2><p className="text-sm text-stone-500">Outreach records: {detail.outreachCount}. Outreach controls are not implemented.</p>{detail.activities.length?<ol className="mt-4 space-y-3">{detail.activities.map(activity=><li key={activity.id} className="border-l-4 border-green-700 pl-4"><p className="font-bold">{formatSalesScoutTimelineEvent(activity.metadata)}</p><p className="text-sm">{activity.summary}</p><time className="text-xs text-stone-500">{new Date(activity.occurred_at).toLocaleString("en-NG",{timeZone:"Africa/Lagos"})}</time></li>)}</ol>:<p className="mt-3">No activity yet.</p>}</section>
+  </>;
+}

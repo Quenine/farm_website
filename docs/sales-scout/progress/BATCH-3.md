@@ -49,6 +49,16 @@
 - Migration `00200` has not been applied remotely.
 - PostgreSQL behavioural verification remains pending.
 
+## Owner-reported production validation
+
+- On 30 July 2026 the owner reported that the rollback dry run passed,
+  migration `00200` was applied twice, and rollback-only verification passed
+  after each run.
+- The owner also reported that the permanent functions and provider-identity
+  index were confirmed in Shields Farms and Noble Farms was not modified.
+- Migration `00200` is therefore reported as applied to Shields Farms. Codex
+  did not independently execute or witness these SQL operations.
+
 ## Deferred
 
 - No admin UI, automated discovery provider, outbound messaging, scraping,
