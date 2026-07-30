@@ -416,3 +416,6 @@ After the planning-only run, start with **Batch 0**, then **Batch 1**. Batch 0 r
 ### Batch 4A correction note
 
 Migration `00300` separates generic `campaign_id` from authoritative `scout_campaign_id` and supports in-place legacy CRM enrollment and exact-match channel enrichment. It remains unapplied. PostgreSQL behavioral verification and the production rollback dry-run review remain required before application.
+
+## Batch 5
+Discovery provider adapter, staged candidate review, duplicate checks, and guarded admin entry are dependency-ordered before any later outreach work.

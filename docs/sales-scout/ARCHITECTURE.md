@@ -260,3 +260,6 @@ Do not infer identity by name alone. A normalized phone/email match may be shown
 ### Campaign identity and CRM attachment
 
 `marketing_prospects.campaign_id` remains the generic CRM/marketing relationship. `scout_campaign_id` is the authoritative Sales Scout relationship and references the campaign extension with restricted deletion. Attaching a legacy CRM prospect enrolls that record in place, preserving its commercial stage, generic campaign, activity, suppression, inquiry and order history. Exact matches may add only genuinely new public channels; a no-op repeat creates no activity.
+
+## Batch 5 discovery
+DataForSEO Business Listings is isolated behind a server-only adapter. Results are staged in provider-keyed rows before human review; evidence is validated and no automated outreach is performed.

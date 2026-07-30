@@ -27,7 +27,17 @@ const publicUrl = z.url().max(2048).refine((value) => {
     return false;
   }
 }, "A public HTTP(S) URL is required.");
-const timestamp = z.iso.datetime({ offset: true });
+const timestamp = z.iso.datetime({ offset: true });export const recurringDemandEvidenceMessage = "Describe what the public source proves. A link by itself is not sufficient evidence.";
+export function validateRecurringDemandEvidence(value: string | null | undefined) {
+  const normalized=value?.trim() ?? "";
+  if (!normalized) return true;
+  if (normalized.length < 20) return false;
+  return !/^https?:\/\/\S+$/i.test(normalized);
+}
+export const recurringDemandEvidenceSchema = z.string().trim().max(2000).refine(
+  validateRecurringDemandEvidence,
+  recurringDemandEvidenceMessage,
+);
 
 export const discoveryChannelSchema = z.object({
   platform: z.enum(prospectPlatforms),
@@ -69,7 +79,7 @@ export const discoveryCandidateSchema = z.object({
   publicDescription: optionalTrimmed(2000),
   serviceAreaCities: z.array(trimmed(120)).max(100).default([]),
   mostRecentPublicActivityAt: timestamp.optional(),
-  recurringProduceDemandEvidence: optionalTrimmed(2000),
+  recurringProduceDemandEvidence: recurringDemandEvidenceSchema.optional(),
   demandBand: z.enum(demandBands),
   isInactiveOrClosed: z.boolean(),
   isConsumerOnly: z.boolean(),
@@ -97,7 +107,7 @@ export const qualificationFactsSchema = z.object({
   country: trimmed(120),
   serviceAreaCities: z.array(trimmed(120)).max(100),
   mostRecentPublicActivityAt: timestamp.optional().nullable(),
-  recurringProduceDemandEvidence: optionalTrimmed(2000).nullable(),
+  recurringProduceDemandEvidence: recurringDemandEvidenceSchema.nullable().optional(),
   demandBand: z.enum(demandBands),
   isInactiveOrClosed: z.boolean(),
   isConsumerOnly: z.boolean(),

@@ -58,7 +58,7 @@ export function ManualCandidateForm({ campaigns, initialCampaignId }: { campaign
       <label className="font-bold sm:col-span-2">Public description<textarea name="publicDescription" className="mt-1 min-h-24 w-full rounded-lg border p-3"/></label>
       <label className="font-bold">Service-area cities<input name="serviceAreaCities" placeholder="Lagos, Ikeja" className={`${input} mt-1`}/></label>
       <label className="font-bold">Most recent public activity<input name="mostRecentPublicActivityAt" type="datetime-local" className={`${input} mt-1`}/></label>
-      <label className="font-bold sm:col-span-2">Recurring produce-demand evidence<textarea name="recurringProduceDemandEvidence" className="mt-1 min-h-24 w-full rounded-lg border p-3"/></label>
+      <label className="font-bold sm:col-span-2">Recurring produce-demand evidence<textarea name="recurringProduceDemandEvidence" className="mt-1 min-h-24 w-full rounded-lg border p-3"/><span className="text-xs font-normal text-stone-600">State what the public source shows, then include its link where useful.</span></label>
       <label className="font-bold">Demand band<select name="demandBand" className={`${input} mt-1`}>{["unknown","low","medium","high"].map(x=><option key={x}>{x}</option>)}</select></label>
       <div className="space-y-2 pt-6"><label className="flex gap-2"><input name="isInactiveOrClosed" type="checkbox"/>Appears inactive or closed</label><label className="flex gap-2"><input name="isConsumerOnly" type="checkbox"/>Consumer-only account</label></div>
     </fieldset>
