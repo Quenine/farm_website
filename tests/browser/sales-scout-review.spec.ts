@@ -18,6 +18,8 @@ test.describe("guarded Sales Scout admin fixture", () => {
     await expect(page.locator("textarea[name='candidate']")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Preview candidate" })).toBeVisible();
     await expect(page.getByRole("button", { name: /capture|send outreach/i })).toHaveCount(0);
+    await expect(page.locator("input[name=city], input[name=state], input[name=country]")).toHaveCount(3);
+    await expect(page.getByText("Preview before capture")).toBeVisible();
   });
 });
 

@@ -3,11 +3,12 @@ import { z } from "zod";
 export const queueSorts = ["newest", "highest_score", "oldest_unreviewed"] as const;
 export const campaignStatuses = ["draft", "active", "paused", "completed"] as const;
 export const reviewStatuses = ["new", "researching", "qualified", "disqualified", "closed"] as const;
+export const allScoutStatuses = ["new","researching","qualified","disqualified","engaged","converted","closed","do_not_contact"] as const;
 
 export const queueFilterSchema = z.object({
   campaignId: z.uuid().optional(),
   search: z.string().trim().max(120).optional(),
-  scoutStatus: z.string().trim().max(40).optional(),
+  scoutStatus: z.enum(allScoutStatuses).optional(),
   city: z.string().trim().max(120).optional(),
   category: z.string().trim().max(120).optional(),
   source: z.string().trim().max(100).optional(),
@@ -66,4 +67,22 @@ export function allowedResolutionChoices(input: {
     { choice: "create_new" as const },
     ...input.softIds.map((prospectId) => ({ choice: "attach_to_existing" as const, prospectId })),
   ];
+}
+
+export function formatLocalDateTimeInput(value: unknown) {
+  if (!value) return "";
+  const date=value instanceof Date?value:new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "";
+  const pad=(value:number)=>String(value).padStart(2,"0");
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+export function mergeLocationEvidenceNote(existing: unknown, note: string) {
+  const base=existing && typeof existing==="object" && !Array.isArray(existing) ? existing as Record<string,unknown> : {};
+  return { ...base, note: note.trim() };
+}
+export function invalidatesPreview(previousSnapshot: string | null, nextCandidate: unknown) {
+  return previousSnapshot !== JSON.stringify(nextCandidate);
+}
+export function oldestUnreviewedStatuses(sort: string) {
+  return sort === "oldest_unreviewed" ? ["new","researching"] as const : null;
 }

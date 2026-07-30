@@ -411,3 +411,8 @@ Run new SQL verification in the target Shields environment and record the result
 ## Recommended first implementation batch
 
 After the planning-only run, start with **Batch 0**, then **Batch 1**. Batch 0 resolves the only deployment/schema assumptions that could make later work unsafe. Batch 1 proves the scoring, normalization, duplicate keys, and follow-up policy as pure code before any migration or UI commitment.
+
+
+### Batch 4A correction note
+
+Migration `00300` separates generic `campaign_id` from authoritative `scout_campaign_id` and supports in-place legacy CRM enrollment and exact-match channel enrichment. It remains unapplied. PostgreSQL behavioral verification and the production rollback dry-run review remain required before application.

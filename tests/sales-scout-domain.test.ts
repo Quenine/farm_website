@@ -17,7 +17,7 @@ import { isSalesScoutDeploymentEnabled } from "../src/lib/sales-scout/access-pol
 import { createManualDiscoveryProvider, createManualDiscoveryResult } from "../src/lib/sales-scout/discovery/manual.ts";
 import { findSoftMatchWarnings, prepareDiscoveryCandidate } from "../src/lib/sales-scout/ingestion.ts";
 import { discoveryCandidateSchema } from "../src/lib/sales-scout/schemas.ts";
-import { campaignStatusSchema, doNotContactSchema, formatSalesScoutTimelineEvent, allowedResolutionChoices, parseQueueFilters, reviewTransitionSchema } from "../src/lib/sales-scout/review.ts";
+import { campaignStatusSchema, doNotContactSchema, formatSalesScoutTimelineEvent, allowedResolutionChoices, parseQueueFilters, reviewTransitionSchema, formatLocalDateTimeInput, mergeLocationEvidenceNote, invalidatesPreview, oldestUnreviewedStatuses } from "../src/lib/sales-scout/review.ts";
 import { qualificationFactsSchema } from "../src/lib/sales-scout/schemas.ts";
 
 test("domain constants contain approved immutable values", () => {
@@ -51,7 +51,7 @@ test("normalizes website, business, and location identities", () => {
   assert.equal(canonicalizeWebsiteHostname("http://example.com:80/path/"), "example.com");
   assert.equal(canonicalizeWebsiteHostname("https://instagram.com/shields"), null);
   assert.equal(canonicalizeWebsiteHostname("not a website"), null);
-  assert.equal(normalizeBusinessName("  Àdì's—Kitchen, LIMITED  "), "àdì s kitchen");
+  assert.equal(normalizeBusinessName("  \u00c0d\u00ec's\u2014Kitchen, LIMITED  "), "\u00e0d\u00ec s kitchen");
   assert.equal(normalizeBusinessName("Farm Trading House"), "farm trading house");
   assert.equal(normalizeLocationComparison(" Abuja,  FCT "), "abuja fct");
 });
@@ -222,6 +222,8 @@ test("queue filters parse and enforce pagination bounds", () => {
   assert.equal(parseQueueFilters({}).page, 1);
   assert.throws(() => parseQueueFilters({ pageSize: "51" }));
   assert.throws(() => parseQueueFilters({ page: "0" }));
+  assert.throws(() => parseQueueFilters({ scoutStatus: "arbitrary" }));
+  assert.equal(parseQueueFilters({ city: "Lagos", category: "Restaurant", source: "manual", minimumScore: "60", scoutStatus: "new" }).scoutStatus, "new");
 });
 
 test("review and campaign schemas enforce owner-controlled statuses", () => {
@@ -245,4 +247,14 @@ test("timeline labels and duplicate choices are safe and explicit", () => {
   assert.equal(formatSalesScoutTimelineEvent({ event: "unknown_event" }), "Sales Scout activity");
   assert.deepEqual(allowedResolutionChoices({ exactIds: ["one"], softIds: ["two"] }), [{ choice: "attach_to_existing", prospectId: "one" }]);
   assert.deepEqual(allowedResolutionChoices({ exactIds: [], softIds: ["two"] }), [{ choice: "create_new" }, { choice: "attach_to_existing", prospectId: "two" }]);
+});
+
+test("review workspace helpers preserve local and structured owner state", () => {
+  const local = new Date(2026, 6, 30, 9, 5);
+  assert.equal(formatLocalDateTimeInput(local), "2026-07-30T09:05");
+  assert.deepEqual(mergeLocationEvidenceNote({ source_url: "https://example.com", observed_at: "2026-07-30T08:00:00Z", note: "old" }, " new note "), { source_url: "https://example.com", observed_at: "2026-07-30T08:00:00Z", note: "new note" });
+  assert.equal(invalidatesPreview(JSON.stringify({ city: "Lagos" }), { city: "Lagos" }), false);
+  assert.equal(invalidatesPreview(JSON.stringify({ city: "Lagos" }), { city: "Ikeja" }), true);
+  assert.deepEqual(oldestUnreviewedStatuses("oldest_unreviewed"), ["new", "researching"]);
+  assert.equal(oldestUnreviewedStatuses("newest"), null);
 });

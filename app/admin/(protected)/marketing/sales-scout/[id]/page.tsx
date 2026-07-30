@@ -6,13 +6,13 @@ import { ProspectReviewForms } from "@/src/components/sales-scout/prospect-revie
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { isSalesScoutEnabled } from "@/src/lib/sales-scout/access";
 import { formatSalesScoutTimelineEvent } from "@/src/lib/sales-scout/review";
-import { loadSalesScoutProspectDetail } from "@/src/lib/sales-scout/server";
+import { loadSalesScoutProspectDetail, SalesScoutOperationError } from "@/src/lib/sales-scout/server";
 
 export const dynamic="force-dynamic";
 export default async function Page({params}:{params:Promise<{id:string}>}) {
   await requireAdmin(); if(!isSalesScoutEnabled())notFound();
   const {id}=await params; let detail;
-  try { detail=await loadSalesScoutProspectDetail(id); } catch { notFound(); }
+  try { detail=await loadSalesScoutProspectDetail(id); } catch(error) { if(error instanceof SalesScoutOperationError&&error.reference==="SCOUT_DETAIL_NOT_FOUND")notFound(); throw error; }
   const p=detail.prospect as Record<string,unknown>;
   return <><AdminHeader title={String(p.business_name)} body="Owner-only qualification review. Score is a deterministic qualification rule, not purchase likelihood or revenue probability."/><MarketingNav/>
     <div className="mb-4 flex flex-wrap gap-4"><Link href="/admin/marketing/sales-scout" className="font-bold text-green-800">Back to queue</Link><Link href={`/admin/marketing/prospects/${id}`} className="font-bold text-green-800">Open commercial prospect record</Link></div>

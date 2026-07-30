@@ -255,3 +255,8 @@ Do not infer identity by name alone. A normalized phone/email match may be shown
 - AI/vector scoring for a deterministic MVP
 - Background cron for follow-up sending; due dates and a queue page are enough
 - Direct platform APIs before the manual workflow proves useful and an approved provider exists
+
+
+### Campaign identity and CRM attachment
+
+`marketing_prospects.campaign_id` remains the generic CRM/marketing relationship. `scout_campaign_id` is the authoritative Sales Scout relationship and references the campaign extension with restricted deletion. Attaching a legacy CRM prospect enrolls that record in place, preserving its commercial stage, generic campaign, activity, suppression, inquiry and order history. Exact matches may add only genuinely new public channels; a no-op repeat creates no activity.

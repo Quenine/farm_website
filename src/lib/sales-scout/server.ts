@@ -131,15 +131,16 @@ export async function getSalesScoutCampaign(campaignId: string) {
 }
 
 export type DuplicatePreviewDto = {
-  exactMatch: { prospectIds: string[]; reasons: string[] } | null;
-  softMatchWarnings: ReturnType<typeof findSoftMatchWarnings>;
+  exactMatch: { prospects: MatchProspectSummaryDto[]; reasons: string[] } | null;
+  softMatchWarnings: Array<ReturnType<typeof findSoftMatchWarnings>[number] & { prospect: MatchProspectSummaryDto }>;
   scorePreview: PreparedCandidate["score"];
   normalizedCandidate: PreparedCandidate;
   allowedResolutionChoices: Array<
     { choice: "create_new" } |
-    { choice: "attach_to_existing"; prospectId: string }
+    { choice: "attach_to_existing"; prospectId: string; prospect: MatchProspectSummaryDto }
   >;
 };
+export type MatchProspectSummaryDto={id:string;businessName:string;businessCategory:string|null;city:string|null;country:string|null;scoutStatus:string|null;commercialStage:string;alreadyEnrolled:boolean};
 
 async function previewWithDatabase(
   database: ReturnType<typeof createAdminSupabaseClient>,
@@ -159,7 +160,7 @@ async function previewWithDatabase(
         .eq("discovery_source_id", prepared.providerSourceId).limit(10)
       : Promise.resolve({ data: [], error: null }),
     database.from("marketing_prospects")
-      .select("id,business_name,business_category,city,country")
+      .select("id,business_name,business_category,city,country,scout_status,stage,scout_campaign_id")
       .ilike("city", prepared.city).limit(50),
   ]);
   if (channelsResult.error) fail("SCOUT_DUPLICATE_CHANNELS", channelsResult.error);
@@ -189,20 +190,23 @@ async function previewWithDatabase(
     })),
   );
   const attachIds = new Set([...exactIds, ...softMatchWarnings.map((warning) => warning.prospectId)]);
+  const matchResult=attachIds.size?await database.from("marketing_prospects").select("id,business_name,business_category,city,country,scout_status,stage,scout_campaign_id").in("id",[...attachIds]):{data:[],error:null};
+  if(matchResult.error)fail("SCOUT_MATCH_SUMMARIES",matchResult.error);
+  const summaries=new Map((matchResult.data??[]).map(row=>[row.id,{id:row.id,businessName:row.business_name,businessCategory:row.business_category,city:row.city,country:row.country,scoutStatus:row.scout_status,commercialStage:row.stage,alreadyEnrolled:Boolean(row.scout_campaign_id)}]));
   return {
     exactMatch: exactIds.size
-      ? { prospectIds: [...exactIds], reasons: [...reasons] }
+      ? { prospects: [...exactIds].map(id=>summaries.get(id)!).filter(Boolean), reasons: [...reasons] }
       : null,
-    softMatchWarnings,
+    softMatchWarnings: softMatchWarnings.map(warning=>({...warning,prospect:summaries.get(warning.prospectId)!})).filter(item=>item.prospect),
     scorePreview: prepared.score,
     normalizedCandidate: prepared,
     allowedResolutionChoices: exactIds.size
-      ? [...exactIds].map((prospectId) => ({ choice: "attach_to_existing" as const, prospectId }))
+      ? [...exactIds].map((prospectId) => ({ choice: "attach_to_existing" as const, prospectId, prospect:summaries.get(prospectId)! }))
       : [
           { choice: "create_new" as const },
           ...[...attachIds].map((prospectId) => ({
             choice: "attach_to_existing" as const,
-            prospectId,
+            prospectId, prospect:summaries.get(prospectId)!,
           })),
         ],
   };
@@ -219,6 +223,7 @@ export type CaptureCandidateDto = {
   channelsInserted: number;
   exactDuplicateReason: string | null;
   activityId: string | null;
+  existingProspectEnrolled: boolean;
 };
 
 export async function captureSalesScoutCandidate(input: {
@@ -249,6 +254,7 @@ export async function captureSalesScoutCandidate(input: {
       ? String(result.exact_duplicate_reason)
       : null,
     activityId: result.activity_id ? String(result.activity_id) : null,
+    existingProspectEnrolled: Boolean(result.existing_prospect_enrolled),
   };
 }
 
@@ -320,7 +326,7 @@ export type SalesScoutQueueRowDto = {
   createdAt: string; channels: Array<{ platform: string; value: string; primary: boolean }>;
 };
 
-const queueSelect = "id,business_name,business_category,city,state,country,scout_status,stage,score,score_version,discovery_source,source_url,discovered_at,profile_last_activity_at,do_not_contact_at,handover_status,campaign_id,created_at";
+const queueSelect = "id,business_name,business_category,city,state,country,scout_status,stage,score,score_version,discovery_source,source_url,discovered_at,profile_last_activity_at,do_not_contact_at,handover_status,scout_campaign_id,created_at";
 
 export async function loadSalesScoutQueue(raw: Record<string, string | undefined>) {
   await authorizeSalesScout();
@@ -328,7 +334,7 @@ export async function loadSalesScoutQueue(raw: Record<string, string | undefined
   const database = createAdminSupabaseClient();
   let query = database.from("marketing_prospects").select(queueSelect, { count: "exact" })
     .not("scout_status", "is", null);
-  if (filters.campaignId) query = query.eq("campaign_id", filters.campaignId);
+  if (filters.campaignId) query = query.eq("scout_campaign_id", filters.campaignId);
   if (filters.scoutStatus) query = query.eq("scout_status", filters.scoutStatus);
   if (filters.city) query = query.ilike("city", filters.city);
   if (filters.category) query = query.ilike("business_category", filters.category);
@@ -338,6 +344,7 @@ export async function loadSalesScoutQueue(raw: Record<string, string | undefined
     const safe = filters.search.replace(/[%_,()]/g, " ");
     query = query.or(`business_name.ilike.%${safe}%,business_category.ilike.%${safe}%`);
   }
+  if(filters.sort==="oldest_unreviewed")query=query.in("scout_status",["new","researching"]);
   query = filters.sort === "highest_score"
     ? query.order("score", { ascending: false, nullsFirst: false })
     : filters.sort === "oldest_unreviewed"
@@ -364,26 +371,28 @@ export async function loadSalesScoutQueue(raw: Record<string, string | undefined
     discoverySource: row.discovery_source, sourceUrl: row.source_url,
     discoveredAt: row.discovered_at, lastPublicActivityAt: row.profile_last_activity_at,
     doNotContact: Boolean(row.do_not_contact_at), handoverStatus: row.handover_status,
-    campaignId: row.campaign_id, createdAt: row.created_at, channels: channels.get(row.id) ?? [],
+    campaignId: row.scout_campaign_id, createdAt: row.created_at, channels: channels.get(row.id) ?? [],
   }));
   const total = result.count ?? 0;
   return { rows, total, page: filters.page, pageSize: filters.pageSize,
     totalPages: Math.max(1, Math.ceil(total / filters.pageSize)), appliedFilters: filters };
 }
 
-export async function loadSalesScoutSummary(campaignId?: string) {
+export async function loadSalesScoutSummary(raw: Record<string,string|undefined>) {
   await authorizeSalesScout();
+  const filters=parseQueueFilters(raw);
   const database = createAdminSupabaseClient();
   const statuses = ["new", "researching", "qualified", "disqualified", "do_not_contact"];
   const counts = await Promise.all([undefined, ...statuses].map(async (status) => {
     let query = database.from("marketing_prospects").select("id", { count: "exact", head: true }).not("scout_status", "is", null);
-    if (campaignId) query = query.eq("campaign_id", campaignId);
+    if(filters.campaignId)query=query.eq("scout_campaign_id",filters.campaignId);
+    if(filters.city)query=query.ilike("city",filters.city);if(filters.category)query=query.ilike("business_category",filters.category);if(filters.source)query=query.ilike("discovery_source",filters.source);if(filters.minimumScore!==undefined)query=query.gte("score",filters.minimumScore);if(filters.scoutStatus)query=query.eq("scout_status",filters.scoutStatus);if(filters.search){const safe=filters.search.replace(/[%_,()]/g," ");query=query.or(`business_name.ilike.%${safe}%,business_category.ilike.%${safe}%`);}
     if (status) query = query.eq("scout_status", status);
     return query;
   }));
   counts.forEach((result) => { if (result.error) fail("SCOUT_SUMMARY", result.error); });
   let scoreQuery = database.from("marketing_prospects").select("score").not("scout_status", "is", null).not("score", "is", null).limit(5000);
-  if (campaignId) scoreQuery = scoreQuery.eq("campaign_id", campaignId);
+  if(filters.campaignId)scoreQuery=scoreQuery.eq("scout_campaign_id",filters.campaignId);if(filters.city)scoreQuery=scoreQuery.ilike("city",filters.city);if(filters.category)scoreQuery=scoreQuery.ilike("business_category",filters.category);if(filters.source)scoreQuery=scoreQuery.ilike("discovery_source",filters.source);if(filters.minimumScore!==undefined)scoreQuery=scoreQuery.gte("score",filters.minimumScore);if(filters.scoutStatus)scoreQuery=scoreQuery.eq("scout_status",filters.scoutStatus);if(filters.search){const safe=filters.search.replace(/[%_,()]/g," ");scoreQuery=scoreQuery.or(`business_name.ilike.%${safe}%,business_category.ilike.%${safe}%`);}
   const scores = await scoreQuery;
   if (scores.error) fail("SCOUT_SUMMARY_SCORE", scores.error);
   const values = (scores.data ?? []).map((row) => Number(row.score));
@@ -427,12 +436,12 @@ export async function updateSalesScoutCampaignStatus(raw: unknown) {
 export async function loadSalesScoutProspectDetail(id: string) {
   await authorizeSalesScout();
   const database = createAdminSupabaseClient();
-  const prospectResult = await database.from("marketing_prospects").select("id,business_name,business_category,stage,campaign_id,scout_status,city,state,country,location_evidence,service_area_cities,discovery_source,discovery_source_id,source_url,discovered_at,profile_last_activity_at,has_recurring_produce_demand,recurring_demand_evidence,demand_band,appears_inactive_or_closed,is_consumer_only,score,score_version,score_factors,scored_at,do_not_contact_at,do_not_contact_reason,do_not_contact_source,handover_status,handover_ready_at,handover_accepted_at,handover_completed_at,handover_reason,created_at,updated_at").eq("id", id).maybeSingle();
+  const prospectResult = await database.from("marketing_prospects").select("id,business_name,business_category,stage,campaign_id,scout_campaign_id,scout_status,city,state,country,location_evidence,service_area_cities,discovery_source,discovery_source_id,source_url,discovered_at,profile_last_activity_at,has_recurring_produce_demand,recurring_demand_evidence,demand_band,appears_inactive_or_closed,is_consumer_only,score,score_version,score_factors,scored_at,do_not_contact_at,do_not_contact_reason,do_not_contact_source,handover_status,handover_ready_at,handover_accepted_at,handover_completed_at,handover_reason,created_at,updated_at").eq("id", id).maybeSingle();
   if (prospectResult.error) fail("SCOUT_DETAIL", prospectResult.error);
   const prospect = prospectResult.data;
   if (!prospect || !prospect.scout_status) throw new SalesScoutOperationError("SCOUT_DETAIL_NOT_FOUND", "Sales Scout prospect not found.");
   const [campaign, channels, activities, outreach] = await Promise.all([
-    loadCampaign(database, prospect.campaign_id),
+    loadCampaign(database, prospect.scout_campaign_id),
     database.from("marketing_prospect_channels").select("id,platform,handle_or_value,profile_url,is_primary,is_active,verified_at,source,source_id,evidence,created_at").eq("prospect_id", id).order("is_primary", { ascending: false }),
     database.from("marketing_prospect_activities").select("id,activity_type,summary,occurred_at,metadata,created_at").eq("prospect_id", id).order("occurred_at", { ascending: false }).limit(100),
     database.from("marketing_prospect_outreaches").select("id", { count: "exact", head: true }).eq("prospect_id", id),
