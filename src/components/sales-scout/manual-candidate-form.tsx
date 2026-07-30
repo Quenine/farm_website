@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { captureManualCandidateAction, previewManualCandidateAction } from "@/app/admin/(protected)/marketing/sales-scout/actions";
-import type { SalesScoutCampaignDto } from "@/src/lib/sales-scout/server";
-import { formatLocalDateTimeInput } from "@/src/lib/sales-scout/review";
+import type { DuplicatePreviewDto, SalesScoutCampaignDto } from "@/src/lib/sales-scout/server";
+import { formatLocalDateTimeInput, isLatestPreviewRequest } from "@/src/lib/sales-scout/review";
+import { CandidatePreview } from "@/src/components/sales-scout/candidate-preview";
 
 type Channel = { platform: string; value: string; url: string; primary: boolean; sourceId: string; evidence: string };
 const blank = (primary=false): Channel => ({ platform:"instagram",value:"",url:"",primary,sourceId:"",evidence:"" });
@@ -16,10 +17,13 @@ export function ManualCandidateForm({ campaigns }: { campaigns: SalesScoutCampai
   const campaign=campaigns.find((item)=>item.campaignId===campaignId) ?? campaigns[0];
   const [channels,setChannels]=useState<Channel[]>([blank(true)]);
   const [city,setCity]=useState(campaign?.city??""); const [state,setState]=useState(campaign?.state??""); const [country,setCountry]=useState(campaign?.country??"");
-  const [preview,setPreview]=useState<Record<string,unknown>|null>(null);
+  const [preview,setPreview]=useState<DuplicatePreviewDto|null>(null);
   const [candidate,setCandidate]=useState<Record<string,unknown>|null>(null);
   const [message,setMessage]=useState("");
-  const invalidate=()=>{setPreview(null);setCandidate(null);};
+  const [observedAt,setObservedAt]=useState("");
+  const previewRequestToken=useRef(0);
+  useEffect(()=>{const frame=requestAnimationFrame(()=>setObservedAt(current=>current||formatLocalDateTimeInput(new Date())));return()=>cancelAnimationFrame(frame);},[]);
+  const invalidate=()=>{previewRequestToken.current+=1;setPreview(null);setCandidate(null);};
   const updateChannel=(index:number,patch:Partial<Channel>)=>{invalidate();setChannels((current)=>current.map((row,i)=>{
     const next={...row,...patch}; if(patch.primary&&i===index) return next; return patch.primary?{...next,primary:false}:next;
   }).map((row,i)=>patch.primary?{...row,primary:i===index}:row));};
@@ -36,8 +40,7 @@ export function ManualCandidateForm({ campaigns }: { campaigns: SalesScoutCampai
     channels:channels.map(row=>({platform:row.platform,handleOrValue:row.value,profileUrl:row.url||undefined,
       isPrimary:row.primary,sourceId:row.sourceId||undefined,evidence:{note:row.evidence}})),
   });
-  const onPreview=(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();const next=build(new FormData(event.currentTarget));setCandidate(next);start(async()=>{const data=new FormData();data.set("candidate",JSON.stringify(next));const result=await previewManualCandidateAction(data);setMessage(result.message);setPreview(result.ok?(result.data as Record<string,unknown>):null);});};
-  const choices=(preview?.allowedResolutionChoices as Array<{choice:string;prospectId?:string;prospect?:{businessName:string;city:string|null;scoutStatus:string|null}}>|undefined)??[];
+  const onPreview=(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();const next=build(new FormData(event.currentTarget));const requestToken=++previewRequestToken.current;setPreview(null);setCandidate(null);start(async()=>{const data=new FormData();data.set("candidate",JSON.stringify(next));const result=await previewManualCandidateAction(data);if(!isLatestPreviewRequest(requestToken,previewRequestToken.current))return;setMessage(result.message);if(result.ok){setCandidate(next);setPreview(result.data as DuplicatePreviewDto);}else{setCandidate(null);setPreview(null);}});};
   const capture=(choice:{choice:string;prospectId?:string})=>{if(!candidate)return;start(async()=>{const data=new FormData();data.set("candidate",JSON.stringify(candidate));data.set("resolution",JSON.stringify(choice));const result=await captureManualCandidateAction(data);setMessage(result.message);if(result.ok){const id=String((result.data as Record<string,unknown>).prospectId||"");if(/^[0-9a-f-]{36}$/i.test(id))router.push(`/admin/marketing/sales-scout/${id}`);}});};
   return <div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]"><form onSubmit={onPreview} onChange={invalidate} className="grid gap-5 rounded-xl border bg-white p-5">
     <fieldset className="grid gap-3 sm:grid-cols-2"><legend className="mb-3 text-xl font-bold">Campaign and business</legend>
@@ -48,7 +51,7 @@ export function ManualCandidateForm({ campaigns }: { campaigns: SalesScoutCampai
       <label className="font-bold">State<input name="state" value={state} onChange={e=>setState(e.target.value)} className={`${input} mt-1`}/></label>
       <label className="font-bold">Country<input name="country" required value={country} onChange={e=>setCountry(e.target.value)} className={`${input} mt-1`}/></label>
       <label className="font-bold sm:col-span-2">Public source URL<input name="sourceUrl" type="url" required className={`${input} mt-1`}/></label>
-      <label className="font-bold">Observed at<input name="observedAt" type="datetime-local" required defaultValue={formatLocalDateTimeInput(new Date())} className={`${input} mt-1`}/></label>
+      <label className="font-bold">Observed at<input name="observedAt" type="datetime-local" required value={observedAt} onChange={event=>setObservedAt(event.target.value)} className={`${input} mt-1`}/></label>
       <label className="font-bold">Provider source ID<input name="providerSourceId" className={`${input} mt-1`}/></label>
     </fieldset>
     <fieldset className="grid gap-3 sm:grid-cols-2"><legend className="mb-3 text-xl font-bold">Public evidence</legend>
@@ -70,5 +73,5 @@ export function ManualCandidateForm({ campaigns }: { campaigns: SalesScoutCampai
     <button disabled={pending} className="h-11 rounded-full bg-green-800 px-5 font-bold text-white">{pending?"Checking...":"Preview candidate"}</button>
     {message?<p aria-live="polite">{message}</p>:null}
   </form>
-  <aside className="rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Preview before capture</h2>{preview?<div className="mt-4 space-y-4"><div><h3 className="font-bold">Normalized candidate, channels, scoring and matches</h3><pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-stone-50 p-3 text-xs">{JSON.stringify(preview,null,2)}</pre></div>{preview.exactMatch?<p className="text-sm text-amber-800">An exact identity already belongs to this business. Attach to reuse its existing history; creating a duplicate is unavailable.</p>:null}<div className="space-y-2">{choices.map((choice,index)=><button key={index} type="button" disabled={pending} onClick={()=>capture(choice)} className="block w-full rounded-full bg-green-800 px-4 py-2 font-bold text-white">{choice.choice==="create_new"?"Create new prospect":`Attach to ${choice.prospect?.businessName??"existing prospect"}${choice.prospect?.city?` - ${choice.prospect.city}`:""}${choice.prospect?.scoutStatus?` - ${choice.prospect.scoutStatus}`:""}`}</button>)}</div><p className="text-xs text-stone-500">Attachment is always an explicit owner choice. No prospect is silently merged.</p></div>:<p className="mt-3 text-stone-600">Complete the normal fields and preview. Capture is unavailable until preview succeeds.</p>}</aside></div>;
+  <aside className="rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Preview before capture</h2>{preview?<CandidatePreview preview={preview} pending={pending} onCapture={capture}/>:<p className="mt-3 text-stone-600">Complete the normal fields and preview. Capture is unavailable until preview succeeds.</p>}</aside></div>;
 }

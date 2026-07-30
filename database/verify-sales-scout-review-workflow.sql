@@ -9,26 +9,34 @@ declare
   v_result jsonb;
   v_before jsonb;
   v_count integer;
-  v_function regprocedure:=to_regprocedure('public.transition_sales_scout_review_status(jsonb,uuid)');
+  v_function regprocedure;
+  v_signature text;
 begin
   if not exists(select 1 from information_schema.columns where table_schema='public' and table_name='marketing_prospects' and column_name='scout_campaign_id') then raise exception 'scout campaign column is missing'; end if;
   if not exists(select 1 from pg_constraint where conrelid='public.marketing_prospects'::regclass and conname='marketing_prospects_scout_campaign_id_fkey' and confdeltype='r') then raise exception 'scout campaign foreign key is missing or not restrictive'; end if;
   if not exists(select 1 from pg_indexes where schemaname='public' and tablename='marketing_prospects' and indexname='marketing_prospects_scout_campaign_idx') then raise exception 'scout campaign queue index is missing'; end if;
-  if v_function is null then raise exception 'review transition function is missing'; end if;
-  if not exists(select 1 from pg_proc where oid=v_function and prosecdef
-    and coalesce(proconfig,'{}'::text[]) @> array['search_path=public, pg_temp']) then
-    raise exception 'review transition security configuration is invalid';
-  end if;
-  if exists(select 1 from pg_proc p cross join lateral
-    aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
-    where p.oid=v_function and a.grantee=0 and a.privilege_type='EXECUTE')
-    or has_function_privilege('anon',v_function,'execute')
-    or has_function_privilege('authenticated',v_function,'execute') then
-    raise exception 'untrusted role can execute review transition';
-  end if;
-  if not has_function_privilege('service_role',v_function,'execute') then
-    raise exception 'service_role cannot execute review transition';
-  end if;
+  foreach v_signature in array array[
+    'public.capture_sales_scout_candidate(jsonb,text,uuid,uuid)',
+    'public.update_sales_scout_qualification_facts(jsonb,uuid)',
+    'public.transition_sales_scout_review_status(jsonb,uuid)'
+  ] loop
+    v_function:=to_regprocedure(v_signature);
+    if v_function is null then raise exception 'Sales Scout function is missing: %',v_signature; end if;
+    if not exists(select 1 from pg_proc where oid=v_function and prosecdef
+      and coalesce(proconfig,'{}'::text[]) @> array['search_path=public, pg_temp']) then
+      raise exception 'Sales Scout function security configuration is invalid: %',v_signature;
+    end if;
+    if exists(select 1 from pg_proc p cross join lateral
+      aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      where p.oid=v_function and a.grantee=0 and a.privilege_type='EXECUTE')
+      or has_function_privilege('anon',v_function,'execute')
+      or has_function_privilege('authenticated',v_function,'execute') then
+      raise exception 'untrusted role can execute Sales Scout function: %',v_signature;
+    end if;
+    if not has_function_privilege('service_role',v_function,'execute') then
+      raise exception 'service_role cannot execute Sales Scout function: %',v_signature;
+    end if;
+  end loop;
 
   insert into public.marketing_campaigns(id,name,slug,channel,source,medium,campaign_name,target_path)
   values(v_campaign,'Review verification','review-'||v_campaign,'instagram','manual','social','review','/admin/marketing/sales-scout');
@@ -167,8 +175,30 @@ begin
   if not exists(select 1 from public.marketing_prospects where id=v_legacy and campaign_id=v_generic and scout_campaign_id=v_scout and stage='contacted' and scout_status='new' and score=75 and discovery_source='manual') then raise exception 'legacy enrollment did not preserve and populate expected facts'; end if;
   if not exists(select 1 from public.marketing_prospect_activities where id=v_existing_activity) then raise exception 'legacy activity was lost'; end if;
   if (select count(*) from public.marketing_prospect_activities where prospect_id=v_legacy and metadata->>'event'='candidate_attached')<>1 then raise exception 'legacy enrollment activity count invalid'; end if;
+  v_result:=public.update_sales_scout_qualification_facts(jsonb_build_object(
+    'prospectId',v_legacy,'campaignId',v_scout,'businessCategory','Restaurant',
+    'city','Lagos','state','Lagos','country','Nigeria','serviceAreaCities',jsonb_build_array('Lagos'),
+    'mostRecentPublicActivityAt',now(),'recurringProduceDemandEvidence','Public menu confirms recurring produce demand.',
+    'demandBand','high','isInactiveOrClosed',false,'isConsumerOnly',false,
+    'sourceUrl','https://instagram.com/legacy_verification',
+    'locationEvidence',jsonb_build_object('source_url','https://instagram.com/legacy_verification','note','Lagos location verified'),
+    'score',jsonb_build_object('score',80,'ruleVersion','ng-city-b2b-v1','factors','[]'::jsonb,'scoredAt',now())
+  ),v_actor);
+  if nullif(v_result->>'activity_id','') is null
+    or not exists(select 1 from public.marketing_prospect_activities where id=(v_result->>'activity_id')::uuid and prospect_id=v_legacy and metadata->>'event'='scout_scored')
+    or not exists(select 1 from public.marketing_prospects where id=v_legacy and campaign_id=v_generic and scout_campaign_id=v_scout and score=80)
+  then raise exception 'qualification did not use the separated Scout campaign'; end if;
+  v_result:=public.transition_sales_scout_review_status(jsonb_build_object('prospectId',v_legacy,'targetStatus','qualified'),v_actor);
+  if v_result->>'current_status'<>'qualified'
+    or not exists(select 1 from public.marketing_prospects where id=v_legacy and campaign_id=v_generic and scout_campaign_id=v_scout)
+  then raise exception 'qualification transition did not preserve generic campaign separation'; end if;
   v_payload:=jsonb_set(v_payload,'{channels}',(v_payload->'channels')||jsonb_build_array(jsonb_build_object('platform','facebook','handleOrValue','legacy.restaurant','identityKey','legacy.restaurant','profileUrl','https://facebook.com/legacy.restaurant','isPrimary',false,'sourceId','legacy-facebook','evidence','{}'::jsonb)));
-  begin perform public.capture_sales_scout_candidate(v_payload,'attach_to_existing',v_other,v_actor); raise exception 'exact owner mismatch succeeded'; exception when sqlstate '22023' then null; end;
+  begin
+    perform public.capture_sales_scout_candidate(v_payload,'attach_to_existing',v_other,v_actor);
+    raise exception 'exact owner mismatch succeeded';
+  exception when sqlstate '22023' then
+    if sqlerrm <> 'selected attachment target does not own the exact identity' then raise; end if;
+  end;
   v_result:=public.capture_sales_scout_candidate(v_payload,'attach_to_existing',v_legacy,v_actor);
   if (v_result->>'channels_inserted')::integer<>1 then raise exception 'exact enrichment did not add one channel'; end if;
   select count(*) into v_count from public.marketing_prospect_activities where prospect_id=v_legacy and metadata->>'event'='candidate_attached';
@@ -177,7 +207,19 @@ begin
   v_payload:=(v_payload||jsonb_build_object('businessName','Suppressed Restaurant','providerSourceId','suppressed-verification'))||jsonb_build_object('channels',jsonb_build_array(jsonb_build_object('platform','instagram','handleOrValue','@suppressed_verification','identityKey','suppressed_verification','profileUrl','https://instagram.com/suppressed_verification','isPrimary',true,'sourceId','suppressed-channel','evidence','{}'::jsonb)));
   v_result:=public.capture_sales_scout_candidate(v_payload,'attach_to_existing',v_suppressed,v_actor);
   if not exists(select 1 from public.marketing_prospects where id=v_suppressed and campaign_id=v_generic and scout_campaign_id=v_scout and scout_status='do_not_contact' and do_not_contact_at is not null and do_not_contact_reason='existing opt-out') then raise exception 'suppressed legacy enrollment cleared suppression'; end if;
-  update public.marketing_prospects set scout_campaign_id=v_other_scout where id=v_other; update public.marketing_prospects set scout_status='new' where id=v_other;
-  begin perform public.capture_sales_scout_candidate(jsonb_set(v_payload,'{channels,0,identityKey}','"different_identity"'), 'attach_to_existing',v_other,v_actor); raise exception 'Scout campaign conflict succeeded'; exception when sqlstate '22023' then null; end;
+  update public.marketing_prospects set scout_campaign_id=v_other_scout,scout_status='new',city='Abuja',state='FCT',country='Nigeria' where id=v_other;
+  v_payload:=(v_payload||jsonb_build_object(
+    'businessName','Other Restaurant','providerSourceId','cross-campaign-new-provider-id'
+  ))||jsonb_build_object('channels',jsonb_build_array(jsonb_build_object(
+    'platform','instagram','handleOrValue','@cross_campaign_new_identity',
+    'identityKey','cross_campaign_new_identity','profileUrl','https://instagram.com/cross_campaign_new_identity',
+    'isPrimary',true,'sourceId','cross-campaign-new-channel-id','evidence','{}'::jsonb
+  )));
+  begin
+    perform public.capture_sales_scout_candidate(v_payload,'attach_to_existing',v_other,v_actor);
+    raise exception 'Scout campaign conflict succeeded';
+  exception when sqlstate '22023' then
+    if sqlerrm <> 'existing Scout prospect belongs to a different Scout campaign' then raise; end if;
+  end;
 end $$;
 rollback;

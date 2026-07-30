@@ -86,3 +86,25 @@ export function invalidatesPreview(previousSnapshot: string | null, nextCandidat
 export function oldestUnreviewedStatuses(sort: string) {
   return sort === "oldest_unreviewed" ? ["new","researching"] as const : null;
 }
+
+export type CaptureResolutionChoice =
+  | { choice: "create_new" }
+  | { choice: "attach_to_existing"; prospectId: string };
+
+export function isCaptureResolutionAllowed(
+  allowedChoices: readonly CaptureResolutionChoice[],
+  resolution: CaptureResolutionChoice,
+) {
+  return resolution.choice === "create_new"
+    ? allowedChoices.some((choice) => choice.choice === "create_new")
+    : allowedChoices.some((choice) =>
+        choice.choice === "attach_to_existing" && choice.prospectId === resolution.prospectId);
+}
+
+export function isLatestPreviewRequest(requestToken: number, currentToken: number) {
+  return requestToken === currentToken;
+}
+
+export function formatMatchLabel(match: { businessName: string; city: string | null }) {
+  return match.city ? `${match.businessName} - ${match.city}` : match.businessName;
+}

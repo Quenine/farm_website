@@ -13,6 +13,10 @@
 - Added protected prospect detail with score factors, qualification failures, evidence editor, review decisions, do-not-contact, channels, and safe timeline.
 - Added guarded Sales Scout navigation only when the private flag and exact Shields deployment policy both pass.
 - Added focused schema/pure-logic tests and a guarded Playwright admin fixture spec.
+- Candidate capture now validates create/attach resolution against the freshly rerun server preview before invoking SQL.
+- Replaced raw preview JSON with structured candidate, channel, qualification, exact-match, and soft-match sections.
+- Observation time initializes from browser-local time after mount; request tokens prevent stale asynchronous previews from restoring capture controls.
+- Rollback-only SQL verification now checks all three migration functions consistently and proves genuine campaign separation/conflict behavior with exact messages.
 
 ## Boundaries
 
@@ -25,10 +29,9 @@
 
 ## Verification
 
-- Sales Scout checks: 24 passed; marketing checks, scoped ESLint, TypeScript,
+- Sales Scout checks: 28 passed; marketing checks, scoped ESLint, TypeScript,
   production build, static SQL audit, migration parity, and diff check passed.
-- The targeted Playwright run did not execute because the configured web server
-  refused to start while another Next.js development server held the workspace lock.
+- The targeted Playwright run was not executed: the configuration requires its own port-3210 server and does not support reusing the identified repository server on port 3000; starting another server would hit the existing workspace lock.
   Authenticated database cases also remain guarded by the documented local fixture.
 - PostgreSQL behavioural verification remains pending; static inspection and rollback-only SQL fixtures are not execution against PostgreSQL.
 

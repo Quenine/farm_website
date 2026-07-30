@@ -18,6 +18,7 @@ import { scoreSalesScoutProspect } from "./scoring.ts";
 import {
   campaignStatusSchema,
   doNotContactSchema,
+  isCaptureResolutionAllowed,
   parseQueueFilters,
   reviewTransitionSchema,
 } from "./review.ts";
@@ -236,6 +237,12 @@ export async function captureSalesScoutCandidate(input: {
   const preview = await previewWithDatabase(database, input.candidate);
   if (resolution.choice === "create_new" && preview.exactMatch) {
     throw new SalesScoutOperationError("SCOUT_EXACT_REQUIRES_ATTACH", "An exact identity already exists.");
+  }
+  if (!isCaptureResolutionAllowed(preview.allowedResolutionChoices, resolution)) {
+    throw new SalesScoutOperationError(
+      "SCOUT_ATTACHMENT_NOT_ALLOWED",
+      "The selected prospect is not an allowed match for this candidate.",
+    );
   }
   const { data, error } = await database.rpc("capture_sales_scout_candidate", {
     p_payload: preview.normalizedCandidate,

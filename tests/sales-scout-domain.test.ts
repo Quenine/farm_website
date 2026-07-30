@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { handoverStatuses, outreachStatuses, prospectPlatforms, scoutStatuses } from "../src/lib/sales-scout/domain.ts";
 import {
@@ -17,7 +18,7 @@ import { isSalesScoutDeploymentEnabled } from "../src/lib/sales-scout/access-pol
 import { createManualDiscoveryProvider, createManualDiscoveryResult } from "../src/lib/sales-scout/discovery/manual.ts";
 import { findSoftMatchWarnings, prepareDiscoveryCandidate } from "../src/lib/sales-scout/ingestion.ts";
 import { discoveryCandidateSchema } from "../src/lib/sales-scout/schemas.ts";
-import { campaignStatusSchema, doNotContactSchema, formatSalesScoutTimelineEvent, allowedResolutionChoices, parseQueueFilters, reviewTransitionSchema, formatLocalDateTimeInput, mergeLocationEvidenceNote, invalidatesPreview, oldestUnreviewedStatuses } from "../src/lib/sales-scout/review.ts";
+import { campaignStatusSchema, doNotContactSchema, formatSalesScoutTimelineEvent, allowedResolutionChoices, parseQueueFilters, reviewTransitionSchema, formatLocalDateTimeInput, mergeLocationEvidenceNote, invalidatesPreview, oldestUnreviewedStatuses, isCaptureResolutionAllowed, isLatestPreviewRequest, formatMatchLabel } from "../src/lib/sales-scout/review.ts";
 import { qualificationFactsSchema } from "../src/lib/sales-scout/schemas.ts";
 
 test("domain constants contain approved immutable values", () => {
@@ -257,4 +258,39 @@ test("review workspace helpers preserve local and structured owner state", () =>
   assert.equal(invalidatesPreview(JSON.stringify({ city: "Lagos" }), { city: "Ikeja" }), true);
   assert.deepEqual(oldestUnreviewedStatuses("oldest_unreviewed"), ["new", "researching"]);
   assert.equal(oldestUnreviewedStatuses("newest"), null);
+});
+test("capture authorization accepts only current preview choices", () => {
+  const exactChoices=[{ choice: "attach_to_existing" as const, prospectId: "exact-owner" }];
+  assert.equal(isCaptureResolutionAllowed(exactChoices,{choice:"attach_to_existing",prospectId:"exact-owner"}),true);
+  assert.equal(isCaptureResolutionAllowed(exactChoices,{choice:"create_new"}),false);
+  assert.equal(isCaptureResolutionAllowed(exactChoices,{choice:"attach_to_existing",prospectId:"unrelated"}),false);
+  const softChoices=[{choice:"create_new" as const},{choice:"attach_to_existing" as const,prospectId:"soft-match"}];
+  assert.equal(isCaptureResolutionAllowed(softChoices,{choice:"create_new"}),true);
+  assert.equal(isCaptureResolutionAllowed(softChoices,{choice:"attach_to_existing",prospectId:"soft-match"}),true);
+  assert.equal(isCaptureResolutionAllowed(softChoices,{choice:"attach_to_existing",prospectId:"stale-match"}),false);
+});
+
+test("only the latest preview request may update visible capture state", () => {
+  assert.equal(isLatestPreviewRequest(4,4),true);
+  assert.equal(isLatestPreviewRequest(3,4),false);
+  assert.equal(isLatestPreviewRequest(4,5),false);
+});
+
+test("match labels are human-readable and never UUID-only", () => {
+  assert.equal(formatMatchLabel({businessName:"Scout Kitchen",city:"Lagos"}),"Scout Kitchen - Lagos");
+  assert.equal(formatMatchLabel({businessName:"Island Caterers",city:null}),"Island Caterers");
+});
+test("Batch 4B static capture, preview, and SQL security guards remain present", () => {
+  const server=readFileSync("src/lib/sales-scout/server.ts","utf8");
+  const form=readFileSync("src/components/sales-scout/manual-candidate-form.tsx","utf8");
+  const verification=readFileSync("database/verify-sales-scout-review-workflow.sql","utf8");
+  assert.ok(server.indexOf("isCaptureResolutionAllowed(preview.allowedResolutionChoices, resolution)") < server.indexOf('database.rpc("capture_sales_scout_candidate"'));
+  assert.match(server,/SCOUT_ATTACHMENT_NOT_ALLOWED/);
+  assert.doesNotMatch(form,/JSON\.stringify\(preview/);
+  for(const signature of [
+    "public.capture_sales_scout_candidate(jsonb,text,uuid,uuid)",
+    "public.update_sales_scout_qualification_facts(jsonb,uuid)",
+    "public.transition_sales_scout_review_status(jsonb,uuid)",
+  ]) assert.match(verification,new RegExp(signature.replace(/[()]/g,"\\$&")));
+  assert.match(verification,/sqlerrm <> 'existing Scout prospect belongs to a different Scout campaign'/);
 });
