@@ -53,6 +53,10 @@ export type SalesScoutCampaignDto = ScoutCampaignConfig & {
   productScope: string | null;
   deliverySummary: string | null;
   dailyReviewTarget: number;
+  discoveryLatitude: number | null;
+  discoveryLongitude: number | null;
+  discoveryRadiusKm: number | null;
+  discoveryDefaultLimit: number | null;
 };
 
 function campaignDto(
@@ -73,13 +77,17 @@ function campaignDto(
     productScope: extension.product_scope ? String(extension.product_scope) : null,
     deliverySummary: extension.delivery_summary ? String(extension.delivery_summary) : null,
     dailyReviewTarget: Number(extension.daily_review_target),
+    discoveryLatitude: extension.discovery_latitude == null ? null : Number(extension.discovery_latitude),
+    discoveryLongitude: extension.discovery_longitude == null ? null : Number(extension.discovery_longitude),
+    discoveryRadiusKm: extension.discovery_radius_km == null ? null : Number(extension.discovery_radius_km),
+    discoveryDefaultLimit: extension.discovery_default_limit == null ? null : Number(extension.discovery_default_limit),
   };
 }
 
 async function loadCampaign(database: ReturnType<typeof createAdminSupabaseClient>, campaignId: string) {
   const [extensionResult, campaignResult] = await Promise.all([
     database.from("marketing_sales_scout_campaigns")
-      .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target")
+      .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit")
       .eq("campaign_id", campaignId).maybeSingle(),
     database.from("marketing_campaigns")
       .select("id,name,slug").eq("id", campaignId).maybeSingle(),
@@ -96,7 +104,7 @@ export async function listSalesScoutCampaigns(): Promise<SalesScoutCampaignDto[]
   await authorizeSalesScout();
   const database = createAdminSupabaseClient();
   const extensions = await database.from("marketing_sales_scout_campaigns")
-    .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target")
+    .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit")
     .eq("status", "active").limit(100);
   if (extensions.error) fail("SCOUT_CAMPAIGNS_LIST", extensions.error);
   const ids = (extensions.data ?? []).map((row) => row.campaign_id);
@@ -114,7 +122,7 @@ export async function listAllSalesScoutCampaigns(): Promise<SalesScoutCampaignDt
   await authorizeSalesScout();
   const database = createAdminSupabaseClient();
   const extensions = await database.from("marketing_sales_scout_campaigns")
-    .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target")
+    .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit")
     .order("created_at", { ascending: false }).limit(100);
   if (extensions.error) fail("SCOUT_CAMPAIGNS_ADMIN", extensions.error);
   const ids = (extensions.data ?? []).map((row) => row.campaign_id);

@@ -268,3 +268,6 @@ DataForSEO Business Listings is isolated behind a server-only adapter. Results a
 DataForSEO listings are provider research records, not capture-ready prospects. Canonical provider identity is separate from per-run membership, with no fabricated geography, category, demand, or contact facts.
 
 Batch 5A correction retains provider category IDs and check_url verification URLs, maps only exact configured category IDs, and stores research gaps for owner review.
+
+## Batch 5B owner discovery
+Owner-triggered DataForSEO runs stage canonical provider listings for review. Capture reuses the authoritative ingestion RPC; dismissal changes only staged review state. No outreach is automated.

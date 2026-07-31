@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { AdminHeader } from "@/src/components/admin";
 import { Kpi, MarketingNav } from "@/src/components/marketing-command-ui";
 import { requireAdmin } from "@/src/lib/admin-auth";
-import { isSalesScoutEnabled } from "@/src/lib/sales-scout/access";
+import { isSalesScoutDiscoveryEnabled, isSalesScoutEnabled } from "@/src/lib/sales-scout/access";
 import { listAllSalesScoutCampaigns, loadSalesScoutQueue, loadSalesScoutSummary } from "@/src/lib/sales-scout/server";
 import { CampaignStatusControls } from "@/src/components/sales-scout/campaign-status-controls";
 import { isCandidateEntryAvailable } from "@/src/lib/sales-scout/review";
@@ -33,7 +33,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Par
   return <>
     <AdminHeader title="Sales Scout" body="Owner-only prospect research and review workspace. No social message is sent automatically." />
     <MarketingNav />
-    {selected&&isCandidateEntryAvailable(selected.status)?<div className="mb-5"><Link href={`/admin/marketing/sales-scout/new?campaignId=${selected.campaignId}`} className="inline-flex h-11 items-center rounded-full bg-green-800 px-5 font-bold text-white">Add candidate</Link></div>:null}
+    {selected&&isCandidateEntryAvailable(selected.status)?<div className="mb-5 flex gap-3"><Link href={`/admin/marketing/sales-scout/new?campaignId=${selected.campaignId}`} className="inline-flex h-11 items-center rounded-full bg-green-800 px-5 font-bold text-white">Add candidate</Link>{isSalesScoutDiscoveryEnabled()?<Link href={`/admin/marketing/sales-scout/discover?campaignId=${selected.campaignId}`} className="inline-flex h-11 items-center rounded-full border border-green-800 px-5 font-bold text-green-900">Discover businesses</Link>:null}</div>:null}
     {selected ? <section className={`mb-5 rounded-xl border p-5 ${selected.status==="active"?"bg-white":"border-amber-300 bg-amber-50"}`}>
       <div className="grid gap-4 lg:grid-cols-[1fr_auto]"><div><h2 className="text-xl font-bold">{selected.name}</h2><p className="text-sm text-stone-600">{selected.city}, {selected.country} - {selected.targetCategories.join(", ")}</p><p className="mt-1 text-sm">Daily review target: {selected.dailyReviewTarget}</p>
         {selected.status==="draft"||selected.status==="paused"?<div className="mt-3"><p className="font-bold">Activate this campaign before adding candidates.</p><p className="text-sm text-stone-700">Activating makes it available in the candidate form. It does not send outreach or start automated discovery.</p></div>:selected.status==="completed"?<p className="mt-3 font-bold">This campaign is completed. Reactivate it or select another campaign to add candidates.</p>:null}

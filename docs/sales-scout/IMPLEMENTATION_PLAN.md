@@ -424,3 +424,6 @@ Discovery provider adapter, staged candidate review, duplicate checks, and guard
 Apply and rollback-test discovery persistence before Batch 5B adds the guarded application service and review UI.
 
 The discovery migration requires a PostgreSQL rollback dry run with synthetic behavioural fixtures before Batch 5B services/UI.
+
+## Batch 5B implemented
+Guarded run orchestration, paginated staged review, server-side preview/capture, dismissal, and admin routes are implemented behind the disabled discovery flag.

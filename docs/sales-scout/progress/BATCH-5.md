@@ -1,3 +1,5 @@
 # Batch 5 progress
 
-Migration definitions are approved for verifier construction. Executable rollback-only fixtures replaced the prior placeholder verifier, but the verifier has not been executed against PostgreSQL and migration `00400` remains unapplied. No provider request occurred. Batch 5B remains unimplemented. The next step is a human-reviewed PostgreSQL rollback dry run.
+Migration 00400 was permanently applied and verified. Batch 5B adds owner-triggered DataForSEO Business Listings discovery, canonical staged review, exact/soft duplicate handling, capture through the existing ingestion RPC, and staged dismissal.
+
+Discovery sends no outreach and remains behind SALES_SCOUT_DISCOVERY_ENABLED. Production discovery credentials and the flag remain disabled/unconfigured; the first live provider test remains pending.
