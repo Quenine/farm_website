@@ -14,6 +14,7 @@ const files = [
 
 const source = files.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 const orchestration = fs.readFileSync("src/lib/sales-scout/discovery/server.ts", "utf8");
+const discoveryActions = fs.readFileSync("app/admin/(protected)/marketing/sales-scout/discover/actions.ts", "utf8");
 assert.doesNotMatch(source, /eslint-disable[^\n]*no-explicit-any/);
 assert.doesNotMatch(source, /\bany\b/);
 assert.doesNotMatch(source, /catch\s*\([^)]*\)\s*\{\s*\}/);
@@ -25,6 +26,17 @@ for (const match of orchestration.matchAll(/from\("marketing_sales_scout_discove
 }
 const providerGuardIndex = orchestration.indexOf("if(!isDataForSeoBusinessListingsConfigured())");
 assert.ok(providerGuardIndex >= 0 && providerGuardIndex < orchestration.indexOf("start_sales_scout_discovery_run"));
+assert.doesNotMatch(
+  discoveryActions,
+  /exports+(?:const|let|var|class)|exports+default(?!s+asyncs+function)/m,
+);
+for (const actionName of [
+  "runDiscoveryAction",
+  "dismissDiscoveryCandidateAction",
+  "captureDiscoveryCandidateAction",
+]) {
+  assert.match(discoveryActions, new RegExp(`export\\s+async\\s+function\\s+${actionName}\\s*\\(`));
+}
 assert.match(source, /requireSalesScoutDiscoveryEnabled/);
 assert.match(source, /useActionState/);
 assert.match(source, /useFormStatus/);

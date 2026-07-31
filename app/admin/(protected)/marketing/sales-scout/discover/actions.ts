@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/src/lib/admin-auth";
 import { requireSalesScoutDiscoveryEnabled } from "@/src/lib/sales-scout/access";
+import type { DiscoveryActionState } from "@/src/lib/sales-scout/discovery/action-state";
 import {
   captureStagedSalesScoutCandidate,
   dismissSalesScoutDiscoveryCandidate,
@@ -11,14 +12,7 @@ import {
   SalesScoutDiscoveryError,
 } from "@/src/lib/sales-scout/discovery/server";
 
-export type DiscoveryActionState = {
-  ok: boolean;
-  message: string;
-  reference?: string;
-  data?: Record<string, unknown>;
-};
 
-export const initialDiscoveryActionState: DiscoveryActionState = { ok: false, message: "" };
 const uuid = z.uuid();
 
 async function guard() {

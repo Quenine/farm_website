@@ -5,8 +5,8 @@ import { useFormStatus } from "react-dom";
 import {
   captureDiscoveryCandidateAction,
   dismissDiscoveryCandidateAction,
-  initialDiscoveryActionState,
 } from "@/app/admin/(protected)/marketing/sales-scout/discover/actions";
+import { initialDiscoveryActionState } from "@/src/lib/sales-scout/discovery/action-state";
 
 type CaptureChoice = {
   choice: string;

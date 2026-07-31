@@ -2,10 +2,8 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import {
-  initialDiscoveryActionState,
-  runDiscoveryAction,
-} from "@/app/admin/(protected)/marketing/sales-scout/discover/actions";
+import { runDiscoveryAction } from "@/app/admin/(protected)/marketing/sales-scout/discover/actions";
+import { initialDiscoveryActionState } from "@/src/lib/sales-scout/discovery/action-state";
 
 function RunButton() {
   const { pending } = useFormStatus();
