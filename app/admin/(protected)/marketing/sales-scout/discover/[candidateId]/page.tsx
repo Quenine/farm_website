@@ -1,3 +1,130 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import Link from "next/link";import {notFound} from "next/navigation";import {requireAdmin} from "@/src/lib/admin-auth";import {isSalesScoutDiscoveryEnabled,isSalesScoutEnabled} from "@/src/lib/sales-scout/access";import {getSalesScoutDiscoveryCandidate,previewStagedSalesScoutCandidate} from "@/src/lib/sales-scout/discovery/server";import {captureDiscoveryCandidateAction,dismissDiscoveryCandidateAction} from "../actions";export const dynamic="force-dynamic";
-export default async function Page({params}:{params:Promise<{candidateId:string}>}){await requireAdmin();if(!isSalesScoutEnabled()||!isSalesScoutDiscoveryEnabled())notFound();const {candidateId}=await params;const detail=await getSalesScoutDiscoveryCandidate(candidateId);const c:any=detail.candidate;let preview:any=null;if(detail.readiness.candidate)try{preview=await previewStagedSalesScoutCandidate(candidateId)}catch{}const final=["captured","dismissed"].includes(c.status);return <main className="space-y-5 p-6"><Link href={`/admin/marketing/sales-scout/discover?campaignId=${c.scout_campaign_id}`} className="text-green-800">← Discovery</Link><section className="rounded-xl border bg-white p-5"><h1 className="text-3xl font-bold">{c.business_name}</h1><p>{c.provider} · {c.provider_source_id}</p>{c.provider_source_url?<a href={c.provider_source_url} target="_blank" rel="noreferrer" className="text-green-800 underline">Provider evidence</a>:null}<dl className="mt-4 grid gap-2 sm:grid-cols-2"><div><dt>Category</dt><dd>{c.provider_category??"-"} → {c.mapped_campaign_category??"Needs review"}</dd></div><div><dt>Location</dt><dd>{[c.city,c.state,c.country_code].filter(Boolean).join(", ")||"-"}</dd></div><div><dt>Contact</dt><dd>{c.public_phone??"-"} · {c.public_website??"-"}</dd></div><div><dt>Rating</dt><dd>{c.rating_value??"-"} ({c.rating_count??0})</dd></div><div><dt>Status</dt><dd>{c.status} · seen {c.seen_count}</dd></div><div><dt>Operating</dt><dd>{c.operating_status??"-"}</dd></div></dl></section><section className="rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Review gaps</h2>{detail.readiness.blockers.map(x=><p key={x}>{x}</p>)}{(c.mapping_issues??[]).map((x:string)=><p key={x}>{x}</p>)}</section><section className="rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Run history</h2>{detail.history.map((x:any)=><p key={x.discovery_run_id}>{new Date(x.created_at).toLocaleString("en-NG")} · exact {String(x.is_exact_duplicate)} · warnings {x.soft_match_warning_count}</p>)}</section>{c.status==="captured"?<p>Captured prospect: <Link className="underline" href={`/admin/marketing/sales-scout/${c.captured_prospect_id}`}>open prospect</Link></p>:null}{!final&&preview?<section className="rounded-xl border bg-white p-5"><h2 className="text-xl font-bold">Capture</h2>{preview.allowedResolutionChoices.map((choice:any)=><form action={captureDiscoveryCandidateAction} key={JSON.stringify(choice)} className="mt-2"><input type="hidden" name="candidateId" value={candidateId}/><input type="hidden" name="resolution" value={JSON.stringify(choice.choice==="create_new"?{choice:"create_new"}:{choice:"attach_to_existing",prospectId:choice.prospectId})}/><button className="rounded-full bg-green-800 px-4 py-2 text-white">{choice.choice==="create_new"?"Create prospect":`Attach to ${choice.prospect?.businessName}`}</button></form>)}</section>:null}{!final?<form action={dismissDiscoveryCandidateAction} className="rounded-xl border bg-amber-50 p-5"><input type="hidden" name="candidateId" value={candidateId}/><label className="block font-bold">Dismissal reason<textarea name="reason" required minLength={3} maxLength={500} className="mt-2 block w-full rounded border p-3"/></label><p>Dismissal suppresses this listing from normal staged review.</p><button className="mt-3 rounded-full border px-4 py-2">Dismiss candidate</button></form>:c.status==="dismissed"?<p>Dismissed: {c.dismissal_reason}</p>:null}</main>}
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import {
+  CaptureCandidateForm,
+  DismissCandidateForm,
+} from "@/src/components/sales-scout/discovery-candidate-actions";
+import { requireAdmin } from "@/src/lib/admin-auth";
+import {
+  isSalesScoutDiscoveryEnabled,
+  isSalesScoutEnabled,
+} from "@/src/lib/sales-scout/access";
+import {
+  getSalesScoutDiscoveryCandidate,
+  previewStagedSalesScoutCandidate,
+} from "@/src/lib/sales-scout/discovery/server";
+
+export const dynamic = "force-dynamic";
+
+export default async function DiscoveryCandidatePage({
+  params,
+}: {
+  params: Promise<{ candidateId: string }>;
+}) {
+  await requireAdmin();
+  if (!isSalesScoutEnabled() || !isSalesScoutDiscoveryEnabled()) notFound();
+
+  const { candidateId } = await params;
+  const detail = await getSalesScoutDiscoveryCandidate(candidateId);
+  const candidate = detail.candidate;
+  let preview: Awaited<ReturnType<typeof previewStagedSalesScoutCandidate>> | null = null;
+  let previewError: string | null = null;
+
+  if (detail.readiness.candidate) {
+    try {
+      preview = await previewStagedSalesScoutCandidate(candidateId);
+    } catch (error) {
+      previewError = error instanceof Error ? error.name : "DISCOVERY_PREVIEW_FAILED";
+    }
+  }
+
+  const isFinal = ["captured", "dismissed"].includes(candidate.status);
+  const facts = [
+    ["Provider category", candidate.provider_category],
+    ["Mapped category", candidate.mapped_campaign_category],
+    ["Address", candidate.full_address],
+    ["Location", [candidate.city, candidate.state, candidate.country_code].filter(Boolean).join(", ")],
+    ["Coordinates", candidate.latitude != null ? `${candidate.latitude}, ${candidate.longitude}` : null],
+    ["Phone", candidate.public_phone],
+    ["Website", candidate.public_website],
+    ["Rating", candidate.rating_value != null ? `${candidate.rating_value} (${candidate.rating_count ?? 0})` : null],
+    ["Claimed", candidate.claimed_indication == null ? null : String(candidate.claimed_indication)],
+    ["Operating status", candidate.operating_status],
+    ["First seen", candidate.first_seen_at],
+    ["Last seen", candidate.last_seen_at],
+    ["Seen count", String(candidate.seen_count)],
+  ];
+
+  return (
+    <main className="space-y-5 p-6">
+      <Link
+        href={`/admin/marketing/sales-scout/discover?campaignId=${candidate.scout_campaign_id}`}
+        className="text-green-800"
+      >
+        ← Discovery
+      </Link>
+
+      <section className="rounded-xl border bg-white p-5">
+        <h1 className="text-3xl font-bold">{candidate.business_name}</h1>
+        <p>{candidate.provider} · {candidate.provider_source_id}</p>
+        {candidate.provider_source_url ? (
+          <a href={candidate.provider_source_url} target="_blank" rel="noreferrer" className="text-green-800 underline">
+            Provider evidence
+          </a>
+        ) : null}
+        <p className="mt-3">{candidate.description ?? "No provider description."}</p>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          {facts.map(([label, value]) => (
+            <div key={label}>
+              <dt className="font-semibold">{label}</dt>
+              <dd>{value || "—"}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-3">Category IDs: {(candidate.provider_category_ids ?? []).join(", ") || "—"}</p>
+        <p>Additional categories: {(candidate.additional_categories ?? []).join(", ") || "—"}</p>
+      </section>
+
+      <section className="rounded-xl border bg-white p-5">
+        <h2 className="text-xl font-bold">Review and matching</h2>
+        <p>Staged status: {candidate.status}</p>
+        <p>Exact CRM prospect: {detail.exactProspect?.businessName ?? "None"}</p>
+        <p>Captured CRM prospect: {detail.capturedProspect?.businessName ?? "None"}</p>
+        {detail.readiness.blockers.map((blocker) => <p key={blocker}>{blocker}</p>)}
+        {(candidate.mapping_issues ?? []).map((issue) => <p key={issue}>{issue}</p>)}
+      </section>
+
+      <section className="rounded-xl border bg-white p-5">
+        <h2 className="text-xl font-bold">Membership history</h2>
+        {detail.history.map((membership) => (
+          <p key={membership.discovery_run_id}>
+            {new Date(membership.created_at).toLocaleString("en-NG")} · exact {String(membership.is_exact_duplicate)}
+            {" · "}warnings {membership.soft_match_warning_count}
+          </p>
+        ))}
+      </section>
+
+      {previewError ? (
+        <p className="rounded border border-amber-300 bg-amber-50 p-3">
+          Preview unavailable. Reference: {previewError}
+        </p>
+      ) : null}
+
+      {!isFinal && preview ? (
+        <section className="rounded-xl border bg-white p-5">
+          <h2 className="text-xl font-bold">Capture</h2>
+          {preview.allowedResolutionChoices.map((choice) => (
+            <CaptureCandidateForm
+              key={JSON.stringify(choice)}
+              candidateId={candidateId}
+              choice={choice}
+            />
+          ))}
+        </section>
+      ) : null}
+
+      {!isFinal ? <DismissCandidateForm candidateId={candidateId} /> : null}
+      {candidate.status === "dismissed" ? <p>Dismissed: {candidate.dismissal_reason}</p> : null}
+    </main>
+  );
+}

@@ -1,5 +1,9 @@
 # Batch 5 progress
 
-Migration 00400 was permanently applied and verified. Batch 5B adds owner-triggered DataForSEO Business Listings discovery, canonical staged review, exact/soft duplicate handling, capture through the existing ingestion RPC, and staged dismissal.
+Migration 00400 is applied and verified. Batch 5B core was implemented in commit `ad8f7d7`.
 
-Discovery sends no outreach and remains behind SALES_SCOUT_DISCOVERY_ENABLED. Production discovery credentials and the flag remain disabled/unconfigured; the first live provider test remains pending.
+Batch 5B-H hardened pure discovery mapping and matching, capture and dismissal state transitions, typed and bounded read models, safe server-action feedback, pending controls, paid-run confirmation, workspace filters and pagination, candidate detail, and focused pure tests.
+
+Discovery sends no outreach and remains disabled behind `SALES_SCOUT_DISCOVERY_ENABLED`. Production discovery credentials remain unconfigured. No provider request occurred during this pass.
+
+Owner browser validation and the first deliberately authorized live provider test remain pending.
