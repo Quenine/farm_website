@@ -79,7 +79,7 @@ create or replace function public.complete_sales_scout_discovery_run(
 language plpgsql
 security definer
 set search_path=public,pg_temp
-as $
+as $$
 declare
   v_run public.marketing_sales_scout_discovery_runs%rowtype;
   v_campaign public.marketing_sales_scout_campaigns%rowtype;
@@ -96,14 +96,14 @@ begin
   if p_payload is null or jsonb_typeof(p_payload) <> 'object' then raise exception using errcode='22023',message='discovery completion payload is invalid'; end if;
   select * into v_run from public.marketing_sales_scout_discovery_runs where id=p_run_id for update;
   if not found then raise exception using errcode='P0002',message='discovery run not found'; end if;
-  select * into v_campaign from public.marketing_sales_scout_campaigns where campaign_id=v_run.scout_campaign_id;
-  if not found or v_campaign.status <> 'active' then raise exception using errcode='22023',message='discovery campaign must be active'; end if;
   v_fingerprint:=md5(p_payload::text);
   if v_run.status='completed' then
     if v_run.completion_payload_fingerprint=v_fingerprint then return jsonb_build_object('runId',v_run.id,'status','completed','stagedCandidateCount',v_run.staged_candidate_count,'exactDuplicateCount',v_run.exact_duplicate_count); end if;
     raise exception using errcode='22023',message='discovery completion payload differs from completed run';
   end if;
   if v_run.status<>'running' then raise exception using errcode='22023',message='discovery run is not running'; end if;
+  select * into v_campaign from public.marketing_sales_scout_campaigns where campaign_id=v_run.scout_campaign_id;
+  if not found or v_campaign.status <> 'active' then raise exception using errcode='22023',message='discovery campaign must be active'; end if;
   if nullif(trim(p_payload->>'providerTaskId'),'') is null or length(trim(p_payload->>'providerTaskId'))>300 or jsonb_typeof(p_payload->'providerCostUsd')<>'number' or jsonb_typeof(p_payload->'rawResultCount')<>'number' or jsonb_typeof(p_payload->'candidates') is distinct from 'array' then raise exception using errcode='22023',message='discovery completion payload is invalid'; end if;
   if (p_payload->>'providerCostUsd')::numeric<0 or (p_payload->>'rawResultCount')::numeric<0 or trunc((p_payload->>'rawResultCount')::numeric)<>(p_payload->>'rawResultCount')::numeric then raise exception using errcode='22023',message='discovery completion payload is invalid'; end if;
   v_candidate_count:=jsonb_array_length(p_payload->'candidates');
@@ -131,7 +131,7 @@ begin
   update public.marketing_sales_scout_discovery_runs set status='completed',provider_task_id=trim(p_payload->>'providerTaskId'),provider_cost_usd=(p_payload->>'providerCostUsd')::numeric,raw_result_count=(p_payload->>'rawResultCount')::integer,staged_candidate_count=v_staged,exact_duplicate_count=v_exact_count,completion_payload_fingerprint=v_fingerprint,completed_at=now(),updated_at=now() where id=v_run.id;
   return jsonb_build_object('runId',v_run.id,'status','completed','stagedCandidateCount',v_staged,'exactDuplicateCount',v_exact_count);
 end;
-$;
+$$;
 create or replace function public.fail_sales_scout_discovery_run(p_run_id uuid,p_error_reference text,p_error_safe_message text,p_actor_id uuid) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare v_run public.marketing_sales_scout_discovery_runs%rowtype;
 begin
