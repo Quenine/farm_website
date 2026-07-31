@@ -1,7 +1,5 @@
 # Batch 5 progress
 
-The first Batch 5 attempt stopped incomplete. Batch 5A corrected the official DataForSEO `tasks → result → items` response model and stages provider facts with honest research gaps rather than capture-ready assumptions.
+The prior verifier was incomplete and has been strengthened structurally. DataForSEO categories now parse `category_name`; provider category IDs and provider verification URLs are retained. Canonical candidates preserve mapping gaps and run membership is the intended authority for run totals; duplicate provider identities are rejected before completion persistence.
 
-Canonical candidate identity is campaign, provider, and provider source ID; historical run membership is separate. Rediscovery refreshes safe public facts while preserving captured, dismissed, and reviewing owner decisions.
-
-Discovery UI and the application service remain for Batch 5B. No provider request was made. Migration `00400` remains unapplied, and SQL verification was not executed remotely.
+Migration `00400` remains unapplied. PostgreSQL verification remains unexecuted and no provider request was made. Discovery application services and UI remain deferred to Batch 5B.

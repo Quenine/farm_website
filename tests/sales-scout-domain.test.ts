@@ -20,7 +20,7 @@ import { findSoftMatchWarnings, prepareDiscoveryCandidate } from "../src/lib/sal
 import { discoveryCandidateSchema } from "../src/lib/sales-scout/schemas.ts";
 import { campaignStatusSchema, doNotContactSchema, formatSalesScoutTimelineEvent, allowedResolutionChoices, parseQueueFilters, reviewTransitionSchema, formatLocalDateTimeInput, mergeLocationEvidenceNote, invalidatesPreview, oldestUnreviewedStatuses, isCaptureResolutionAllowed, isLatestPreviewRequest, formatMatchLabel, campaignStatusActions, campaignActionLabel, isCandidateEntryAvailable, selectInitialCampaignId, deriveCandidateSetupState } from "../src/lib/sales-scout/review.ts";
 import { qualificationFactsSchema, validateRecurringDemandEvidence } from "../src/lib/sales-scout/schemas.ts";
-import { buildDataForSeoRequest, compareConfiguredCategories, mapCampaignCategories, mapDataForSeoLiveResponse } from "../src/lib/sales-scout/discovery/dataforseo.ts";
+import { buildDataForSeoRequest, compareConfiguredCategories, mapCampaignCategories, mapDataForSeoLiveResponse, parseDataForSeoCategoriesResponse, mapListingCampaignCategory } from "../src/lib/sales-scout/discovery/dataforseo-parser.ts";
 
 test("domain constants contain approved immutable values", () => {
   assert.deepEqual(scoutStatuses, ["new", "researching", "qualified", "disqualified", "engaged", "converted", "closed", "do_not_contact"]);
@@ -340,8 +340,8 @@ test("recurring demand evidence requires substantive descriptive content", () =>
 });
 
 test("DataForSEO response parsing preserves research gaps and identity rules", () => {
-  const fixture={status_code:20000,tasks:[{id:"task-1",status_code:20000,cost:0.12,result:[{items:[{type:"business_listing",title:"Harbor Kitchen",place_id:"place-1",category:"restaurant",additional_categories:["cafe"],address:"1 Marina",address_info:{city:"Lagos",region:"Lagos",country_code:"NG"},rating:{value:4.5,votes_count:12},is_claimed:true,work_time:{current_status:"close"}},{type:"business_listing",title:"Gap Cafe",feature_id:"feature-2"},{type:"business_listing",title:"No ID"}]}]}]};
-  const result=mapDataForSeoLiveResponse(fixture,"2026-07-31T00:00:00.000Z");
+  const fixture={status_code:20000,tasks:[{id:"task-1",status_code:20000,cost:0.12,result:[{items:[{type:"business_listing",title:"Harbor Kitchen",place_id:"place-1",category:"restaurant",category_ids:["restaurant"],check_url:"https://provider.example/check",additional_categories:["cafe"],address:"1 Marina",address_info:{city:"Lagos",region:"Lagos",country_code:"NG"},rating:{value:4.5,votes_count:12},is_claimed:true,work_time:{current_status:"close"}},{type:"business_listing",title:"Gap Cafe",feature_id:"feature-2"},{type:"business_listing",title:"No ID"}]}]}]};
+  const result=mapDataForSeoLiveResponse(fixture,"2026-07-31T00:00:00.000Z",["Restaurant"]);
   assert.equal(result.candidates.length,2); assert.equal(result.candidates[0].providerSourceId,"place-1"); assert.equal(result.candidates[0].isInactiveOrClosed,false); assert.equal(result.candidates[0].ratingValue,4.5); assert.equal(result.candidates[1].city,null); assert.ok(result.candidates[1].mappingIssues.includes("Listing has no public phone.")); assert.equal(result.issues.length,1);
   const closed=mapDataForSeoLiveResponse({status_code:20000,tasks:[{status_code:20000,result:[{items:[{type:"business_listing",title:"Closed",cid:"123",work_time:{current_status:"closed_forever"}}]}]}]}); assert.equal(closed.candidates[0].isInactiveOrClosed,true);
   assert.throws(()=>mapDataForSeoLiveResponse({status_code:20100,tasks:[]}),/DataForSEO provider request failed/);
@@ -355,4 +355,17 @@ test("DataForSEO category mapping and request construction are bounded", () => {
   assert.throws(()=>buildDataForSeoRequest({latitude:91,longitude:3,radiusKm:1,categories:["Restaurant"],limit:1}));
   assert.throws(()=>buildDataForSeoRequest({latitude:1,longitude:3,radiusKm:101,categories:["Restaurant"],limit:1}));
   assert.throws(()=>buildDataForSeoRequest({latitude:1,longitude:3,radiusKm:1,categories:["Food Vendor"],limit:51}));
+});
+test("DataForSEO categories use category_name and listing category ids", () => {
+  assert.deepEqual([...parseDataForSeoCategoriesResponse({status_code:20000,tasks:[{id:"categories",status_code:20000,result:[{category_name:"restaurant",business_count:4,ignored:true}]}]})],["restaurant"]);
+  assert.throws(()=>parseDataForSeoCategoriesResponse({status_code:20100,tasks:[]}),/DataForSEO provider request failed/);
+  assert.throws(()=>parseDataForSeoCategoriesResponse({status_code:20000,tasks:[{status_code:20100,result:[]}]}),/DataForSEO provider request failed/);
+  assert.equal(mapListingCampaignCategory(["hotel","restaurant"],["Restaurant","Hotel"]),"Restaurant");
+  assert.equal(mapListingCampaignCategory(["restaurant"],["Food Vendor"]),null);
+});
+test("Batch 5 discovery SQL guards are concrete", () => {
+ const migration=readFileSync("database/20260731000100_sales_scout_discovery.sql","utf8");
+ const verifier=readFileSync("database/verify-sales-scout-discovery.sql","utf8");
+ for(const marker of ["is distinct from 'array'","discovery completion contains duplicate provider identities","marketing_sales_scout_discovery_run_candidates","security definer","completion_payload_fingerprint"]) assert.match(migration,new RegExp(marker.replace(/[()]/g,"\\$&"),"i"));
+ assert.match(verifier,/begin;/i);assert.match(verifier,/rollback;/i);assert.doesNotMatch(verifier,/Behavioural coverage:/);
 });

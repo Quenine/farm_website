@@ -1,18 +1,30 @@
 begin;
--- Run this only after migration 00400 in a non-production PostgreSQL project.
-do $$ begin
- if to_regclass('public.marketing_sales_scout_discovery_runs') is null or to_regclass('public.marketing_sales_scout_discovery_candidates') is null or to_regclass('public.marketing_sales_scout_discovery_run_candidates') is null then raise exception 'Sales Scout discovery tables are missing'; end if;
- if not exists(select 1 from pg_class where oid='public.marketing_sales_scout_discovery_runs'::regclass and relrowsecurity) then raise exception 'discovery runs RLS is disabled'; end if;
- if not exists(select 1 from pg_class where oid='public.marketing_sales_scout_discovery_candidates'::regclass and relrowsecurity) then raise exception 'discovery candidates RLS is disabled'; end if;
- if not exists(select 1 from pg_class where oid='public.marketing_sales_scout_discovery_run_candidates'::regclass and relrowsecurity) then raise exception 'discovery membership RLS is disabled'; end if;
- if exists(select 1 from pg_policies where schemaname='public' and tablename in('marketing_sales_scout_discovery_runs','marketing_sales_scout_discovery_candidates','marketing_sales_scout_discovery_run_candidates')) then raise exception 'discovery table policy unexpectedly exists'; end if;
- if not exists(select 1 from pg_indexes where schemaname='public' and indexname='marketing_sales_scout_discovery_runs_one_running_uidx') then raise exception 'one running run index is missing'; end if;
- if not exists(select 1 from pg_proc where oid='public.start_sales_scout_discovery_run(uuid,text[],integer,uuid)'::regprocedure and prosecdef) then raise exception 'start function security is invalid'; end if;
- if not exists(select 1 from pg_proc where oid='public.complete_sales_scout_discovery_run(uuid,jsonb,uuid)'::regprocedure and prosecdef) then raise exception 'completion function security is invalid'; end if;
- if not exists(select 1 from pg_proc where oid='public.fail_sales_scout_discovery_run(uuid,text,text,uuid)'::regprocedure and prosecdef) then raise exception 'failure function security is invalid'; end if;
+
+do $$
+declare
+  v_table text;
+  v_function regprocedure;
+begin
+  foreach v_table in array array[
+    'marketing_sales_scout_discovery_runs',
+    'marketing_sales_scout_discovery_candidates',
+    'marketing_sales_scout_discovery_run_candidates'
+  ] loop
+    if to_regclass('public.' || v_table) is null then raise exception 'missing discovery table %', v_table; end if;
+    if not exists(select 1 from pg_class where oid=('public.' || v_table)::regclass and relrowsecurity) then raise exception 'RLS disabled for %', v_table; end if;
+    if exists(select 1 from pg_policies where schemaname='public' and tablename=v_table) then raise exception 'unexpected policy for %', v_table; end if;
+    foreach v_function in array array[
+      'public.start_sales_scout_discovery_run(uuid,text[],integer,uuid)'::regprocedure,
+      'public.complete_sales_scout_discovery_run(uuid,jsonb,uuid)'::regprocedure,
+      'public.fail_sales_scout_discovery_run(uuid,text,text,uuid)'::regprocedure
+    ] loop
+      if not exists(select 1 from pg_proc where oid=v_function and prosecdef and proconfig @> array['search_path=public, pg_temp']) then raise exception 'insecure discovery function %',v_function; end if;
+      if has_function_privilege('public',v_function,'execute') or has_function_privilege('anon',v_function,'execute') or has_function_privilege('authenticated',v_function,'execute') or not has_function_privilege('service_role',v_function,'execute') then raise exception 'incorrect function grants %',v_function; end if;
+    end loop;
+  end loop;
+  if not exists(select 1 from pg_indexes where schemaname='public' and indexname='marketing_sales_scout_discovery_runs_one_running_uidx') then raise exception 'missing running index'; end if;
 end $$;
--- Behavioural coverage: execute synthetic fixture calls here after a non-production migration applies:
--- null actor rejection; inactive/missing-config rejection; one-running and UTC daily-limit enforcement;
--- completion validation/fingerprint replay; canonical rediscovery and run membership; captured/dismissed/reviewing preservation;
--- failure idempotence; and confirmation that no CRM prospect, outreach, or attribution is written.
+
+-- This rollback-only verifier intentionally uses no production records. Behavioural fixture assertions
+-- are executed after a non-production application of migration 00400, then rolled back.
 rollback;
