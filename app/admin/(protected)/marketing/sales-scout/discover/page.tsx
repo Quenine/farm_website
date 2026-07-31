@@ -12,6 +12,7 @@ import {
   listSalesScoutDiscoveryRuns,
 } from "@/src/lib/sales-scout/discovery/server";
 import { listAllSalesScoutCampaigns } from "@/src/lib/sales-scout/server";
+import { isDataForSeoBusinessListingsConfigured, mapCampaignCategories } from "@/src/lib/sales-scout/discovery/dataforseo";
 
 export const dynamic = "force-dynamic";
 const RUN_PAGE_SIZE = 20;
@@ -46,6 +47,8 @@ export default async function DiscoveryWorkspacePage({
 
   if (!campaign) return <main className="p-6">No Sales Scout campaign exists.</main>;
 
+  const providerConfigured = isDataForSeoBusinessListingsConfigured();
+  const hasMappedCategory = mapCampaignCategories([...campaign.targetCategories]).mapped.length > 0;
   const runPage = positivePage(query.runPage);
   const candidatePage = positivePage(query.candidatePage);
   const [runs, candidates] = await Promise.all([
@@ -100,9 +103,14 @@ export default async function DiscoveryWorkspacePage({
         <h2 className="text-xl font-bold">{campaign.name}</h2>
         <p>{campaign.targetCategories.join(", ")}</p>
         <p>{campaign.discoveryLatitude}, {campaign.discoveryLongitude} · {campaign.discoveryRadiusKm} km · limit {campaign.discoveryDefaultLimit}</p>
+        {!providerConfigured ? (
+          <p className="mt-3 rounded border border-amber-300 bg-amber-50 p-3">
+            DataForSEO credentials are not configured for this deployment. Discovery cannot be started.
+          </p>
+        ) : null}
         <DiscoveryRunForm
           campaignId={campaign.campaignId}
-          disabled={campaign.status !== "active" || !hasCompleteDiscoveryConfiguration(campaign)}
+          disabled={campaign.status !== "active" || !hasCompleteDiscoveryConfiguration(campaign) || !hasMappedCategory || !providerConfigured}
         />
       </section>
 

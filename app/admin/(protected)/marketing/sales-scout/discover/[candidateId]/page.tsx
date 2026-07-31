@@ -72,7 +72,7 @@ export default async function DiscoveryCandidatePage({
             Provider evidence
           </a>
         ) : null}
-        <p className="mt-3">{candidate.description ?? "No provider description."}</p>
+        <p className="mt-3">{candidate.publicDescription ?? "No provider description."}</p>
         <dl className="mt-4 grid gap-3 sm:grid-cols-2">
           {facts.map(([label, value]) => (
             <div key={label}>
