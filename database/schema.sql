@@ -2332,203 +2332,31 @@ notify pgrst,'reload schema';
 commit;
 
 
--- Sales Scout discovery Batch 5 migration parity
-
 begin;
-
-alter table public.marketing_sales_scout_campaigns
-  add column if not exists discovery_latitude numeric,
-  add column if not exists discovery_longitude numeric,
-  add column if not exists discovery_radius_km integer,
-  add column if not exists discovery_default_limit integer;
-
-do $$
-begin
-  if not exists(select 1 from pg_constraint where conname='marketing_sales_scout_campaigns_discovery_latitude_check') then
-    alter table public.marketing_sales_scout_campaigns add constraint marketing_sales_scout_campaigns_discovery_latitude_check check (discovery_latitude is null or discovery_latitude between -90 and 90);
-  end if;
-  if not exists(select 1 from pg_constraint where conname='marketing_sales_scout_campaigns_discovery_longitude_check') then
-    alter table public.marketing_sales_scout_campaigns add constraint marketing_sales_scout_campaigns_discovery_longitude_check check (discovery_longitude is null or discovery_longitude between -180 and 180);
-  end if;
-  if not exists(select 1 from pg_constraint where conname='marketing_sales_scout_campaigns_discovery_radius_check') then
-    alter table public.marketing_sales_scout_campaigns add constraint marketing_sales_scout_campaigns_discovery_radius_check check (discovery_radius_km is null or discovery_radius_km between 1 and 100);
-  end if;
-  if not exists(select 1 from pg_constraint where conname='marketing_sales_scout_campaigns_discovery_limit_check') then
-    alter table public.marketing_sales_scout_campaigns add constraint marketing_sales_scout_campaigns_discovery_limit_check check (discovery_default_limit is null or discovery_default_limit between 1 and 50);
-  end if;
+alter table public.marketing_sales_scout_campaigns add column if not exists discovery_latitude numeric, add column if not exists discovery_longitude numeric, add column if not exists discovery_radius_km integer, add column if not exists discovery_default_limit integer;
+do $$ begin
+ if not exists(select 1 from pg_constraint where conrelid='public.marketing_sales_scout_campaigns'::regclass and conname='marketing_sales_scout_campaigns_discovery_latitude_check') then alter table public.marketing_sales_scout_campaigns add constraint marketing_sales_scout_campaigns_discovery_latitude_check check(discovery_latitude is null or discovery_latitude between -90 and 90); end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.marketing_sales_scout_campaigns'::regclass and conname='marketing_sales_scout_campaigns_discovery_longitude_check') then alter table public.marketing_sales_scout_campaigns add constraint marketing_sales_scout_campaigns_discovery_longitude_check check(discovery_longitude is null or discovery_longitude between -180 and 180); end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.marketing_sales_scout_campaigns'::regclass and conname='marketing_sales_scout_campaigns_discovery_radius_check') then alter table public.marketing_sales_scout_campaigns add constraint marketing_sales_scout_campaigns_discovery_radius_check check(discovery_radius_km is null or discovery_radius_km between 1 and 100); end if;
+ if not exists(select 1 from pg_constraint where conrelid='public.marketing_sales_scout_campaigns'::regclass and conname='marketing_sales_scout_campaigns_discovery_limit_check') then alter table public.marketing_sales_scout_campaigns add constraint marketing_sales_scout_campaigns_discovery_limit_check check(discovery_default_limit is null or discovery_default_limit between 1 and 50); end if;
 end $$;
-
-update public.marketing_sales_scout_campaigns
-set discovery_latitude=coalesce(discovery_latitude,6.5244),
-    discovery_longitude=coalesce(discovery_longitude,3.3792),
-    discovery_radius_km=coalesce(discovery_radius_km,40),
-    discovery_default_limit=coalesce(discovery_default_limit,25)
-where lower(trim(city))='lagos' and lower(trim(country))='nigeria';
-
-create table if not exists public.marketing_sales_scout_discovery_runs (
-  id uuid primary key default gen_random_uuid(),
-  scout_campaign_id uuid not null references public.marketing_sales_scout_campaigns(campaign_id) on delete cascade,
-  provider text not null check (provider='dataforseo_business_listings'),
-  status text not null check (status in ('running','completed','failed')),
-  requested_categories text[] not null default '{}',
-  requested_result_limit integer not null check (requested_result_limit between 1 and 50),
-  latitude numeric not null check (latitude between -90 and 90),
-  longitude numeric not null check (longitude between -180 and 180),
-  radius_km integer not null check (radius_km between 1 and 100),
-  provider_task_id text,
-  provider_cost_usd numeric(12,6),
-  raw_result_count integer not null default 0 check (raw_result_count >= 0),
-  staged_candidate_count integer not null default 0 check (staged_candidate_count >= 0),
-  exact_duplicate_count integer not null default 0 check (exact_duplicate_count >= 0),
-  error_reference text,
-  error_safe_message text,
-  started_by uuid not null,
-  started_at timestamptz not null default now(),
-  completed_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.marketing_sales_scout_discovery_candidates (
-  id uuid primary key default gen_random_uuid(),
-  discovery_run_id uuid not null references public.marketing_sales_scout_discovery_runs(id) on delete cascade,
-  scout_campaign_id uuid not null references public.marketing_sales_scout_campaigns(campaign_id) on delete cascade,
-  provider text not null check (provider='dataforseo_business_listings'),
-  provider_source_id text not null,
-  status text not null default 'new' check (status in ('new','reviewing','duplicate','captured','dismissed')),
-  business_name text not null,
-  provider_category text,
-  mapped_campaign_category text,
-  public_description text,
-  full_address text,
-  city text,
-  state text,
-  country text,
-  latitude numeric,
-  longitude numeric,
-  public_phone text,
-  public_website text,
-  rating_value numeric,
-  rating_count integer,
-  claimed_indication boolean,
-  provider_source_url text,
-  observed_at timestamptz not null,
-  normalized_business_name text not null,
-  normalized_city text not null,
-  prepared_score integer,
-  score_version text,
-  score_factors jsonb not null default '[]'::jsonb,
-  exact_matching_prospect_id uuid references public.marketing_prospects(id) on delete set null,
-  soft_match_warning_count integer not null default 0,
-  captured_prospect_id uuid references public.marketing_prospects(id) on delete set null,
-  dismissal_reason text,
-  reviewed_by uuid,
-  reviewed_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create unique index if not exists marketing_sales_scout_discovery_candidates_identity_uidx
-  on public.marketing_sales_scout_discovery_candidates(scout_campaign_id,provider,provider_source_id);
-create index if not exists marketing_sales_scout_discovery_runs_campaign_idx
-  on public.marketing_sales_scout_discovery_runs(scout_campaign_id,started_at desc);
-create index if not exists marketing_sales_scout_discovery_candidates_review_idx
-  on public.marketing_sales_scout_discovery_candidates(scout_campaign_id,status,created_at desc);
-
-alter table public.marketing_sales_scout_discovery_runs enable row level security;
-alter table public.marketing_sales_scout_discovery_candidates enable row level security;
-revoke all on table public.marketing_sales_scout_discovery_runs from public,anon,authenticated;
-revoke all on table public.marketing_sales_scout_discovery_candidates from public,anon,authenticated;
-grant all on table public.marketing_sales_scout_discovery_runs to service_role;
-grant all on table public.marketing_sales_scout_discovery_candidates to service_role;
-
-create or replace function public.complete_sales_scout_discovery_run(
-  p_run_id uuid,
-  p_payload jsonb,
-  p_actor_id uuid
-) returns jsonb
-language plpgsql
-security definer
-set search_path=public,pg_temp
-as $$
-declare
-  v_run public.marketing_sales_scout_discovery_runs%rowtype;
-  v_item jsonb;
-  v_candidate_id uuid;
-  v_staged integer:=0;
-  v_exact integer:=0;
-  v_raw integer;
-  v_cost numeric;
-  v_task text;
-  v_status text;
-begin
-  if p_actor_id is null then raise exception using errcode='22023',message='actor id is required for discovery completion'; end if;
-  select * into v_run from public.marketing_sales_scout_discovery_runs where id=p_run_id for update;
-  if not found then raise exception using errcode='P0002',message='discovery run not found'; end if;
-  if not exists(select 1 from public.marketing_sales_scout_campaigns where campaign_id=v_run.scout_campaign_id and status='active') then
-    raise exception using errcode='22023',message='discovery campaign must be active';
-  end if;
-  if v_run.status='completed' then
-    if coalesce(p_payload->>'rawResultCount','')=v_run.raw_result_count::text
-      and coalesce(p_payload->>'providerCostUsd','')=coalesce(v_run.provider_cost_usd::text,'')
-      and coalesce(p_payload->>'providerTaskId','')=coalesce(v_run.provider_task_id,'') then
-      return jsonb_build_object('runId',v_run.id,'status',v_run.status,'stagedCandidateCount',v_run.staged_candidate_count,'exactDuplicateCount',v_run.exact_duplicate_count);
-    end if;
-    raise exception using errcode='22023',message='discovery run is already completed';
-  end if;
-  if v_run.status<>'running' then raise exception using errcode='22023',message='discovery run is not running'; end if;
-  v_raw:=coalesce((p_payload->>'rawResultCount')::integer,0);
-  v_cost:=nullif(p_payload->>'providerCostUsd','')::numeric;
-  v_task:=nullif(p_payload->>'providerTaskId','');
-  if v_raw<0 or v_raw>10000 or v_cost<0 then raise exception using errcode='22023',message='discovery completion counters are invalid'; end if;
-  if jsonb_typeof(p_payload->'candidates') is distinct from 'array' then raise exception using errcode='22023',message='discovery candidates payload is invalid'; end if;
-  for v_item in select value from jsonb_array_elements(p_payload->'candidates') loop
-    insert into public.marketing_sales_scout_discovery_candidates(
-      discovery_run_id,scout_campaign_id,provider,provider_source_id,business_name,provider_category,
-      mapped_campaign_category,public_description,full_address,city,state,country,latitude,longitude,
-      public_phone,public_website,rating_value,rating_count,claimed_indication,provider_source_url,
-      observed_at,normalized_business_name,normalized_city,prepared_score,score_version,score_factors,
-      exact_matching_prospect_id,soft_match_warning_count
-    ) values (
-      v_run.id,v_run.scout_campaign_id,'dataforseo_business_listings',nullif(v_item->>'providerSourceId',''),
-      coalesce(nullif(v_item->>'businessName',''),'Unknown business'),nullif(v_item->>'providerCategory',''),
-      nullif(v_item->>'mappedCampaignCategory',''),nullif(v_item->>'publicDescription',''),
-      nullif(v_item->>'fullAddress',''),nullif(v_item->>'city',''),nullif(v_item->>'state',''),
-      nullif(v_item->>'country',''),nullif(v_item->>'latitude','')::numeric,nullif(v_item->>'longitude','')::numeric,
-      nullif(v_item->>'publicPhone',''),nullif(v_item->>'publicWebsite',''),
-      nullif(v_item->>'ratingValue','')::numeric,nullif(v_item->>'ratingCount','')::integer,
-      nullif(v_item->>'claimedIndication','')::boolean,nullif(v_item->>'providerSourceUrl',''),
-      (v_item->>'observedAt')::timestamptz,coalesce(nullif(v_item->>'normalizedBusinessName',''),'unknown'),
-      coalesce(nullif(v_item->>'normalizedCity',''),'unknown'),nullif(v_item->>'preparedScore','')::integer,
-      nullif(v_item->>'scoreVersion',''),coalesce(v_item->'scoreFactors','[]'::jsonb),
-      nullif(v_item->>'exactMatchingProspectId','')::uuid,coalesce((v_item->>'softMatchWarningCount')::integer,0)
-    )
-    on conflict(scout_campaign_id,provider,provider_source_id) do update set
-      discovery_run_id=excluded.discovery_run_id,business_name=excluded.business_name,
-      provider_category=excluded.provider_category,mapped_campaign_category=excluded.mapped_campaign_category,
-      public_description=excluded.public_description,full_address=excluded.full_address,city=excluded.city,
-      state=excluded.state,country=excluded.country,latitude=excluded.latitude,longitude=excluded.longitude,
-      public_phone=excluded.public_phone,public_website=excluded.public_website,rating_value=excluded.rating_value,
-      rating_count=excluded.rating_count,claimed_indication=excluded.claimed_indication,
-      provider_source_url=excluded.provider_source_url,observed_at=excluded.observed_at,
-      normalized_business_name=excluded.normalized_business_name,normalized_city=excluded.normalized_city,
-      prepared_score=excluded.prepared_score,score_version=excluded.score_version,score_factors=excluded.score_factors,
-      exact_matching_prospect_id=excluded.exact_matching_prospect_id,soft_match_warning_count=excluded.soft_match_warning_count,
-      updated_at=now()
-    where marketing_sales_scout_discovery_candidates.status not in ('captured','dismissed')
-    returning id,status into v_candidate_id,v_status;
-    if v_candidate_id is not null then v_staged:=v_staged+1; if v_item->>'exactMatchingProspectId' is not null then v_exact:=v_exact+1; end if; end if;
-  end loop;
-  update public.marketing_sales_scout_discovery_runs set
-    status='completed',provider_task_id=v_task,provider_cost_usd=v_cost,raw_result_count=v_raw,
-    staged_candidate_count=v_staged,exact_duplicate_count=v_exact,completed_at=now(),updated_at=now()
-  where id=v_run.id;
-  return jsonb_build_object('runId',v_run.id,'status','completed','stagedCandidateCount',v_staged,'exactDuplicateCount',v_exact);
-end;
-$$;
-
-revoke all on function public.complete_sales_scout_discovery_run(uuid,jsonb,uuid) from public,anon,authenticated;
-grant execute on function public.complete_sales_scout_discovery_run(uuid,jsonb,uuid) to service_role;
-
+update public.marketing_sales_scout_campaigns set discovery_latitude=coalesce(discovery_latitude,6.5244),discovery_longitude=coalesce(discovery_longitude,3.3792),discovery_radius_km=coalesce(discovery_radius_km,40),discovery_default_limit=coalesce(discovery_default_limit,25) where lower(trim(city))='lagos' and lower(trim(country))='nigeria';
+create table if not exists public.marketing_sales_scout_discovery_runs(
+ id uuid primary key default gen_random_uuid(), scout_campaign_id uuid not null references public.marketing_sales_scout_campaigns(campaign_id) on delete cascade, provider text not null check(provider='dataforseo_business_listings'), status text not null check(status in('running','completed','failed')), requested_categories text[] not null check(cardinality(requested_categories) between 1 and 10), requested_result_limit integer not null check(requested_result_limit between 1 and 50), latitude numeric not null check(latitude between -90 and 90), longitude numeric not null check(longitude between -180 and 180), radius_km integer not null check(radius_km between 1 and 100), provider_task_id text, provider_cost_usd numeric(12,6) check(provider_cost_usd is null or provider_cost_usd>=0), raw_result_count integer not null default 0 check(raw_result_count>=0), staged_candidate_count integer not null default 0 check(staged_candidate_count>=0), exact_duplicate_count integer not null default 0 check(exact_duplicate_count>=0), completion_payload_fingerprint text, error_reference text, error_safe_message text, started_by uuid not null, started_at timestamptz not null default now(), completed_at timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create unique index if not exists marketing_sales_scout_discovery_runs_one_running_uidx on public.marketing_sales_scout_discovery_runs(scout_campaign_id) where status='running';
+create index if not exists marketing_sales_scout_discovery_runs_campaign_started_idx on public.marketing_sales_scout_discovery_runs(scout_campaign_id,started_at desc);
+create table if not exists public.marketing_sales_scout_discovery_candidates(
+ id uuid primary key default gen_random_uuid(), discovery_run_id uuid not null references public.marketing_sales_scout_discovery_runs(id) on delete restrict, last_discovery_run_id uuid not null references public.marketing_sales_scout_discovery_runs(id) on delete restrict, scout_campaign_id uuid not null references public.marketing_sales_scout_campaigns(campaign_id) on delete cascade, provider text not null check(provider='dataforseo_business_listings'), provider_source_id text not null check(length(trim(provider_source_id))>0), status text not null default 'new' check(status in('new','reviewing','duplicate','captured','dismissed')), business_name text not null check(length(trim(business_name))>0), provider_category text, mapped_campaign_category text, additional_categories jsonb not null default '[]'::jsonb check(jsonb_typeof(additional_categories)='array'), public_description text, full_address text, city text, state text, country_code text, latitude numeric check(latitude is null or latitude between -90 and 90), longitude numeric check(longitude is null or longitude between -180 and 180), public_phone text, public_website text, rating_value numeric, rating_count integer check(rating_count is null or rating_count>=0), claimed_indication boolean, operating_status text, observed_at timestamptz not null, normalized_business_name text, normalized_city text, prepared_score integer check(prepared_score is null or prepared_score between 0 and 100), score_version text, score_factors jsonb not null default '[]'::jsonb check(jsonb_typeof(score_factors)='array'), exact_matching_prospect_id uuid references public.marketing_prospects(id) on delete set null, soft_match_warning_count integer not null default 0 check(soft_match_warning_count>=0), captured_prospect_id uuid references public.marketing_prospects(id) on delete set null, dismissal_reason text, reviewed_by uuid, reviewed_at timestamptz, first_seen_at timestamptz not null default now(), last_seen_at timestamptz not null default now(), seen_count integer not null default 1 check(seen_count>=1), created_at timestamptz not null default now(), updated_at timestamptz not null default now(), check(status<>'dismissed' or length(trim(coalesce(dismissal_reason,'')))>0), check(status<>'captured' or captured_prospect_id is not null), check(status<>'duplicate' or exact_matching_prospect_id is not null));
+create unique index if not exists marketing_sales_scout_discovery_candidates_identity_uidx on public.marketing_sales_scout_discovery_candidates(scout_campaign_id,provider,provider_source_id);
+create index if not exists marketing_sales_scout_discovery_candidates_review_idx on public.marketing_sales_scout_discovery_candidates(scout_campaign_id,status,last_seen_at desc);
+create table if not exists public.marketing_sales_scout_discovery_run_candidates(discovery_run_id uuid not null references public.marketing_sales_scout_discovery_runs(id) on delete cascade,candidate_id uuid not null references public.marketing_sales_scout_discovery_candidates(id) on delete cascade,is_exact_duplicate boolean not null default false,exact_matching_prospect_id uuid references public.marketing_prospects(id) on delete set null,soft_match_warning_count integer not null default 0 check(soft_match_warning_count>=0),created_at timestamptz not null default now(),primary key(discovery_run_id,candidate_id),check(not is_exact_duplicate or exact_matching_prospect_id is not null));
+create index if not exists marketing_sales_scout_discovery_membership_candidate_idx on public.marketing_sales_scout_discovery_run_candidates(candidate_id,created_at desc);
+alter table public.marketing_sales_scout_discovery_runs enable row level security; alter table public.marketing_sales_scout_discovery_candidates enable row level security; alter table public.marketing_sales_scout_discovery_run_candidates enable row level security;
+revoke all on table public.marketing_sales_scout_discovery_runs,public.marketing_sales_scout_discovery_candidates,public.marketing_sales_scout_discovery_run_candidates from public,anon,authenticated;
+grant select,insert,update,delete on table public.marketing_sales_scout_discovery_runs,public.marketing_sales_scout_discovery_candidates,public.marketing_sales_scout_discovery_run_candidates to service_role;
+create or replace function public.start_sales_scout_discovery_run(p_campaign_id uuid,p_categories text[],p_result_limit integer,p_actor_id uuid) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$ declare v_campaign public.marketing_sales_scout_campaigns%rowtype; v_run public.marketing_sales_scout_discovery_runs%rowtype; begin if p_actor_id is null then raise exception using errcode='22023',message='actor id is required for discovery run start';end if; select * into v_campaign from public.marketing_sales_scout_campaigns where campaign_id=p_campaign_id for update;if not found then raise exception using errcode='P0002',message='discovery campaign not found';end if;if v_campaign.status<>'active' then raise exception using errcode='22023',message='discovery campaign must be active';end if;if v_campaign.discovery_latitude is null or v_campaign.discovery_longitude is null or v_campaign.discovery_radius_km is null or v_campaign.discovery_default_limit is null then raise exception using errcode='22023',message='discovery campaign configuration is incomplete';end if;if cardinality(p_categories) is null or cardinality(p_categories) not between 1 and 10 then raise exception using errcode='22023',message='discovery categories are invalid';end if;if p_result_limit not between 1 and 50 then raise exception using errcode='22023',message='discovery result limit is invalid';end if;if (select count(*) from public.marketing_sales_scout_discovery_runs where scout_campaign_id=p_campaign_id and started_at >= date_trunc('day',now() at time zone 'utc') at time zone 'utc' and started_at < (date_trunc('day',now() at time zone 'utc')+interval '1 day') at time zone 'utc')>=3 then raise exception using errcode='22023',message='discovery daily run limit reached';end if;insert into public.marketing_sales_scout_discovery_runs(scout_campaign_id,provider,status,requested_categories,requested_result_limit,latitude,longitude,radius_km,started_by) values(p_campaign_id,'dataforseo_business_listings','running',p_categories,p_result_limit,v_campaign.discovery_latitude,v_campaign.discovery_longitude,v_campaign.discovery_radius_km,p_actor_id) returning * into v_run;return jsonb_build_object('runId',v_run.id,'latitude',v_run.latitude,'longitude',v_run.longitude,'radiusKm',v_run.radius_km,'limit',v_run.requested_result_limit);end $$;
+create or replace function public.complete_sales_scout_discovery_run(p_run_id uuid,p_payload jsonb,p_actor_id uuid) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$ declare v_run public.marketing_sales_scout_discovery_runs%rowtype;v_item jsonb;v_candidate_id uuid;v_fingerprint text;v_exact boolean;v_exact_id uuid;v_soft integer;v_total integer:=0;v_exact_total integer:=0;begin if p_actor_id is null then raise exception using errcode='22023',message='actor id is required for discovery completion';end if;if p_payload is null or jsonb_typeof(p_payload)<>'object' then raise exception using errcode='22023',message='discovery completion payload is invalid';end if;v_fingerprint:=md5(p_payload::text);select * into v_run from public.marketing_sales_scout_discovery_runs where id=p_run_id for update;if not found then raise exception using errcode='P0002',message='discovery run not found';end if;if v_run.status='completed' then if v_run.completion_payload_fingerprint=v_fingerprint then return jsonb_build_object('runId',v_run.id,'status','completed','stagedCandidateCount',v_run.staged_candidate_count,'exactDuplicateCount',v_run.exact_duplicate_count);end if;raise exception using errcode='22023',message='discovery completion payload differs from completed run';end if;if v_run.status<>'running' then raise exception using errcode='22023',message='discovery run is not running';end if;if not exists(select 1 from public.marketing_sales_scout_campaigns where campaign_id=v_run.scout_campaign_id and status='active') then raise exception using errcode='22023',message='discovery campaign must be active';end if;if nullif(p_payload->>'providerTaskId','') is null or coalesce((p_payload->>'providerCostUsd')::numeric,-1)<0 or coalesce((p_payload->>'rawResultCount')::integer,-1)<0 or jsonb_typeof(p_payload->'candidates')<>'array' then raise exception using errcode='22023',message='discovery completion payload is invalid';end if;for v_item in select value from jsonb_array_elements(p_payload->'candidates') loop if nullif(v_item->>'providerSourceId','') is null or nullif(v_item->>'businessName','') is null or nullif(v_item->>'observedAt','') is null then raise exception using errcode='22023',message='discovery candidate payload is invalid';end if;v_exact_id:=nullif(v_item->>'exactMatchingProspectId','')::uuid;v_exact:=v_exact_id is not null;v_soft:=coalesce((v_item->>'softMatchWarningCount')::integer,0);insert into public.marketing_sales_scout_discovery_candidates(discovery_run_id,last_discovery_run_id,scout_campaign_id,provider,provider_source_id,business_name,provider_category,additional_categories,public_description,full_address,city,state,country_code,latitude,longitude,public_phone,public_website,rating_value,rating_count,claimed_indication,operating_status,observed_at,normalized_business_name,normalized_city,prepared_score,score_version,score_factors,exact_matching_prospect_id,soft_match_warning_count,status) values(v_run.id,v_run.id,v_run.scout_campaign_id,'dataforseo_business_listings',v_item->>'providerSourceId',v_item->>'businessName',nullif(v_item->>'providerCategory',''),coalesce(v_item->'additionalCategories','[]'::jsonb),nullif(v_item->>'description',''),nullif(v_item->>'fullAddress',''),nullif(v_item->>'city',''),nullif(v_item->>'state',''),nullif(v_item->>'countryCode',''),nullif(v_item->>'latitude','')::numeric,nullif(v_item->>'longitude','')::numeric,nullif(v_item->>'phone',''),nullif(v_item->>'website',''),nullif(v_item->>'ratingValue','')::numeric,nullif(v_item->>'ratingCount','')::integer,nullif(v_item->>'claimedIndication','')::boolean,nullif(v_item->>'operatingStatus',''),(v_item->>'observedAt')::timestamptz,nullif(v_item->>'normalizedBusinessName',''),nullif(v_item->>'normalizedCity',''),nullif(v_item->>'preparedScore','')::integer,nullif(v_item->>'scoreVersion',''),coalesce(v_item->'scoreFactors','[]'::jsonb),v_exact_id,v_soft,case when v_exact then 'duplicate' else 'new' end) on conflict(scout_campaign_id,provider,provider_source_id) do update set last_discovery_run_id=excluded.last_discovery_run_id,business_name=excluded.business_name,provider_category=excluded.provider_category,additional_categories=excluded.additional_categories,public_description=excluded.public_description,full_address=excluded.full_address,city=excluded.city,state=excluded.state,country_code=excluded.country_code,latitude=excluded.latitude,longitude=excluded.longitude,public_phone=excluded.public_phone,public_website=excluded.public_website,rating_value=excluded.rating_value,rating_count=excluded.rating_count,claimed_indication=excluded.claimed_indication,operating_status=excluded.operating_status,observed_at=excluded.observed_at,normalized_business_name=excluded.normalized_business_name,normalized_city=excluded.normalized_city,prepared_score=excluded.prepared_score,score_version=excluded.score_version,score_factors=excluded.score_factors,exact_matching_prospect_id=excluded.exact_matching_prospect_id,soft_match_warning_count=excluded.soft_match_warning_count,status=case when marketing_sales_scout_discovery_candidates.status in('captured','dismissed') then marketing_sales_scout_discovery_candidates.status when marketing_sales_scout_discovery_candidates.status='reviewing' and excluded.exact_matching_prospect_id is null then 'reviewing' when excluded.exact_matching_prospect_id is not null then 'duplicate' else 'new' end,last_seen_at=now(),seen_count=marketing_sales_scout_discovery_candidates.seen_count+1,updated_at=now() returning id into v_candidate_id;insert into public.marketing_sales_scout_discovery_run_candidates(discovery_run_id,candidate_id,is_exact_duplicate,exact_matching_prospect_id,soft_match_warning_count) values(v_run.id,v_candidate_id,v_exact,v_exact_id,v_soft) on conflict do nothing;v_total:=v_total+1;if v_exact then v_exact_total:=v_exact_total+1;end if;end loop;update public.marketing_sales_scout_discovery_runs set status='completed',provider_task_id=p_payload->>'providerTaskId',provider_cost_usd=(p_payload->>'providerCostUsd')::numeric,raw_result_count=(p_payload->>'rawResultCount')::integer,staged_candidate_count=v_total,exact_duplicate_count=v_exact_total,completion_payload_fingerprint=v_fingerprint,completed_at=now(),updated_at=now() where id=v_run.id;return jsonb_build_object('runId',v_run.id,'status','completed','stagedCandidateCount',v_total,'exactDuplicateCount',v_exact_total);end $$;
+create or replace function public.fail_sales_scout_discovery_run(p_run_id uuid,p_error_reference text,p_error_safe_message text,p_actor_id uuid) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$ declare v_run public.marketing_sales_scout_discovery_runs%rowtype;begin if p_actor_id is null then raise exception using errcode='22023',message='actor id is required for discovery failure';end if;if nullif(trim(p_error_reference),'') is null or nullif(trim(p_error_safe_message),'') is null then raise exception using errcode='22023',message='discovery failure details are required';end if;select * into v_run from public.marketing_sales_scout_discovery_runs where id=p_run_id for update;if not found then raise exception using errcode='P0002',message='discovery run not found';end if;if v_run.status='failed' and v_run.error_reference=p_error_reference and v_run.error_safe_message=p_error_safe_message then return jsonb_build_object('runId',v_run.id,'status','failed');end if;if v_run.status<>'running' then raise exception using errcode='22023',message='discovery run is not running';end if;update public.marketing_sales_scout_discovery_runs set status='failed',error_reference=p_error_reference,error_safe_message=p_error_safe_message,completed_at=now(),updated_at=now() where id=v_run.id;return jsonb_build_object('runId',v_run.id,'status','failed');end $$;
+revoke all on function public.start_sales_scout_discovery_run(uuid,text[],integer,uuid),public.complete_sales_scout_discovery_run(uuid,jsonb,uuid),public.fail_sales_scout_discovery_run(uuid,text,text,uuid) from public,anon,authenticated; grant execute on function public.start_sales_scout_discovery_run(uuid,text[],integer,uuid),public.complete_sales_scout_discovery_run(uuid,jsonb,uuid),public.fail_sales_scout_discovery_run(uuid,text,text,uuid) to service_role;
 notify pgrst,'reload schema';
 commit;

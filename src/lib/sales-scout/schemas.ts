@@ -27,12 +27,13 @@ const publicUrl = z.url().max(2048).refine((value) => {
     return false;
   }
 }, "A public HTTP(S) URL is required.");
-const timestamp = z.iso.datetime({ offset: true });export const recurringDemandEvidenceMessage = "Describe what the public source proves. A link by itself is not sufficient evidence.";
+const timestamp = z.iso.datetime({ offset: true });
+export const recurringDemandEvidenceMessage = "Describe what the public source proves. A link by itself is not sufficient evidence.";
 export function validateRecurringDemandEvidence(value: string | null | undefined) {
-  const normalized=value?.trim() ?? "";
+  const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
   if (!normalized) return true;
-  if (normalized.length < 20) return false;
-  return !/^https?:\/\/\S+$/i.test(normalized);
+  const descriptive = normalized.replace(/https?:\/\/\S+/gi, "").replace(/\s+/g, " ").trim();
+  return descriptive.replace(/[^\p{L}\p{N}]+/gu, "").length >= 20;
 }
 export const recurringDemandEvidenceSchema = z.string().trim().max(2000).refine(
   validateRecurringDemandEvidence,

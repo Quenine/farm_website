@@ -263,3 +263,6 @@ Do not infer identity by name alone. A normalized phone/email match may be shown
 
 ## Batch 5 discovery
 DataForSEO Business Listings is isolated behind a server-only adapter. Results are staged in provider-keyed rows before human review; evidence is validated and no automated outreach is performed.
+
+## Batch 5A discovery foundation
+DataForSEO listings are provider research records, not capture-ready prospects. Canonical provider identity is separate from per-run membership, with no fabricated geography, category, demand, or contact facts.

@@ -419,3 +419,6 @@ Migration `00300` separates generic `campaign_id` from authoritative `scout_camp
 
 ## Batch 5
 Discovery provider adapter, staged candidate review, duplicate checks, and guarded admin entry are dependency-ordered before any later outreach work.
+
+## Batch 5A correction
+Apply and rollback-test discovery persistence before Batch 5B adds the guarded application service and review UI.
