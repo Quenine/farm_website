@@ -1,5 +1,3 @@
 # Batch 5 progress
 
-The prior verifier was incomplete and has been strengthened structurally. DataForSEO categories now parse `category_name`; provider category IDs and provider verification URLs are retained. Canonical candidates preserve mapping gaps and run membership is the intended authority for run totals; duplicate provider identities are rejected before completion persistence.
-
-Migration `00400` remains unapplied. PostgreSQL verification remains unexecuted and no provider request was made. Discovery application services and UI remain deferred to Batch 5B.
+The previous two Batch 5A attempts stopped incomplete. The migration has been reformatted for human review, start and completion envelope validation tightened, and membership counts are now derived from run membership. The executable rollback fixture remains pending PostgreSQL execution. Migration 00400 remains unapplied; no provider request, deployment, or environment change occurred. Batch 5B service and UI remain unimplemented.
