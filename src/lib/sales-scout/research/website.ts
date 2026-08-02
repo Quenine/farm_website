@@ -7,7 +7,11 @@ import {
   normalizeSocialIdentity,
   type SocialPlatform,
 } from "../normalization.ts";
-import type { ResearchCandidate, ResearchEvidence } from "./types.ts";
+import type {
+  ResearchCandidate,
+  ResearchCategory,
+  ResearchEvidence,
+} from "./types.ts";
 import { ResearchProviderError } from "./types.ts";
 
 const USER_AGENT = "ShieldsFarmsSalesScoutResearch/1.0 (+https://shieldsfarms.store/contact)";
@@ -16,6 +20,20 @@ const MAX_REDIRECTS = 2;
 const MAX_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 10_000;
 const PACE_MS = 250;
+
+const CATEGORY_SCHEMA_TYPES: Partial<Record<ResearchCategory, ReadonlySet<string>>> = {
+  Restaurant: new Set(["Restaurant"]),
+  Hotel: new Set(["Hotel", "LodgingBusiness"]),
+  Supermarket: new Set(["GroceryStore"]),
+  Caterer: new Set(["Caterer", "CateringBusiness"]),
+  School: new Set(["School"]),
+  Hospital: new Set(["Hospital"]),
+};
+const SUPPORTED_SCHEMA_TYPES = new Set([
+  "Organization",
+  "LocalBusiness",
+  ...Object.values(CATEGORY_SCHEMA_TYPES).flatMap((types) => [...(types ?? [])]),
+]);
 
 export function normalizeIpLiteral(address: string) {
   const trimmed = address.trim().toLowerCase();
@@ -153,6 +171,7 @@ export type ExtractedWebsiteFacts = {
   country: string | null;
   state: string | null;
   city: string | null;
+  schemaTypes: string[];
   evidence: ResearchEvidence[];
 };
 
@@ -178,6 +197,13 @@ function makeEvidence(
     confidence: "high",
     verificationStatus: "verified",
   };
+}
+
+function normalizeSchemaType(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const raw = value.trim().replace(/^https?:\/\/schema\.org\//i, "")
+    .replace(/^schema:/i, "");
+  return /^[A-Za-z][A-Za-z0-9]*$/.test(raw) ? raw : null;
 }
 
 function safeCanonicalUrl(value: string | null, sourceUrl: string) {
@@ -258,6 +284,7 @@ export function extractWebsiteFacts(
   )][0]?.[0];
   let publicDescription = metaTag ? attributes(metaTag, "content")[0] ?? null : null;
   const addresses: string[] = [];
+  const schemaTypes: string[] = [];
   let country: string | null = null;
   let state: string | null = null;
   let city: string | null = null;
@@ -270,10 +297,13 @@ export function extractWebsiteFacts(
         if (!item || typeof item !== "object") continue;
         const record = item as Record<string, unknown>;
         const types = Array.isArray(record["@type"]) ? record["@type"] : [record["@type"]];
-        if (!types.some((type) =>
-          typeof type === "string" &&
-          /Organization|LocalBusiness|Restaurant|Hotel|Store|School|Hospital/i.test(type)
-        )) continue;
+        const normalizedTypes = types
+          .map(normalizeSchemaType)
+          .filter((type): type is string => Boolean(type));
+        if (!normalizedTypes.some((type) => SUPPORTED_SCHEMA_TYPES.has(type))) continue;
+        schemaTypes.push(
+          ...normalizedTypes.filter((type) => SUPPORTED_SCHEMA_TYPES.has(type)),
+        );
         if (typeof record.description === "string" && record.description.trim()) {
           publicDescription = record.description.trim();
         }
@@ -309,6 +339,7 @@ export function extractWebsiteFacts(
     youtube: normalizedSocialUrls(social.youtube, "youtube"),
     publicDescription,
     addresses: unique(addresses),
+    schemaTypes: unique(schemaTypes),
     country,
     state,
     city,
@@ -324,6 +355,7 @@ export function extractWebsiteFacts(
     x: facts.x,
     youtube: facts.youtube,
     address: facts.addresses,
+    schemaType: facts.schemaTypes,
   })) {
     for (const value of values) evidence.push(makeEvidence(sourceUrl, observedAt, field, value));
   }
@@ -396,6 +428,25 @@ export function mergeWebsiteFactsIntoCandidate(
     }
     return current ?? incoming;
   };
+  const supportedCategoryTypes = CATEGORY_SCHEMA_TYPES[candidate.requestedCategory];
+  const schemaSupportsCategory = Boolean(
+    supportedCategoryTypes &&
+    facts.schemaTypes.some((type) => supportedCategoryTypes.has(type)),
+  );
+  const alreadyVerifiedCategory = candidate.evidence.some((item) =>
+    item.field === "requestedCategory" &&
+    item.value === candidate.requestedCategory &&
+    item.verificationStatus === "verified"
+  );
+  const schemaEvidence = facts.evidence.find((item) => item.field === "schemaType");
+  const categoryEvidence = schemaSupportsCategory && !alreadyVerifiedCategory
+    ? [makeEvidence(
+        sourceUrl,
+        schemaEvidence?.observedAt ?? candidate.lastObservedAt,
+        "requestedCategory",
+        candidate.requestedCategory,
+      )]
+    : [];
   return {
     ...candidate,
     website,
@@ -418,7 +469,7 @@ export function mergeWebsiteFactsIntoCandidate(
     tiktok: mergeSocial(candidate.tiktok, facts.tiktok, "tiktok"),
     x: mergeSocial(candidate.x, facts.x, "x"),
     youtube: mergeSocial(candidate.youtube, facts.youtube, "youtube"),
-    evidence: [...candidate.evidence, ...facts.evidence],
+    evidence: [...candidate.evidence, ...facts.evidence, ...categoryEvidence],
     discoverySources: candidate.discoverySources.includes("official_website")
       ? candidate.discoverySources
       : [...candidate.discoverySources, "official_website"],
@@ -469,50 +520,21 @@ export function buildWebsiteResearchPlan(
   return [...plan.values()];
 }
 
-async function safeFetch(
-  input: string,
-  allowPlainText = false,
-  redirects = 0,
-): Promise<{ url: URL; body: string }> {
-  const url = await assertPublicDestination(input);
+type RobotsCache = Map<string, string>;
+
+async function fetchResponse(url: URL, accept: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await fetch(url, {
+    return await fetch(url, {
       redirect: "manual",
       signal: controller.signal,
       headers: {
         "User-Agent": USER_AGENT,
-        Accept: allowPlainText ? "text/plain" : "text/html,application/xhtml+xml",
+        Accept: accept,
       },
     });
-    if (response.status >= 300 && response.status < 400) {
-      if (redirects >= MAX_REDIRECTS) {
-        throw new ResearchProviderError("WEBSITE_REDIRECT_LIMIT");
-      }
-      const location = response.headers.get("location");
-      if (!location) throw new ResearchProviderError("WEBSITE_REDIRECT_INVALID");
-      const target = new URL(location, url);
-      await assertPublicDestination(target.href);
-      return safeFetch(target.href, allowPlainText, redirects + 1);
-    }
-    if (!response.ok) throw new ResearchProviderError("WEBSITE_REQUEST_FAILED");
-    const type = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (
-      allowPlainText ? !type.includes("text/plain") :
-        !type.includes("text/html") && !type.includes("application/xhtml+xml")
-    ) {
-      throw new ResearchProviderError("WEBSITE_CONTENT_TYPE_UNSUPPORTED");
-    }
-    const declared = Number(response.headers.get("content-length") ?? "0");
-    if (declared > MAX_BYTES) throw new ResearchProviderError("WEBSITE_RESPONSE_TOO_LARGE");
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_BYTES) {
-      throw new ResearchProviderError("WEBSITE_RESPONSE_TOO_LARGE");
-    }
-    return { url, body: new TextDecoder().decode(bytes) };
   } catch (error) {
-    if (error instanceof ResearchProviderError) throw error;
     throw new ResearchProviderError(
       error instanceof DOMException && error.name === "AbortError"
         ? "WEBSITE_TIMEOUT"
@@ -521,6 +543,95 @@ async function safeFetch(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function readBoundedBody(
+  response: Response,
+  oversizedReference: string,
+) {
+  const declared = Number(response.headers.get("content-length") ?? "0");
+  if (declared > MAX_BYTES) throw new ResearchProviderError(oversizedReference);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > MAX_BYTES) {
+    throw new ResearchProviderError(oversizedReference);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+async function loadRobotsForOrigin(origin: string, robotsCache: RobotsCache) {
+  const cached = robotsCache.get(origin);
+  if (cached !== undefined) return cached;
+  try {
+    const robotsUrl = await assertPublicDestination(
+      new URL("/robots.txt", origin).href,
+    );
+    const response = await fetchResponse(robotsUrl, "text/plain");
+    if (response.status === 404 || response.status === 410) {
+      robotsCache.set(origin, "");
+      return "";
+    }
+    if (response.status !== 200) {
+      throw new ResearchProviderError("WEBSITE_ROBOTS_UNAVAILABLE");
+    }
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (contentType && !contentType.startsWith("text/")) {
+      throw new ResearchProviderError("WEBSITE_ROBOTS_UNAVAILABLE");
+    }
+    const text = await readBoundedBody(response, "WEBSITE_ROBOTS_UNAVAILABLE");
+    robotsCache.set(origin, text);
+    return text;
+  } catch (error) {
+    if (
+      error instanceof ResearchProviderError &&
+      ["WEBSITE_DESTINATION_PRIVATE", "WEBSITE_URL_INVALID", "WEBSITE_URL_UNSAFE"]
+        .includes(error.reference)
+    ) {
+      throw error;
+    }
+    throw new ResearchProviderError("WEBSITE_ROBOTS_UNAVAILABLE");
+  }
+}
+
+async function assertRobotsAllowed(url: URL, robotsCache: RobotsCache) {
+  const robotsText = await loadRobotsForOrigin(url.origin, robotsCache);
+  if (!robotsAllows(robotsText, url.pathname)) {
+    throw new ResearchProviderError("WEBSITE_ROBOTS_DISALLOWED");
+  }
+}
+
+async function safeFetch(
+  input: string,
+  robotsCache: RobotsCache,
+  redirects = 0,
+): Promise<{ url: URL; body: string }> {
+  const url = await assertPublicDestination(input);
+  await assertRobotsAllowed(url, robotsCache);
+  const response = await fetchResponse(
+    url,
+    "text/html,application/xhtml+xml",
+  );
+  if (response.status >= 300 && response.status < 400) {
+    if (redirects >= MAX_REDIRECTS) {
+      throw new ResearchProviderError("WEBSITE_REDIRECT_LIMIT");
+    }
+    const location = response.headers.get("location");
+    if (!location) throw new ResearchProviderError("WEBSITE_REDIRECT_INVALID");
+    const target = await assertPublicDestination(new URL(location, url).href);
+    await assertRobotsAllowed(target, robotsCache);
+    return safeFetch(target.href, robotsCache, redirects + 1);
+  }
+  if (!response.ok) throw new ResearchProviderError("WEBSITE_REQUEST_FAILED");
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (
+    !contentType.includes("text/html") &&
+    !contentType.includes("application/xhtml+xml")
+  ) {
+    throw new ResearchProviderError("WEBSITE_CONTENT_TYPE_UNSUPPORTED");
+  }
+  return {
+    url,
+    body: await readBoundedBody(response, "WEBSITE_RESPONSE_TOO_LARGE"),
+  };
 }
 
 function candidateLinks(html: string, base: URL, allowedOrigin: string) {
@@ -548,24 +659,22 @@ export async function researchOfficialWebsite(input: string) {
   if (!isPlausibleOfficialWebsite(input)) {
     throw new ResearchProviderError("WEBSITE_NOT_PLAUSIBLY_OFFICIAL");
   }
-  const first = await safeFetch(input);
+  const robotsCache: RobotsCache = new Map();
+  const first = await safeFetch(input, robotsCache);
   const finalOrigin = first.url.origin;
-  let robotsText = "";
-  try {
-    robotsText = (await safeFetch(new URL("/robots.txt", finalOrigin).href, true)).body;
-  } catch (error) {
-    if (!(error instanceof ResearchProviderError)) throw error;
-  }
-  const queue = [{ url: first.url, body: first.body }];
+  const queue: Array<{ url: URL; body: string | null }> = [{
+    url: first.url,
+    body: first.body,
+  }];
   const visited = new Set<string>();
   const pages: Array<{ url: string; facts: ExtractedWebsiteFacts }> = [];
   while (queue.length && pages.length < MAX_PAGES) {
     const next = queue.shift();
-    if (!next || visited.has(next.url.href) || !robotsAllows(robotsText, next.url.pathname)) {
-      continue;
-    }
+    if (!next || visited.has(next.url.href)) continue;
     visited.add(next.url.href);
-    const page = next.body == null ? await safeFetch(next.url.href) : next;
+    const page = next.body == null
+      ? await safeFetch(next.url.href, robotsCache)
+      : { url: next.url, body: next.body };
     const observedAt = new Date().toISOString();
     pages.push({
       url: page.url.href,
@@ -573,7 +682,7 @@ export async function researchOfficialWebsite(input: string) {
     });
     for (const link of candidateLinks(page.body, page.url, finalOrigin)) {
       if (!visited.has(link.href) && !queue.some((item) => item.url.href === link.href)) {
-        queue.push({ url: link, body: null as unknown as string });
+        queue.push({ url: link, body: null });
       }
     }
     if (queue.length) await new Promise((resolve) => setTimeout(resolve, PACE_MS));

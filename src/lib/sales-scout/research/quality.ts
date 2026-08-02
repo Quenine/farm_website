@@ -85,7 +85,7 @@ export function isResearchReady(candidate: ResearchCandidate) {
   );
 }
 export function isOutreachReady(candidate: ResearchCandidate) {
-  return hasAnyUsableContact(candidate);
+  return isResearchReady(candidate) && hasAnyUsableContact(candidate);
 }
 export function contactCoverageScore(candidate: ResearchCandidate) {
   const checks = [

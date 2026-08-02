@@ -48,7 +48,8 @@ export type LiveExecutionPlan = {
   maximumGeoapifyCalls: number;
   maximumTavilySearches: number;
   maximumWebsites: number;
-  conservativeMaximumEstimatedProviderCredits: number;
+  maximumHtmlPages: number;
+  conservativeMaximumProviderCreditsIncludingOneRetry: number;
 };
 
 const DEFAULT_MATRIX = "scripts/fixtures/sales-scout-research/nationwide-matrix.json";
@@ -166,17 +167,24 @@ export function buildLiveExecutionPlan(
   maxWebsites: number,
   providers: { geoapify: boolean; tavily: boolean },
 ): LiveExecutionPlan {
-  const geoapifyQueries = providers.geoapify
-    ? queries.filter((query) => Boolean(geoapifyCategory(query.category))).length
+  const maximumGeoapifyCalls = providers.geoapify
+    ? queries
+        .filter((query) => Boolean(geoapifyCategory(query.category)))
+        .reduce((total, query) => {
+          const needsGeocoding =
+            query.territory.longitude == null || query.territory.latitude == null;
+          const completeOperationMaximum = 1 + (needsGeocoding ? 1 : 0);
+          return total + completeOperationMaximum * 2;
+        }, 0)
     : 0;
-  const maximumGeoapifyCalls = geoapifyQueries * 2;
-  const maximumTavilySearches = providers.tavily ? queries.length * 2 : 0;
+  const maximumTavilySearches = providers.tavily ? queries.length * 2 * 2 : 0;
   return {
     matrixQueryCount: queries.length,
     maximumGeoapifyCalls,
     maximumTavilySearches,
     maximumWebsites: maxWebsites,
-    conservativeMaximumEstimatedProviderCredits:
+    maximumHtmlPages: maxWebsites * 5,
+    conservativeMaximumProviderCreditsIncludingOneRetry:
       maximumGeoapifyCalls + maximumTavilySearches,
   };
 }
@@ -185,10 +193,11 @@ function printLiveExecutionPlan(plan: LiveExecutionPlan) {
   console.log(`Matrix query count: ${plan.matrixQueryCount}`);
   console.log(`Maximum Geoapify calls: ${plan.maximumGeoapifyCalls}`);
   console.log(`Maximum Tavily searches: ${plan.maximumTavilySearches}`);
-  console.log(`Maximum websites to research: ${plan.maximumWebsites}`);
+  console.log(`Maximum official websites: ${plan.maximumWebsites}`);
+  console.log(`Maximum HTML pages: ${plan.maximumHtmlPages}`);
   console.log(
-    "Conservative maximum estimated provider credits: " +
-      plan.conservativeMaximumEstimatedProviderCredits,
+    "Conservative maximum provider credits including one retry: " +
+      plan.conservativeMaximumProviderCreditsIncludingOneRetry,
   );
 }
 

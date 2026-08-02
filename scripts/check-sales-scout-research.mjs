@@ -49,8 +49,9 @@ assert.match(source, /RESEARCH_LIVE_REQUIRES_EXPLICIT_CONFIRMATION/);
 assert.match(cliSource, /--max-websites/);
 assert.match(cliSource, /maxWebsites:\s*20/);
 assert.match(cliSource, /boundedInteger\([^\n]*name,\s*1,\s*50\)/);
-assert.match(cliSource, /Maximum websites to research:/);
-assert.match(cliSource, /Conservative maximum estimated provider credits:/);
+assert.match(cliSource, /Maximum official websites:/);
+assert.match(cliSource, /Maximum HTML pages:/);
+assert.match(cliSource, /Conservative maximum provider credits including one retry:/);
 
 assert.doesNotMatch(tavilySource, /country:\s*query\.territory\.country/);
 assert.doesNotMatch(tavilySource, /state:\s*query\.territory\.state/);
@@ -67,6 +68,39 @@ assert.match(officialWebsiteFunction, /field\s*===\s*"website"/);
 assert.match(qualitySource, /hasEvidenceBackedPhone/);
 assert.match(qualitySource, /hasEvidenceBackedEmail/);
 assert.match(qualitySource, /hasEvidenceBackedWhatsApp/);
+const outreachReadyFunction = qualitySource.match(
+  /export function isOutreachReady[\s\S]*?\n\}/,
+)?.[0] ?? "";
+assert.match(outreachReadyFunction, /isResearchReady\(candidate\)/);
+assert.match(outreachReadyFunction, /hasAnyUsableContact\(candidate\)/);
+
+const safeFetchFunction = websiteSource.match(
+  /async function safeFetch[\s\S]*?\n\}/,
+)?.[0] ?? "";
+assert.ok(
+  safeFetchFunction.indexOf("await assertRobotsAllowed(url, robotsCache)") >= 0 &&
+  safeFetchFunction.indexOf("await assertRobotsAllowed(url, robotsCache)") <
+    safeFetchFunction.indexOf("await fetchResponse"),
+);
+assert.match(websiteSource, /const robotsCache: RobotsCache = new Map\(\)/);
+assert.match(websiteSource, /loadRobotsForOrigin\(url\.origin, robotsCache\)/);
+assert.match(websiteSource, /await assertRobotsAllowed\(target, robotsCache\)/);
+assert.match(websiteSource, /WEBSITE_ROBOTS_DISALLOWED/);
+assert.match(websiteSource, /WEBSITE_ROBOTS_UNAVAILABLE/);
+assert.match(websiteSource, /schemaTypes: string\[\]/);
+assert.match(websiteSource, /field === "schemaType"/);
+assert.match(websiteSource, /Restaurant: new Set\(\["Restaurant"\]\)/);
+assert.match(websiteSource, /Hotel: new Set\(\["Hotel", "LodgingBusiness"\]\)/);
+assert.match(websiteSource, /Supermarket: new Set\(\["GroceryStore"\]\)/);
+assert.match(websiteSource, /Caterer: new Set\(\["Caterer", "CateringBusiness"\]\)/);
+assert.match(websiteSource, /School: new Set\(\["School"\]\)/);
+assert.match(websiteSource, /Hospital: new Set\(\["Hospital"\]\)/);
+assert.match(websiteSource, /facts\.schemaTypes\.some/);
+assert.match(websiteSource, /"requestedCategory"/);
+assert.doesNotMatch(
+  websiteSource.match(/const CATEGORY_SCHEMA_TYPES[\s\S]*?\n\};/)?.[0] ?? "",
+  /Food Vendor|Food Processor|Distributor|Institution/,
+);
 
 const preliminaryIndex = cliSource.indexOf(
   "const preliminary = deduplicateCandidates(rawCandidates)",
@@ -103,6 +137,10 @@ assert.match(source, /MAX_BYTES\s*=\s*2\s*\*\s*1024\s*\*\s*1024/);
 assert.match(source, /MAX_SEARCH_RESULTS\s*=\s*20/);
 assert.match(source, /MAX_EXTRACT_URLS\s*=\s*5/);
 assert.match(source, /maxQueries:\s*live\s*\?\s*12\s*:\s*50/);
+assert.match(cliSource, /completeOperationMaximum \* 2/);
+assert.match(cliSource, /queries\.length \* 2 \* 2/);
+assert.match(cliSource, /maximumHtmlPages: maxWebsites \* 5/);
+assert.match(cliSource, /conservativeMaximumProviderCreditsIncludingOneRetry/);
 
 assert.ok(fs.readFileSync(".gitignore", "utf8").includes("tmp/sales-scout-research/"));
 assert.ok(fs.existsSync(

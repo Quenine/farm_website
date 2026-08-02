@@ -15,13 +15,16 @@ import {
   hasOfficialWebsite,
   hasPublicSocialProfile,
   isOutreachReady,
+  isResearchReady,
   isPrivateOrReservedIp,
   mapGeoapifyPlacesResponse,
   mapTavilySearchResponse,
   mergeCandidates,
+  mergeWebsiteFactsIntoCandidate,
   metricsToMarkdown,
   providerStatusReference,
   resolveGeoapifyTerritory,
+  researchOfficialWebsite,
   robotsAllows,
   validatePublicWebsiteUrl,
   type EvaluationMetrics,
@@ -150,6 +153,19 @@ function metricContext(mode: EvaluationMetrics["mode"] = "synthetic_fixture") {
     estimatedProviderCredits: 0,
     failureReferences: [],
   };
+}
+
+async function withMockedFetch(
+  mock: typeof fetch,
+  operation: () => Promise<void>,
+) {
+  const original = globalThis.fetch;
+  globalThis.fetch = mock;
+  try {
+    await operation();
+  } finally {
+    globalThis.fetch = original;
+  }
 }
 
 test("territory and category queries are deterministic and Nigeria-specific", () => {
@@ -412,6 +428,103 @@ test("robots disallow applies without blocking public contact", async () => {
   assert.equal(robotsAllows(robots, "/contact"), true);
 });
 
+test("official website loads robots before its first content page", async () => {
+  const calls: string[] = [];
+  await withMockedFetch(
+    (async (input) => {
+      const url = new URL(String(input));
+      calls.push(url.href);
+      if (url.pathname === "/robots.txt") {
+        return new Response("User-agent: *\nDisallow:", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        });
+      }
+      return new Response("<html><body>Allowed</body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    }) as typeof fetch,
+    async () => {
+      const pages = await researchOfficialWebsite("http://93.184.216.34/");
+      assert.equal(pages.length, 1);
+    },
+  );
+  assert.deepEqual(calls, [
+    "http://93.184.216.34/robots.txt",
+    "http://93.184.216.34/",
+  ]);
+});
+
+test("robots denial and unavailable rules prevent content fetching", async () => {
+  for (const fixture of [
+    { status: 200, body: "User-agent: *\nDisallow: /blocked",
+      reference: "WEBSITE_ROBOTS_DISALLOWED" },
+    { status: 403, body: "", reference: "WEBSITE_ROBOTS_UNAVAILABLE" },
+  ]) {
+    const calls: string[] = [];
+    await withMockedFetch(
+      (async (input) => {
+        const url = new URL(String(input));
+        calls.push(url.href);
+        return new Response(fixture.body, {
+          status: fixture.status,
+          headers: { "content-type": "text/plain" },
+        });
+      }) as typeof fetch,
+      async () => {
+        await assert.rejects(
+          researchOfficialWebsite("http://93.184.216.34/blocked"),
+          (error) => error instanceof ResearchProviderError &&
+            error.reference === fixture.reference,
+        );
+      },
+    );
+    assert.deepEqual(calls, ["http://93.184.216.34/robots.txt"]);
+  }
+});
+
+test("cross-origin redirect loads destination robots before redirected content", async () => {
+  const calls: string[] = [];
+  await withMockedFetch(
+    (async (input) => {
+      const url = new URL(String(input));
+      calls.push(url.href);
+      if (url.hostname === "93.184.216.34" && url.pathname === "/robots.txt") {
+        return new Response("User-agent: *\nDisallow:", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        });
+      }
+      if (url.hostname === "93.184.216.34") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "http://8.8.8.8/blocked" },
+        });
+      }
+      if (url.pathname === "/robots.txt") {
+        return new Response("User-agent: *\nDisallow: /blocked", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        });
+      }
+      throw new Error("redirected content must not be fetched");
+    }) as typeof fetch,
+    async () => {
+      await assert.rejects(
+        researchOfficialWebsite("http://93.184.216.34/start"),
+        (error) => error instanceof ResearchProviderError &&
+          error.reference === "WEBSITE_ROBOTS_DISALLOWED",
+      );
+    },
+  );
+  assert.deepEqual(calls, [
+    "http://93.184.216.34/robots.txt",
+    "http://93.184.216.34/start",
+    "http://8.8.8.8/robots.txt",
+  ]);
+});
+
 test("website extraction normalizes contacts, socials, and structured location", async () => {
   const html = await readFile(
     "scripts/fixtures/sales-scout-research/official-homepage.html",
@@ -433,6 +546,11 @@ test("website extraction normalizes contacts, socials, and structured location",
   assert.equal(facts.city, "Lagos");
   assert.equal(facts.state, "Lagos");
   assert.equal(facts.country, "NG");
+  assert.deepEqual(facts.schemaTypes, ["Restaurant"]);
+  assert.ok(facts.evidence.some((item) =>
+    item.field === "schemaType" && item.value === "Restaurant" &&
+    item.verificationStatus === "verified"
+  ));
   assert.ok(facts.evidence.every((item) => item.sourceUrl));
 });
 
@@ -444,6 +562,104 @@ test("malformed canonical tags do not crash website extraction", () => {
   );
   assert.equal(facts.canonicalUrl, "https://safe.example/");
   assert.deepEqual(facts.phoneNumbers, ["+2348030001000"]);
+});
+
+test("official schema types verify only conservative category mappings", () => {
+  const factsForType = (schemaType: string) => extractWebsiteFacts(
+    `<script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": schemaType,
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Lagos",
+        addressRegion: "Lagos",
+        addressCountry: "NG",
+      },
+    })}</script>`,
+    "https://fixture-business.example/",
+    observedAt,
+  );
+  const withoutVerifiedCategory = (
+    requestedCategory: ResearchCandidate["requestedCategory"],
+  ) => candidate({
+    requestedCategory,
+    evidence: candidate().evidence.filter((item) =>
+      item.field !== "requestedCategory"
+    ),
+  });
+
+  const restaurant = mergeWebsiteFactsIntoCandidate(
+    withoutVerifiedCategory("Restaurant"),
+    factsForType("Restaurant"),
+    "https://fixture-business.example/",
+  );
+  assert.ok(restaurant.evidence.some((item) =>
+    item.field === "requestedCategory" &&
+    item.value === "Restaurant" &&
+    item.verificationStatus === "verified"
+  ));
+
+  const supermarket = mergeWebsiteFactsIntoCandidate(
+    withoutVerifiedCategory("Supermarket"),
+    factsForType("https://schema.org/GroceryStore"),
+    "https://fixture-business.example/",
+  );
+  assert.deepEqual(
+    supermarket.evidence.filter((item) =>
+      item.field === "schemaType"
+    ).map((item) => item.value),
+    ["GroceryStore"],
+  );
+  assert.ok(supermarket.evidence.some((item) =>
+    item.field === "requestedCategory" &&
+    item.value === "Supermarket" &&
+    item.verificationStatus === "verified"
+  ));
+
+  const unsupported = mergeWebsiteFactsIntoCandidate(
+    withoutVerifiedCategory("Food Vendor"),
+    factsForType("GroceryStore"),
+    "https://fixture-business.example/",
+  );
+  assert.equal(unsupported.evidence.some((item) =>
+    item.field === "requestedCategory" &&
+    item.value === "Food Vendor" &&
+    item.verificationStatus === "verified"
+  ), false);
+});
+
+test("Tavily candidate becomes research-ready only after verified website facts", () => {
+  const discovered = mapTavilySearchResponse({
+    results: [{
+      title: "Ready Kitchen | Official Website",
+      url: "https://readykitchen.example/",
+      content: "Discovery snippet only.",
+    }],
+  }, query, observedAt)[0];
+  assert.equal(isResearchReady(discovered), false);
+  assert.equal(isOutreachReady(discovered), false);
+
+  const facts = extractWebsiteFacts(
+    `<script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Restaurant",
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Lagos",
+        addressRegion: "Lagos",
+        addressCountry: "NG",
+      },
+    })}</script><a href="tel:+2348030005000">Call</a>`,
+    "https://readykitchen.example/",
+    observedAt,
+  );
+  const enriched = mergeWebsiteFactsIntoCandidate(
+    discovered,
+    facts,
+    "https://readykitchen.example/",
+  );
+  assert.equal(isResearchReady(enriched), true);
+  assert.equal(isOutreachReady(enriched), true);
 });
 
 test("transitive deduplication is order-independent", () => {
@@ -490,16 +706,31 @@ test("conflicting evidence is retained with a research issue", () => {
   assert.ok(merged.evidence.length >= 6);
 });
 
-test("outreach readiness requires verified public contact evidence", () => {
+test("outreach readiness requires verified relevance and contact", () => {
   assert.equal(isOutreachReady(candidate()), true);
-  assert.equal(isOutreachReady(candidate({
-    evidence: candidate().evidence.map((item) => ({
-      ...item,
-      verificationStatus: "plausible",
-    })),
-  })), false);
-});
 
+  const unverifiedTerritory = candidate({
+    evidence: candidate().evidence.filter((item) => item.field !== "city"),
+  });
+  assert.equal(isOutreachReady(unverifiedTerritory), false);
+
+  const unverifiedCategory = candidate({
+    evidence: candidate().evidence.filter((item) =>
+      item.field !== "requestedCategory"
+    ),
+  });
+  assert.equal(isOutreachReady(unverifiedCategory), false);
+
+  const unverifiedContact = candidate({
+    evidence: candidate().evidence.map((item) =>
+      ["phone", "website"].includes(item.field)
+        ? { ...item, verificationStatus: "plausible" }
+        : item
+    ),
+  });
+  assert.equal(isOutreachReady(unverifiedContact), false);
+  assert.equal(isResearchReady(candidate()), true);
+});
 test("provider status mapping and retry eligibility are narrow", async () => {
   assert.equal(providerStatusReference("GEOAPIFY", 400), "GEOAPIFY_BAD_REQUEST");
   assert.equal(providerStatusReference("TAVILY", 401), "TAVILY_UNAUTHORIZED");
@@ -551,6 +782,10 @@ test("fixture-mode CLI exercises mappers, extraction, deduplication, and outputs
   ]);
   assert.equal(result.metrics.mode, "synthetic_fixture");
   assert.equal(result.metrics.queriesAttempted, 4);
+  assert.equal(
+    result.metrics.outreachReady,
+    result.candidates.filter(isOutreachReady).length,
+  );
   assert.ok(result.candidates.some((item) =>
     item.discoverySources.includes("geoapify_places") &&
     item.discoverySources.includes("tavily_search") &&
@@ -569,26 +804,56 @@ test("fixture-mode CLI exercises mappers, extraction, deduplication, and outputs
   assert.match(summary, /pipeline behaviour only/);
 });
 
-test("live execution plan and website argument remain bounded", () => {
-  const queries = Array.from({ length: 12 }, () => query);
-  const plan = buildLiveExecutionPlan(queries, 20, {
-    geoapify: true,
-    tavily: true,
-  });
-  assert.deepEqual(plan, {
-    matrixQueryCount: 12,
-    maximumGeoapifyCalls: 24,
-    maximumTavilySearches: 24,
-    maximumWebsites: 20,
-    conservativeMaximumEstimatedProviderCredits: 48,
-  });
+test("live execution plan includes one retry and remains bounded", () => {
+  const withCoordinates = query;
+  const withoutCoordinates: ResearchQuery = {
+    ...query,
+    territory: { country: "Nigeria", state: "Oyo", city: "Ibadan" },
+  };
+  assert.deepEqual(
+    buildLiveExecutionPlan([withCoordinates, withoutCoordinates], 20, {
+      geoapify: true,
+      tavily: false,
+    }),
+    {
+      matrixQueryCount: 2,
+      maximumGeoapifyCalls: 6,
+      maximumTavilySearches: 0,
+      maximumWebsites: 20,
+      maximumHtmlPages: 100,
+      conservativeMaximumProviderCreditsIncludingOneRetry: 6,
+    },
+  );
+  assert.deepEqual(
+    buildLiveExecutionPlan([withCoordinates, withoutCoordinates], 3, {
+      geoapify: false,
+      tavily: true,
+    }),
+    {
+      matrixQueryCount: 2,
+      maximumGeoapifyCalls: 0,
+      maximumTavilySearches: 8,
+      maximumWebsites: 3,
+      maximumHtmlPages: 15,
+      conservativeMaximumProviderCreditsIncludingOneRetry: 8,
+    },
+  );
+  const both = buildLiveExecutionPlan(
+    [withCoordinates, withoutCoordinates],
+    4,
+    { geoapify: true, tavily: true },
+  );
+  assert.equal(both.maximumGeoapifyCalls, 6);
+  assert.equal(both.maximumTavilySearches, 8);
+  assert.equal(both.conservativeMaximumProviderCreditsIncludingOneRetry, 14);
+  assert.equal(both.maximumHtmlPages, 20);
+
   assert.equal(parseResearchArgs(["--max-websites", "50"]).maxWebsites, 50);
   assert.throws(
     () => parseResearchArgs(["--max-websites", "51"]),
     /RESEARCH_ARGUMENT_INVALID_MAX_WEBSITES/,
   );
 });
-
 test("live mode requires both explicit switches and a configured provider", () => {
   assert.throws(
     () => parseResearchArgs(["--live"]),
