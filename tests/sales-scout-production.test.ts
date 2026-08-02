@@ -15,6 +15,7 @@ import {
 import {
   resolveGeoapifyTerritory,
 } from "../src/lib/sales-scout/research/geoapify.ts";
+import { researchOfficialWebsite } from "../src/lib/sales-scout/research/website.ts";
 import {
   ResearchProviderError,
   type ResearchCandidate,
@@ -302,6 +303,51 @@ test("contact filtering computes the correct count and second page", () => {
   assert.deepEqual(result.rows.map((row) => row.id), [10, 12, 14, 16, 18]);
 });
 
+test("website timeout covers a slow HTML body and clears its timer", async () => {
+  const originalFetch = globalThis.fetch;
+  let scheduled: (() => void) | undefined;
+  let cleared = 0;
+  globalThis.fetch = (async (input, init) => {
+    if (String(input).endsWith("/robots.txt")) {
+      return {
+        status: 404,
+        ok: false,
+        headers: new Headers(),
+        arrayBuffer: async () => new ArrayBuffer(0),
+      } as Response;
+    }
+    const signal = init?.signal as AbortSignal;
+    return {
+      status: 200,
+      ok: true,
+      headers: new Headers({ "content-type": "text/html" }),
+      arrayBuffer: () => new Promise<ArrayBuffer>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        scheduled?.();
+      }),
+    } as Response;
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      researchOfficialWebsite("https://93.184.216.34/", {
+        deadlineAtMs: 100,
+        now: () => 0,
+        setTimeout: (callback: () => void) => {
+          scheduled = callback;
+          return 0 as unknown as ReturnType<typeof setTimeout>;
+        },
+        clearTimeout: () => {
+          cleared += 1;
+        },
+      }),
+      (error: unknown) => error instanceof ResearchProviderError &&
+        error.reference === "WEBSITE_TIMEOUT",
+    );
+    assert.ok(cleared >= 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 test("production limits align at one hundred results and five Geoapify pages", () => {
   assert.deepEqual(productionResearchCostCeiling({
     categories: 2,
@@ -309,7 +355,7 @@ test("production limits align at one hundred results and five Geoapify pages", (
     resultLimit: 100,
     maxEnrichmentCandidates: 6,
   }), {
-    maximumGeoapifyCalls: 11,
+    maximumGeoapifyCalls: 12,
     maximumTavilySearches: 12,
     maximumOfficialWebsites: 6,
     maximumOfficialWebsitePages: 30,

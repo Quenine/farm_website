@@ -56,6 +56,16 @@ assert.match(productionSource,/error\.reference === "GEOAPIFY_TERRITORY_NOT_RESO
 assert.match(productionSource,/timeBudgetMs \?\? 45_000/);
 assert.match(productionSource,/Math\.min\(50_000/);
 assert.match(productionSource,/RESEARCH_TIME_BUDGET_REACHED/);
+assert.match(productionSource,/maximumGeoapifyCalls: categories \* \([\s\S]*?Math\.min\(5, Math\.ceil\(input\.resultLimit \/ 20\)\)[\s\S]*?coordinatesConfigured \? 0 : 1/);
+assert.match(website,/type TimedResponse/);
+assert.match(website,/body: await readBoundedBody\(request, "WEBSITE_RESPONSE_TOO_LARGE"\)/);
+assert.match(website,/request\.dispose\(\)/);
+assert.match(website,/WEBSITE_TIMEOUT/);
+assert.match(controls,/Copy approved message/);
+assert.match(controls,/navigator\.clipboard\.writeText\(approvedText\)/);
+assert.match(controls,/approvedText/);
+assert.match(controls,/reviewState\.key === reviewKey/);
+assert.match(controls,/currentDraft\?\.draft_text/);
 
 assert.match(tavily,/classification\.kind === "likely_official"/);
 assert.match(tavily,/distinctPhones\.length <= 1/);

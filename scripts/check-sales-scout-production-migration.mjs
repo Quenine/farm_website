@@ -61,6 +61,12 @@ for(const phrase of[
   "reply suppression failed","cancellation left stale follow-up",
   "opt-out suppression failed","fourth outreach was accepted",
 ])assert.ok(verifier.includes(phrase),phrase);
+const captureFixture = verifier.match(
+  /v_capture:=jsonb_build_object\([\s\S]*?\n  \);\r?\n  v_result:=public\.capture_sales_scout_candidate/,
+)?.[0] ?? "";
+for (const field of ["'score'", "'ruleVersion'", "'factors'", "'scoredAt'"]) {
+  assert.ok(captureFixture.includes(field), `capture fixture missing ${field}`);
+}
 assert.match(verifier,/has_function_privilege\('service_role'/);
 assert.match(verifier,/rollback;\s*$/);
 assert.ok(fs.existsSync("database/rollback-dry-run-sales-scout-production-release.sql"));

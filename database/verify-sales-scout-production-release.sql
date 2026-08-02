@@ -297,6 +297,7 @@ begin
     'exactLookupKeys',jsonb_build_array('phone:+2348030001001'),
     'score',jsonb_build_object(
       'score',80,'ruleVersion','ng-city-b2b-v1','factors','[]'::jsonb,
+      'scoredAt','2026-08-02T10:00:00Z',
       'qualified',true,'qualificationFailures','[]'::jsonb
     )
   );

@@ -532,16 +532,46 @@ export function buildWebsiteResearchPlan(
 
 type RobotsCache = Map<string, string>;
 
-type ResearchDeadline = { deadlineAtMs?: number; now?: () => number };
+type ResearchDeadline = {
+  deadlineAtMs?: number;
+  now?: () => number;
+  setTimeout?: (callback: () => void, milliseconds: number) => ReturnType<typeof setTimeout>;
+  clearTimeout?: (timer: ReturnType<typeof setTimeout>) => void;
+};
 
-async function fetchResponse(url: URL, accept: string, deadline: ResearchDeadline = {}) {
+type TimedResponse = {
+  response: Response;
+  dispose: () => void;
+  didAbort: () => boolean;
+};
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+async function fetchResponse(
+  url: URL,
+  accept: string,
+  deadline: ResearchDeadline = {},
+): Promise<TimedResponse> {
+  const now = deadline.now ?? Date.now;
+  if (deadline.deadlineAtMs != null && now() >= deadline.deadlineAtMs) {
+    throw new ResearchProviderError("WEBSITE_TIMEOUT");
+  }
   const remaining = deadline.deadlineAtMs == null
     ? TIMEOUT_MS
-    : Math.max(1, deadline.deadlineAtMs - (deadline.now ?? Date.now)());
+    : deadline.deadlineAtMs - now();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.min(TIMEOUT_MS, remaining));
+  let timedOut = false;
+  const schedule = deadline.setTimeout ?? setTimeout;
+  const cancel = deadline.clearTimeout ?? clearTimeout;
+  const timeout = schedule(() => {
+    timedOut = true;
+    controller.abort();
+  }, Math.min(TIMEOUT_MS, remaining));
+  const dispose = () => cancel(timeout);
   try {
-    return await fetch(url, {
+    const response = await fetch(url, {
       redirect: "manual",
       signal: controller.signal,
       headers: {
@@ -549,28 +579,39 @@ async function fetchResponse(url: URL, accept: string, deadline: ResearchDeadlin
         Accept: accept,
       },
     });
+    return {
+      response,
+      dispose,
+      didAbort: () => timedOut || controller.signal.aborted,
+    };
   } catch (error) {
+    dispose();
     throw new ResearchProviderError(
-      error instanceof DOMException && error.name === "AbortError"
+      timedOut || controller.signal.aborted || isAbortError(error)
         ? "WEBSITE_TIMEOUT"
         : "WEBSITE_REQUEST_FAILED",
     );
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
 async function readBoundedBody(
-  response: Response,
+  request: TimedResponse,
   oversizedReference: string,
 ) {
-  const declared = Number(response.headers.get("content-length") ?? "0");
+  const declared = Number(request.response.headers.get("content-length") ?? "0");
   if (declared > MAX_BYTES) throw new ResearchProviderError(oversizedReference);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > MAX_BYTES) {
-    throw new ResearchProviderError(oversizedReference);
+  try {
+    const bytes = new Uint8Array(await request.response.arrayBuffer());
+    if (bytes.byteLength > MAX_BYTES) {
+      throw new ResearchProviderError(oversizedReference);
+    }
+    return new TextDecoder().decode(bytes);
+  } catch (error) {
+    if (request.didAbort() || isAbortError(error)) {
+      throw new ResearchProviderError("WEBSITE_TIMEOUT");
+    }
+    throw error;
   }
-  return new TextDecoder().decode(bytes);
 }
 
 async function loadRobotsForOrigin(
@@ -584,26 +625,35 @@ async function loadRobotsForOrigin(
     const robotsUrl = await assertPublicDestination(
       new URL("/robots.txt", origin).href,
     );
-    const response = await fetchResponse(robotsUrl, "text/plain", deadline);
-    if (response.status === 404 || response.status === 410) {
-      robotsCache.set(origin, "");
-      return "";
+    const request = await fetchResponse(robotsUrl, "text/plain", deadline);
+    try {
+      const response = request.response;
+      if (response.status === 404 || response.status === 410) {
+        robotsCache.set(origin, "");
+        return "";
+      }
+      if (response.status !== 200) {
+        throw new ResearchProviderError("WEBSITE_ROBOTS_UNAVAILABLE");
+      }
+      const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+      if (contentType && !contentType.startsWith("text/")) {
+        throw new ResearchProviderError("WEBSITE_ROBOTS_UNAVAILABLE");
+      }
+      const text = await readBoundedBody(request, "WEBSITE_ROBOTS_UNAVAILABLE");
+      robotsCache.set(origin, text);
+      return text;
+    } finally {
+      request.dispose();
     }
-    if (response.status !== 200) {
-      throw new ResearchProviderError("WEBSITE_ROBOTS_UNAVAILABLE");
-    }
-    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (contentType && !contentType.startsWith("text/")) {
-      throw new ResearchProviderError("WEBSITE_ROBOTS_UNAVAILABLE");
-    }
-    const text = await readBoundedBody(response, "WEBSITE_ROBOTS_UNAVAILABLE");
-    robotsCache.set(origin, text);
-    return text;
   } catch (error) {
     if (
       error instanceof ResearchProviderError &&
-      ["WEBSITE_DESTINATION_PRIVATE", "WEBSITE_URL_INVALID", "WEBSITE_URL_UNSAFE"]
-        .includes(error.reference)
+      [
+        "WEBSITE_DESTINATION_PRIVATE",
+        "WEBSITE_URL_INVALID",
+        "WEBSITE_URL_UNSAFE",
+        "WEBSITE_TIMEOUT",
+      ].includes(error.reference)
     ) {
       throw error;
     }
@@ -630,35 +680,39 @@ async function safeFetch(
 ): Promise<{ url: URL; body: string }> {
   const url = await assertPublicDestination(input);
   await assertRobotsAllowed(url, robotsCache, deadline);
-  const response = await fetchResponse(
+  const request = await fetchResponse(
     url,
     "text/html,application/xhtml+xml",
     deadline,
   );
-  if (response.status >= 300 && response.status < 400) {
-    if (redirects >= MAX_REDIRECTS) {
-      throw new ResearchProviderError("WEBSITE_REDIRECT_LIMIT");
+  try {
+    const response = request.response;
+    if (response.status >= 300 && response.status < 400) {
+      if (redirects >= MAX_REDIRECTS) {
+        throw new ResearchProviderError("WEBSITE_REDIRECT_LIMIT");
+      }
+      const location = response.headers.get("location");
+      if (!location) throw new ResearchProviderError("WEBSITE_REDIRECT_INVALID");
+      const target = await assertPublicDestination(new URL(location, url).href);
+      await assertRobotsAllowed(target, robotsCache, deadline);
+      return safeFetch(target.href, robotsCache, redirects + 1, deadline);
     }
-    const location = response.headers.get("location");
-    if (!location) throw new ResearchProviderError("WEBSITE_REDIRECT_INVALID");
-    const target = await assertPublicDestination(new URL(location, url).href);
-    await assertRobotsAllowed(target, robotsCache, deadline);
-    return safeFetch(target.href, robotsCache, redirects + 1, deadline);
+    if (!response.ok) throw new ResearchProviderError("WEBSITE_REQUEST_FAILED");
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (
+      !contentType.includes("text/html") &&
+      !contentType.includes("application/xhtml+xml")
+    ) {
+      throw new ResearchProviderError("WEBSITE_CONTENT_TYPE_UNSUPPORTED");
+    }
+    return {
+      url,
+      body: await readBoundedBody(request, "WEBSITE_RESPONSE_TOO_LARGE"),
+    };
+  } finally {
+    request.dispose();
   }
-  if (!response.ok) throw new ResearchProviderError("WEBSITE_REQUEST_FAILED");
-  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-  if (
-    !contentType.includes("text/html") &&
-    !contentType.includes("application/xhtml+xml")
-  ) {
-    throw new ResearchProviderError("WEBSITE_CONTENT_TYPE_UNSUPPORTED");
-  }
-  return {
-    url,
-    body: await readBoundedBody(response, "WEBSITE_RESPONSE_TOO_LARGE"),
-  };
 }
-
 function candidateLinks(html: string, base: URL, allowedOrigin: string) {
   const priorities = ["contact", "about", "location", "service", "menu"];
   return attributes(html, "href").flatMap((href) => {

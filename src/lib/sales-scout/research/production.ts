@@ -213,8 +213,10 @@ export function productionResearchCostCeiling(input: {
   const enrichment = Math.min(PRODUCTION_RESEARCH_LIMITS.maximumEnrichmentCandidates,
     Math.max(1, input.maxEnrichmentCandidates));
   return {
-    maximumGeoapifyCalls: categories * Math.min(5, Math.ceil(input.resultLimit / 20)) +
-      (input.coordinatesConfigured ? 0 : 1),
+    maximumGeoapifyCalls: categories * (
+      Math.min(5, Math.ceil(input.resultLimit / 20)) +
+      (input.coordinatesConfigured ? 0 : 1)
+    ),
     maximumTavilySearches: enrichment * PRODUCTION_RESEARCH_LIMITS.tavilySearchesPerSeed,
     maximumOfficialWebsites: enrichment,
     maximumOfficialWebsitePages: enrichment * PRODUCTION_RESEARCH_LIMITS.maximumPagesPerWebsite,
