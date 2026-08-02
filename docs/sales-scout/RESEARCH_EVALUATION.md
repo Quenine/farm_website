@@ -72,3 +72,9 @@ No real Geoapify, Tavily, or public-website request has run. The first bounded l
 The bounded pilot produced six real Geoapify seeds and six unsuitable broad Tavily documents. Those figures demonstrate that structured seeds were useful and broad document search was not a safe prospect source; they do not measure nationwide coverage. Batch 6B removes broad Tavily documents from prospect generation. Tavily now runs at most two deterministic searches against each selected Geoapify seed and may only enrich that seed after exact-name/address/host association. Rejected documents contribute diagnostics only.
 
 The earlier readiness gate hid provider-listed phone values because they were plausible, not independently verified. Production now exposes them as manual-review-ready with an explicit review warning while preserving a stricter outreach-ready tier for official-site or owner-verified contacts. This is an evidence classification change, not a claim that plausible contacts are verified. A live production evaluation remains pending migration, variables, deployment, and the owner runbook.
+
+## Batch 6B production authorization boundary
+
+Production Tavily enrichment is disabled by default. A key alone cannot activate it: the server also requires `SALES_SCOUT_TAVILY_ENRICHMENT_ENABLED=true`. The owner must not enable that flag without independently confirming applicable contractual permission in writing. The initial rollout uses Geoapify structured seeds and bounded research of likely official websites supplied by Geoapify.
+
+Discovery-only Tavily documents may retain source-association diagnostics but cannot contribute phone or email contacts. Social results contribute only the associated profile. A likely-official Tavily homepage may supply plausible website evidence and becomes verified only after controlled official-site extraction. Provider-listed contact availability varies; Geoapify does not guarantee contact coverage.

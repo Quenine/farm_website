@@ -78,13 +78,13 @@ const safeFetchFunction = websiteSource.match(
   /async function safeFetch[\s\S]*?\n\}/,
 )?.[0] ?? "";
 assert.ok(
-  safeFetchFunction.indexOf("await assertRobotsAllowed(url, robotsCache)") >= 0 &&
-  safeFetchFunction.indexOf("await assertRobotsAllowed(url, robotsCache)") <
+  safeFetchFunction.indexOf("await assertRobotsAllowed(url, robotsCache, deadline)") >= 0 &&
+  safeFetchFunction.indexOf("await assertRobotsAllowed(url, robotsCache, deadline)") <
     safeFetchFunction.indexOf("await fetchResponse"),
 );
 assert.match(websiteSource, /const robotsCache: RobotsCache = new Map\(\)/);
-assert.match(websiteSource, /loadRobotsForOrigin\(url\.origin, robotsCache\)/);
-assert.match(websiteSource, /await assertRobotsAllowed\(target, robotsCache\)/);
+assert.match(websiteSource, /loadRobotsForOrigin\(url\.origin, robotsCache, deadline\)/);
+assert.match(websiteSource, /await assertRobotsAllowed\(target, robotsCache, deadline\)/);
 assert.match(websiteSource, /WEBSITE_ROBOTS_DISALLOWED/);
 assert.match(websiteSource, /WEBSITE_ROBOTS_UNAVAILABLE/);
 assert.match(websiteSource, /schemaTypes: string\[\]/);

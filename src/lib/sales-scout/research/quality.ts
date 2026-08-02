@@ -119,3 +119,26 @@ export function contactCoverageScore(candidate: ResearchCandidate) {
 export function evidenceFor(evidence: ResearchEvidence[], field: string, value: string) {
   return evidence.filter((item) => item.field === field && item.value === value);
 }
+export type CandidateContactFilter =
+  "has_phone" | "has_whatsapp" | "has_email" | "has_web_social";
+
+export function isCandidateContactFilter(value: string | undefined): value is CandidateContactFilter {
+  return ["has_phone", "has_whatsapp", "has_email", "has_web_social"].includes(value ?? "");
+}
+
+export function paginateContactEvidenceRows<T extends {
+  contact_evidence: Array<{ route: string }>;
+}>(
+  rows: T[],
+  filter: CandidateContactFilter,
+  page: number,
+  pageSize: number,
+) {
+  const allowed = filter === "has_web_social"
+    ? new Set(["website", "instagram", "facebook", "tiktok", "x", "youtube"])
+    : new Set([filter.replace("has_", "")]);
+  const filtered = rows.filter((row) =>
+    row.contact_evidence.some((contact) => allowed.has(contact.route)));
+  const from = (Math.max(1, page) - 1) * pageSize;
+  return { rows: filtered.slice(from, from + pageSize), count: filtered.length };
+}

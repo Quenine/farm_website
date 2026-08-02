@@ -282,3 +282,9 @@ Provider-neutral research lives under `src/lib/sales-scout/research/` and is int
 Migration `20260802000100_sales_scout_production_release.sql` extends existing campaign/run/candidate tables instead of adding a second CRM. JSONB arrays retain multi-route contact and evidence records while compatibility phone/website columns remain. Provider constraints enumerate only legacy DataForSEO and the new research method. Campaign, completion, capture-evidence, and outreach writes use actor-required, service-role-only RPCs. Existing RLS remains enabled with no client policy.
 
 Outreach reuses prospect channels, outreaches, activities, commercial stage, follow-up, and do-not-contact fields. Deterministic draft generation is pure; handoff URL creation is pure; every mutation is owner-authorized server code backed by transactional SQL. No provider key enters client code and no handoff invokes an external send API.
+
+### Batch 6B-H1 rollout hardening
+
+Tavily enrichment now requires both an explicit server-only authorization flag and a key, with the flag defaulting false. Geoapify result limits align at five pages by 20 results, state comparison uses the shared Nigerian-state normalizer, missing place identities are discarded, and category failures preserve successful seeds. Provider-neutral runs older than 15 minutes are failed before concurrency enforcement. Research uses a 45-second default and 50-second maximum total budget while retaining provider-specific request timeouts and already discovered seeds.
+
+Contact filtering is owner-only and bounded before pagination so counts match rows. Outreach treats replies, cancellation, and blocking as terminal; only a recorded no-response permits the next sequence. Captured channel evidence remains available to the client solely for a local plausible-contact review acknowledgement, without changing `verified_at`. SQL outcomes and suppression triggers clear follow-up assignments when no valid follow-up remains.

@@ -25,8 +25,18 @@ export function generateDeterministicOutreachDraft(input:{sequenceNumber:1|2|3;b
 }
 
 export function nextOutreachSequence(outreaches:readonly {sequence_number:number;status:string}[]){
-  const sent=new Set(outreaches.filter((item)=>["sent","replied","no_response"].includes(item.status)).map((item)=>item.sequence_number));
-  if(!sent.has(1))return 1 as const;if(!sent.has(2))return 2 as const;if(!sent.has(3))return 3 as const;return null;
+  if(outreaches.some((item)=>["replied","cancelled","blocked"].includes(item.status)))return null;
+  const bySequence=new Map(outreaches.map((item)=>[item.sequence_number,item]));
+  for(const sequence of [1,2,3] as const){
+    const current=bySequence.get(sequence);
+    if(current?.status==="draft")return sequence;
+    if(current?.status==="approved"||current?.status==="sent")return null;
+    if(!current){
+      if(sequence===1||bySequence.get(sequence-1)?.status==="no_response")return sequence;
+      return null;
+    }
+  }
+  return null;
 }
 export function nextFollowUpAt(sequenceNumber:number,sentAt:Date){if(sequenceNumber===1)return new Date(sentAt.getTime()+3*86_400_000);if(sequenceNumber===2)return new Date(sentAt.getTime()+4*86_400_000);return null;}
 

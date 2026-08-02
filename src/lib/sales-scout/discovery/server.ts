@@ -7,6 +7,7 @@ import { captureSalesScoutCandidate, getSalesScoutCampaign, previewSalesScoutCan
 import { normalizeLocationComparison } from "../normalization";
 import { isStructuredGeoapifyCategory, unsupportedStructuredCategories } from "../territory";
 import { runSeedFirstProductionResearch, productionResearchCostCeiling, type PublicContact } from "../research/production";
+import { isCandidateContactFilter, paginateContactEvidenceRows } from "../research/quality";
 import type { ResearchCategory } from "../research/types";
 import { dismissalTransition } from "./helpers";
 import type { DiscoveryCandidate, DiscoveryChannel } from "./types";
@@ -24,9 +25,17 @@ function dbFail(reference: string, error?: DatabaseError): never {
 }
 async function auth() { const actor=await requireAdmin(); requireSalesScoutDiscoveryEnabled(); return actor; }
 export function isGeoapifyConfigured(){return Boolean(process.env.GEOAPIFY_API_KEY?.trim());}
-export function isTavilyConfigured(){return Boolean(process.env.TAVILY_API_KEY?.trim());}
+export function isTavilyEnrichmentEnabled(){return process.env.SALES_SCOUT_TAVILY_ENRICHMENT_ENABLED==="true";}
+export function isTavilyConfigured(){
+  return isTavilyEnrichmentEnabled()&&Boolean(process.env.TAVILY_API_KEY?.trim());
+}
 export function hasCompleteDiscoveryConfiguration(c:SalesScoutCampaignDto){return Boolean(c.state&&c.city&&c.discoveryRadiusKm&&c.discoveryDefaultLimit&&c.maxEnrichmentCandidates);}
-export function providerConfigurationStatus(){return{geoapify:isGeoapifyConfigured(),tavily:isTavilyConfigured(),dataforseo:"disabled_legacy_adapter" as const};}
+export function providerConfigurationStatus(){return{
+  geoapify:isGeoapifyConfigured(),
+  tavily:isTavilyConfigured(),
+  tavilyAuthorizationEnabled:isTavilyEnrichmentEnabled(),
+  dataforseo:"disabled_legacy_adapter" as const,
+};}
 export { productionResearchCostCeiling };
 
 export type DiscoveryRunSummary={runId:string;providerTaskId:string;rawResultCount:number;stagedCandidateCount:number;exactDuplicateCount:number;providerCredits:{geoapify:number;tavily:number};mappingIssueCount:number;manualReviewReadyCount:number;outreachReadyCount:number};
@@ -55,12 +64,17 @@ export async function runSalesScoutDiscovery(input:{campaignId:string}):Promise<
   if(started.error)dbFail("RESEARCH_START",started.error); const runId=String((started.data as Record<string,unknown>).runId);
   try{
     const research=await runSeedFirstProductionResearch({territory:{country:"Nigeria",state:campaign.state!,city:campaign.city,latitude:campaign.discoveryLatitude??undefined,longitude:campaign.discoveryLongitude??undefined,radiusKm:campaign.discoveryRadiusKm!},categories,resultLimit:campaign.discoveryDefaultLimit!,maxEnrichmentCandidates:campaign.maxEnrichmentCandidates!,tavilyConfigured:isTavilyConfigured()});
-    const ids=research.candidates.map((item)=>item.candidate.sourceIdentities.geoapify_places).filter((value):value is string=>Boolean(value));
+    const researchCandidates=research.candidates.flatMap((item)=>{
+      const providerSourceId=item.candidate.sourceIdentities.geoapify_places?.trim();
+      return providerSourceId?[{item,providerSourceId}]:[];
+    });
+    if(!researchCandidates.length)throw new SalesScoutDiscoveryError("GEOAPIFY_INVALID_SEED_IDENTITY");
+    const ids=researchCandidates.map(({providerSourceId})=>providerSourceId);
     const exact=ids.length?await database.from("marketing_prospects").select("id,discovery_source_id").eq("discovery_source","geoapify_tavily_research").in("discovery_source_id",ids).limit(500):{data:[],error:null};
     if(exact.error)dbFail("RESEARCH_EXACT_LOOKUP",exact.error); const exactById=new Map((exact.data??[]).map((row)=>[String(row.discovery_source_id),String(row.id)]));
     let mappingIssueCount=0;
-    const candidates=research.candidates.map((item)=>{
-      const candidate=item.candidate; const providerSourceId=candidate.sourceIdentities.geoapify_places!; const contacts=contactGroups(item.contacts); mappingIssueCount+=candidate.researchIssues.length;
+    const candidates=researchCandidates.map(({item,providerSourceId})=>{
+      const candidate=item.candidate; const contacts=contactGroups(item.contacts); mappingIssueCount+=candidate.researchIssues.length;
       return{providerSourceId,businessName:candidate.businessName,providerCategory:candidate.providerCategories[0]??null,mappedCampaignCategory:candidate.requestedCategory,providerCategoryIds:candidate.providerCategories,additionalCategories:candidate.providerCategories.slice(1),mappingIssues:candidate.researchIssues,providerSourceUrl:sourceUrl(item),description:candidate.publicDescription,fullAddress:candidate.address,city:candidate.city,state:candidate.state,countryCode:"NG",latitude:candidate.latitude,longitude:candidate.longitude,phone:contacts.phoneRoutes[0]?.displayValue??null,website:candidate.website,observedAt:candidate.lastObservedAt,normalizedBusinessName:candidate.normalizedBusinessName,normalizedCity:candidate.city?normalizeLocationComparison(candidate.city):null,exactMatchingProspectId:exactById.get(providerSourceId)??null,softMatchWarningCount:0,territoryMatchEvidence:item.territoryMatch,distanceKm:item.territoryMatch.distanceKm,contacts:item.contacts,...contacts,researchEvidence:candidate.evidence,confidenceSummary:{highest:item.highestContactConfidence,verified:item.contacts.filter((contact)=>contact.confidence==="verified").length,plausible:item.contacts.filter((contact)=>contact.confidence==="plausible").length},enrichmentStatus:item.enrichmentStatus,researchIssues:candidate.researchIssues,manualReviewReady:item.manualReviewReady,outreachReady:item.outreachReady};
     });
     const providerTaskId=`research-${runId}`;
@@ -72,8 +86,40 @@ export async function runSalesScoutDiscovery(input:{campaignId:string}):Promise<
 
 export async function listSalesScoutDiscoveryRuns({campaignId,page=1,pageSize=20}:{campaignId:string;page?:number;pageSize?:number}){await auth();pageSize=Math.min(50,Math.max(1,pageSize));const from=(Math.max(1,page)-1)*pageSize;const q=await createAdminSupabaseClient().from("marketing_sales_scout_discovery_runs").select("id,provider,research_method,status,requested_categories,requested_result_limit,requested_enrichment_limit,provider_task_id,raw_result_count,staged_candidate_count,exact_duplicate_count,structured_seed_count,discarded_source_document_count,enrichment_attempted_count,enrichment_completed_count,official_websites_researched,manual_review_ready_count,outreach_ready_count,provider_credits,warning_references,error_reference,started_at,completed_at",{count:"exact"}).eq("scout_campaign_id",campaignId).order("started_at",{ascending:false}).range(from,from+pageSize-1);if(q.error)dbFail("RESEARCH_RUN_LIST",q.error);return{rows:(q.data??[]) as DiscoveryRunRow[],count:q.count??0};}
 
-export async function listSalesScoutDiscoveryCandidates({campaignId,status,search,filter,page=1,pageSize=25}:{campaignId:string;status?:string;search?:string;filter?:string;mappingIssueOnly?:boolean;page?:number;pageSize?:number}){await auth();pageSize=Math.min(50,Math.max(1,pageSize));const from=(Math.max(1,page)-1)*pageSize;let q=createAdminSupabaseClient().from("marketing_sales_scout_discovery_candidates").select("id,scout_campaign_id,provider,provider_source_id,business_name,mapped_campaign_category,city,state,country_code,status,exact_matching_prospect_id,soft_match_warning_count,mapping_issues,public_phone,public_website,full_address,contact_evidence,research_issues,manual_review_ready,outreach_ready,enrichment_status,last_seen_at,seen_count",{count:"exact"}).eq("scout_campaign_id",campaignId).order("last_seen_at",{ascending:false});if(status)q=q.eq("status",status);if(search)q=q.ilike("business_name",`%${search.replaceAll("%","")}%`);if(filter==="manual_review_ready")q=q.eq("manual_review_ready",true);if(filter==="outreach_ready")q=q.eq("outreach_ready",true);if(filter==="needs_research")q=q.eq("manual_review_ready",false);if(filter==="captured"||filter==="dismissed")q=q.eq("status",filter);const out=await q.range(from,from+pageSize-1);if(out.error)dbFail("RESEARCH_CANDIDATE_LIST",out.error);let rows=(out.data??[]) as DiscoveryCandidateListRow[];if(filter==="has_phone")rows=rows.filter((row)=>row.contact_evidence.some((contact)=>contact.route==="phone"));if(filter==="has_whatsapp")rows=rows.filter((row)=>row.contact_evidence.some((contact)=>contact.route==="whatsapp"));if(filter==="has_email")rows=rows.filter((row)=>row.contact_evidence.some((contact)=>contact.route==="email"));if(filter==="has_web_social")rows=rows.filter((row)=>row.contact_evidence.some((contact)=>["website","instagram","facebook","tiktok","x","youtube"].includes(contact.route)));return{rows,count:out.count??0};}
-
+export async function listSalesScoutDiscoveryCandidates({
+  campaignId,status,search,filter,page=1,pageSize=25,
+}:{
+  campaignId:string;status?:string;search?:string;filter?:string;mappingIssueOnly?:boolean;
+  page?:number;pageSize?:number;
+}){
+  await auth();
+  pageSize=Math.min(50,Math.max(1,pageSize));
+  const from=(Math.max(1,page)-1)*pageSize;
+  const contactFilter=isCandidateContactFilter(filter);
+  let q=createAdminSupabaseClient().from("marketing_sales_scout_discovery_candidates")
+    .select("id,scout_campaign_id,provider,provider_source_id,business_name,mapped_campaign_category,city,state,country_code,status,exact_matching_prospect_id,soft_match_warning_count,mapping_issues,public_phone,public_website,full_address,contact_evidence,research_issues,manual_review_ready,outreach_ready,enrichment_status,last_seen_at,seen_count",{count:"exact"})
+    .eq("scout_campaign_id",campaignId).order("last_seen_at",{ascending:false});
+  if(status)q=q.eq("status",status);
+  if(search)q=q.ilike("business_name","%"+search.replaceAll("%","")+"%");
+  if(filter==="manual_review_ready")q=q.eq("manual_review_ready",true);
+  if(filter==="outreach_ready")q=q.eq("outreach_ready",true);
+  if(filter==="needs_research")q=q.eq("manual_review_ready",false);
+  if(filter==="captured"||filter==="dismissed")q=q.eq("status",filter);
+  if(contactFilter){
+    const out=await q.range(0,1000);
+    if(out.error)dbFail("RESEARCH_CANDIDATE_LIST",out.error);
+    if((out.count??0)>1000)throw new SalesScoutDiscoveryError(
+      "DISCOVERY_FILTER_RESULT_LIMIT",
+      "Narrow the owner-only filters before paging contact evidence.",
+    );
+    return paginateContactEvidenceRows(
+      (out.data??[]) as DiscoveryCandidateListRow[],filter,page,pageSize,
+    );
+  }
+  const out=await q.range(from,from+pageSize-1);
+  if(out.error)dbFail("RESEARCH_CANDIDATE_LIST",out.error);
+  return{rows:(out.data??[]) as DiscoveryCandidateListRow[],count:out.count??0};
+}
 const detailSelect="id,scout_campaign_id,provider,provider_source_id,geoapify_place_id,provider_source_url,business_name,provider_category,mapped_campaign_category,provider_category_ids,additional_categories,publicDescription:public_description,full_address,city,state,country_code,latitude,longitude,public_phone,public_website,observed_at,status,exact_matching_prospect_id,captured_prospect_id,soft_match_warning_count,mapping_issues,dismissal_reason,first_seen_at,last_seen_at,seen_count,territory_match_evidence,distance_km,phone_routes,email_routes,whatsapp_routes,social_profiles,contact_evidence,research_evidence,confidence_summary,enrichment_status,research_issues,manual_review_ready,outreach_ready";
 export async function getSalesScoutDiscoveryCandidate(id:string){await auth();const db=createAdminSupabaseClient();const row=await db.from("marketing_sales_scout_discovery_candidates").select(detailSelect).eq("id",id).maybeSingle();if(row.error)dbFail("RESEARCH_CANDIDATE_DETAIL",row.error);if(!row.data)throw new SalesScoutDiscoveryError("DISCOVERY_CANDIDATE_NOT_FOUND");const candidate=row.data as unknown as DiscoveryCandidateRow;const history=await db.from("marketing_sales_scout_discovery_run_candidates").select("discovery_run_id,candidate_id,is_exact_duplicate,exact_matching_prospect_id,soft_match_warning_count,created_at,marketing_sales_scout_discovery_runs(status,started_at,completed_at,provider_task_id)").eq("candidate_id",id).order("created_at",{ascending:false}).limit(100);if(history.error)dbFail("RESEARCH_HISTORY",history.error);const prospectIds=[candidate.exact_matching_prospect_id,candidate.captured_prospect_id].filter((value):value is string=>Boolean(value));const prospects=prospectIds.length?await db.from("marketing_prospects").select("id,business_name,city").in("id",prospectIds).limit(2):{data:[],error:null};if(prospects.error)dbFail("RESEARCH_LINKED_PROSPECTS",prospects.error);const summaries=(prospects.data??[]).map((prospect)=>({id:String(prospect.id),businessName:String(prospect.business_name),city:prospect.city?String(prospect.city):null}));return{candidate,history:(history.data??[]) as DiscoveryMembershipRow[],exactProspect:summaries.find((prospect)=>prospect.id===candidate.exact_matching_prospect_id)??null,capturedProspect:summaries.find((prospect)=>prospect.id===candidate.captured_prospect_id)??null,readiness:await stagedCaptureReadiness(candidate as unknown as Record<string,unknown>)};}
 

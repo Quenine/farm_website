@@ -10,9 +10,8 @@ begin
     'marketing_sales_scout_discovery_candidates','marketing_sales_scout_discovery_run_candidates'
   ]) name where to_regclass('public.'||name) is null;
   if v_missing is not null then raise exception 'missing prerequisite tables: %',v_missing; end if;
-  if to_regprocedure('public.capture_sales_scout_candidate(jsonb,text,uuid,uuid)') is null or
-     to_regprocedure('public.confirm_sales_scout_outreach_sent(uuid,text,text,timestamptz,uuid,text)') is null then
-    raise exception 'Sales Scout prerequisite RPCs are missing';
+  if to_regprocedure('public.capture_sales_scout_candidate(jsonb,text,uuid,uuid)') is null then
+    raise exception 'Sales Scout capture prerequisite RPC is missing';
   end if;
   if exists(select 1 from public.marketing_prospect_outreaches group by prospect_id,sequence_number having count(*)>1) then raise exception 'duplicate prospect outreach sequence must be reconciled before migration'; end if;
   if exists(select 1 from public.marketing_sales_scout_discovery_runs where status='running') then

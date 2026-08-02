@@ -500,6 +500,16 @@ function hasOfficialWebsiteProviderField(candidate: ResearchCandidate) {
   );
 }
 
+function hasTavilyLikelyOfficialWebsiteEvidence(candidate: ResearchCandidate) {
+  return candidate.website != null && candidate.evidence.some((item) =>
+    item.source === "tavily_search" &&
+    item.field === "website" &&
+    item.verificationStatus === "plausible" &&
+    canonicalizeWebsiteHostname(item.value) ===
+      canonicalizeWebsiteHostname(candidate.website ?? "")
+  );
+}
+
 export function buildWebsiteResearchPlan(
   candidates: ResearchCandidate[],
   maxWebsites: number,
@@ -507,7 +517,7 @@ export function buildWebsiteResearchPlan(
   const plan = new Map<string, WebsiteResearchPlanItem>();
   candidates.forEach((candidate, index) => {
     const eligible = hasOfficialWebsiteProviderField(candidate) ||
-      candidate.researchIssues.includes("TAVILY_LIKELY_OFFICIAL_WEBSITE");
+      hasTavilyLikelyOfficialWebsiteEvidence(candidate);
     if (!eligible || !candidate.website || !isPlausibleOfficialWebsite(candidate.website)) return;
     const hostname = canonicalizeWebsiteHostname(candidate.website);
     if (!hostname) return;
@@ -522,9 +532,14 @@ export function buildWebsiteResearchPlan(
 
 type RobotsCache = Map<string, string>;
 
-async function fetchResponse(url: URL, accept: string) {
+type ResearchDeadline = { deadlineAtMs?: number; now?: () => number };
+
+async function fetchResponse(url: URL, accept: string, deadline: ResearchDeadline = {}) {
+  const remaining = deadline.deadlineAtMs == null
+    ? TIMEOUT_MS
+    : Math.max(1, deadline.deadlineAtMs - (deadline.now ?? Date.now)());
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), Math.min(TIMEOUT_MS, remaining));
   try {
     return await fetch(url, {
       redirect: "manual",
@@ -558,14 +573,18 @@ async function readBoundedBody(
   return new TextDecoder().decode(bytes);
 }
 
-async function loadRobotsForOrigin(origin: string, robotsCache: RobotsCache) {
+async function loadRobotsForOrigin(
+  origin: string,
+  robotsCache: RobotsCache,
+  deadline: ResearchDeadline = {},
+) {
   const cached = robotsCache.get(origin);
   if (cached !== undefined) return cached;
   try {
     const robotsUrl = await assertPublicDestination(
       new URL("/robots.txt", origin).href,
     );
-    const response = await fetchResponse(robotsUrl, "text/plain");
+    const response = await fetchResponse(robotsUrl, "text/plain", deadline);
     if (response.status === 404 || response.status === 410) {
       robotsCache.set(origin, "");
       return "";
@@ -592,8 +611,12 @@ async function loadRobotsForOrigin(origin: string, robotsCache: RobotsCache) {
   }
 }
 
-async function assertRobotsAllowed(url: URL, robotsCache: RobotsCache) {
-  const robotsText = await loadRobotsForOrigin(url.origin, robotsCache);
+async function assertRobotsAllowed(
+  url: URL,
+  robotsCache: RobotsCache,
+  deadline: ResearchDeadline = {},
+) {
+  const robotsText = await loadRobotsForOrigin(url.origin, robotsCache, deadline);
   if (!robotsAllows(robotsText, url.pathname)) {
     throw new ResearchProviderError("WEBSITE_ROBOTS_DISALLOWED");
   }
@@ -603,12 +626,14 @@ async function safeFetch(
   input: string,
   robotsCache: RobotsCache,
   redirects = 0,
+  deadline: ResearchDeadline = {},
 ): Promise<{ url: URL; body: string }> {
   const url = await assertPublicDestination(input);
-  await assertRobotsAllowed(url, robotsCache);
+  await assertRobotsAllowed(url, robotsCache, deadline);
   const response = await fetchResponse(
     url,
     "text/html,application/xhtml+xml",
+    deadline,
   );
   if (response.status >= 300 && response.status < 400) {
     if (redirects >= MAX_REDIRECTS) {
@@ -617,8 +642,8 @@ async function safeFetch(
     const location = response.headers.get("location");
     if (!location) throw new ResearchProviderError("WEBSITE_REDIRECT_INVALID");
     const target = await assertPublicDestination(new URL(location, url).href);
-    await assertRobotsAllowed(target, robotsCache);
-    return safeFetch(target.href, robotsCache, redirects + 1);
+    await assertRobotsAllowed(target, robotsCache, deadline);
+    return safeFetch(target.href, robotsCache, redirects + 1, deadline);
   }
   if (!response.ok) throw new ResearchProviderError("WEBSITE_REQUEST_FAILED");
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
@@ -652,7 +677,7 @@ function candidateLinks(html: string, base: URL, allowedOrigin: string) {
   });
 }
 
-export async function researchOfficialWebsite(input: string) {
+export async function researchOfficialWebsite(input: string, deadline: ResearchDeadline = {}) {
   if (typeof window !== "undefined") {
     throw new ResearchProviderError("WEBSITE_RESEARCH_SERVER_ONLY");
   }
@@ -660,7 +685,7 @@ export async function researchOfficialWebsite(input: string) {
     throw new ResearchProviderError("WEBSITE_NOT_PLAUSIBLY_OFFICIAL");
   }
   const robotsCache: RobotsCache = new Map();
-  const first = await safeFetch(input, robotsCache);
+  const first = await safeFetch(input, robotsCache, 0, deadline);
   const finalOrigin = first.url.origin;
   const queue: Array<{ url: URL; body: string | null }> = [{
     url: first.url,
@@ -668,12 +693,13 @@ export async function researchOfficialWebsite(input: string) {
   }];
   const visited = new Set<string>();
   const pages: Array<{ url: string; facts: ExtractedWebsiteFacts }> = [];
-  while (queue.length && pages.length < MAX_PAGES) {
+  while (queue.length && pages.length < MAX_PAGES &&
+    (deadline.deadlineAtMs == null || (deadline.now ?? Date.now)() < deadline.deadlineAtMs)) {
     const next = queue.shift();
     if (!next || visited.has(next.url.href)) continue;
     visited.add(next.url.href);
     const page = next.body == null
-      ? await safeFetch(next.url.href, robotsCache)
+      ? await safeFetch(next.url.href, robotsCache, 0, deadline)
       : { url: next.url, body: next.body };
     const observedAt = new Date().toISOString();
     pages.push({
@@ -685,7 +711,10 @@ export async function researchOfficialWebsite(input: string) {
         queue.push({ url: link, body: null });
       }
     }
-    if (queue.length) await new Promise((resolve) => setTimeout(resolve, PACE_MS));
+    if (queue.length && (deadline.deadlineAtMs == null ||
+      (deadline.now ?? Date.now)() + PACE_MS < deadline.deadlineAtMs)) {
+      await new Promise((resolve) => setTimeout(resolve, PACE_MS));
+    }
   }
   return pages;
 }

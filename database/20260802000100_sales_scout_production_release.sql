@@ -212,6 +212,17 @@ begin
      exists(select 1 from unnest(p_categories) category where category not in ('Restaurant','Hotel','Supermarket')) then
     raise exception using errcode='22023',message='research start payload is invalid';
   end if;
+  update public.marketing_sales_scout_discovery_runs
+  set status='failed',
+      error_reference='RESEARCH_RUN_STALE',
+      error_safe_message='Research run exceeded the 15-minute execution window.',
+      completed_at=now(),
+      updated_at=now()
+  where scout_campaign_id=p_campaign_id
+    and status='running'
+    and provider='geoapify_tavily_research'
+    and research_method='seed_first_candidate_specific'
+    and started_at<now()-interval '15 minutes';
   if exists(select 1 from public.marketing_sales_scout_discovery_runs where scout_campaign_id=p_campaign_id and status='running') then
     raise exception using errcode='22023',message='campaign already has a running research run';
   end if;
@@ -273,7 +284,7 @@ begin
     raise exception using errcode='22023',message='research completion payload is invalid';
   end if;
   for v_item in select value from jsonb_array_elements(p_payload->'candidates') loop
-    if jsonb_typeof(v_item)<>'object' or nullif(trim(v_item->>'providerSourceId'),'') is null or
+    if jsonb_typeof(v_item)<>'object' or jsonb_typeof(v_item->'providerSourceId')<>'string' or nullif(trim(v_item->>'providerSourceId'),'') is null or
        nullif(trim(v_item->>'businessName'),'') is null or length(trim(v_item->>'businessName'))>200 or length(trim(v_item->>'providerSourceId'))>300 or
        nullif(trim(v_item->>'mappedCampaignCategory'),'') is null or jsonb_typeof(v_item->'territoryMatchEvidence')<>'object' or
        coalesce((v_item->'territoryMatchEvidence'->>'matched')::boolean,false) is not true or
@@ -417,7 +428,8 @@ begin
   if not found then raise exception using errcode='P0002',message='prospect not found'; end if;
   if v_prospect.do_not_contact_at is not null or v_prospect.scout_status in ('do_not_contact','disqualified','converted','closed') then raise exception using errcode='22023',message='prospect is not eligible for outreach'; end if;
   if not exists(select 1 from public.marketing_prospect_channels where id=p_channel_id and prospect_id=p_prospect_id and is_active) then raise exception using errcode='22023',message='active prospect channel is required'; end if;
-  if p_sequence_number>1 and not exists(select 1 from public.marketing_prospect_outreaches where prospect_id=p_prospect_id and sequence_number=p_sequence_number-1 and status in ('sent','no_response')) then raise exception using errcode='22023',message='previous outreach sequence has not been completed'; end if;
+  if exists(select 1 from public.marketing_prospect_outreaches where prospect_id=p_prospect_id and status in ('replied','cancelled','blocked')) then raise exception using errcode='22023',message='outreach workflow is terminal'; end if;
+  if p_sequence_number>1 and not exists(select 1 from public.marketing_prospect_outreaches where prospect_id=p_prospect_id and sequence_number=p_sequence_number-1 and status='no_response') then raise exception using errcode='22023',message='previous outreach sequence has not been completed'; end if;
   v_kind:=case p_sequence_number when 1 then 'initial' when 2 then 'follow_up_1' else 'follow_up_2' end;
   insert into public.marketing_prospect_outreaches(prospect_id,channel_id,sequence_number,kind,status,draft_text,draft_source,personalization_facts)
   values(p_prospect_id,p_channel_id,p_sequence_number,v_kind,'draft',trim(p_draft_text),'assistant',jsonb_build_object('generator','deterministic_batch_6b','generated_by',p_actor_id))
@@ -473,13 +485,15 @@ begin
   if not found then raise exception using errcode='P0002',message='outreach not found'; end if;
   if v_outreach.status not in ('sent','no_response') then raise exception using errcode='22023',message='only sent outreach can receive an outcome'; end if;
   if p_outcome='no_response' then
-    update public.marketing_prospect_outreaches set status='no_response',reply_summary=trim(p_summary),recorded_by=p_actor_id,updated_at=now() where id=p_outreach_id;
+    update public.marketing_prospect_outreaches set status='no_response',reply_summary=trim(p_summary),due_at=null,recorded_by=p_actor_id,updated_at=now() where id=p_outreach_id;
+    update public.marketing_prospects set assigned_follow_up_at=null,updated_at=now() where id=v_outreach.prospect_id;
     insert into public.marketing_prospect_activities(prospect_id,activity_type,summary,occurred_at,created_by,metadata) values(v_outreach.prospect_id,'sales_scout','No response recorded.',v_now,p_actor_id,jsonb_build_object('event','outreach_no_response','outreach_id',p_outreach_id,'external_message_sent',false)) returning id into v_activity;
     return jsonb_build_object('outreachId',p_outreach_id,'prospectId',v_outreach.prospect_id,'outcome',p_outcome,'activityId',v_activity);
   end if;
   if p_outcome='cancelled' then
     update public.marketing_prospect_outreaches set status='cancelled',cancel_reason=trim(p_summary),recorded_by=p_actor_id,updated_at=now() where id=p_outreach_id;
     update public.marketing_prospect_outreaches set status='cancelled',cancel_reason='Outreach workflow cancelled by owner.',updated_at=now() where prospect_id=v_outreach.prospect_id and sequence_number>v_outreach.sequence_number and status in ('draft','approved','no_response');
+    update public.marketing_prospects set assigned_follow_up_at=null,updated_at=now() where id=v_outreach.prospect_id;
     insert into public.marketing_prospect_activities(prospect_id,activity_type,summary,occurred_at,created_by,metadata) values(v_outreach.prospect_id,'sales_scout','Outreach cancelled.',v_now,p_actor_id,jsonb_build_object('event','outreach_cancelled','outreach_id',p_outreach_id,'external_message_sent',false)) returning id into v_activity;
     return jsonb_build_object('outreachId',p_outreach_id,'prospectId',v_outreach.prospect_id,'outcome',p_outcome,'activityId',v_activity);
   end if;
@@ -511,6 +525,16 @@ returns trigger language plpgsql security definer set search_path=public,pg_temp
 begin
   if old.is_active and not new.is_active then
     update public.marketing_prospect_outreaches set status='cancelled',cancel_reason='Public contact channel became inactive.',updated_at=now() where channel_id=new.id and status in ('draft','approved','no_response');
+    update public.marketing_prospects prospect
+    set assigned_follow_up_at=null,updated_at=now()
+    where prospect.id=new.prospect_id
+      and exists(
+        select 1 from public.marketing_prospect_outreaches outreach
+        where outreach.prospect_id=prospect.id
+          and outreach.channel_id=new.id
+          and outreach.status='sent'
+          and outreach.due_at=prospect.assigned_follow_up_at
+      );
   end if;
   return new;
 end $$;

@@ -16,6 +16,7 @@ import {
 } from "./quality.ts";
 import { researchWithGeoapify } from "./geoapify.ts";
 import { researchCandidateWithTavily } from "./tavily.ts";
+import { ResearchProviderError } from "./types.ts";
 import type {
   ProviderResult,
   ResearchCandidate,
@@ -67,6 +68,7 @@ export type ProductionResearchSummary = {
   candidates: ProductionResearchCandidate[];
   resolvedTerritory: ResearchTerritory;
   structuredSeedCount: number;
+  invalidSeedCount: number;
   discardedSourceDocumentCount: number;
   enrichmentAttemptedCount: number;
   enrichmentCompletedCount: number;
@@ -77,20 +79,32 @@ export type ProductionResearchSummary = {
   warnings: string[];
 };
 
-type PipelineDependencies = {
-  geoapify: (input: { territory: ResearchTerritory; category: ResearchCategory; limit: number }) => Promise<ProviderResult>;
-  tavily: (candidate: ResearchCandidate) => Promise<{
+type ResearchDeadline = { deadlineAtMs: number; now: () => number };
+
+export type PipelineDependencies = {
+  geoapify: (input: {
+    territory: ResearchTerritory;
+    category: ResearchCategory;
+    limit: number;
+    deadlineAtMs: number;
+    now: () => number;
+  }) => Promise<ProviderResult>;
+  tavily: (candidate: ResearchCandidate, deadline: ResearchDeadline) => Promise<{
     candidate: ResearchCandidate;
     discardedSourceDocumentCount: number;
     estimatedCredits: number;
   }>;
-  website: typeof researchOfficialWebsite;
+  website: (url: string, deadline: ResearchDeadline) => ReturnType<typeof researchOfficialWebsite>;
+  now: () => number;
+  minimumRequestBudgetMs: number;
 };
 
 const defaultDependencies: PipelineDependencies = {
   geoapify: researchWithGeoapify,
   tavily: researchCandidateWithTavily,
   website: researchOfficialWebsite,
+  now: Date.now,
+  minimumRequestBudgetMs: 1_000,
 };
 
 function contactEvidence(candidate: ResearchCandidate, field: string, value: string) {
@@ -199,7 +213,7 @@ export function productionResearchCostCeiling(input: {
   const enrichment = Math.min(PRODUCTION_RESEARCH_LIMITS.maximumEnrichmentCandidates,
     Math.max(1, input.maxEnrichmentCandidates));
   return {
-    maximumGeoapifyCalls: categories * Math.min(4, Math.ceil(input.resultLimit / 20)) +
+    maximumGeoapifyCalls: categories * Math.min(5, Math.ceil(input.resultLimit / 20)) +
       (input.coordinatesConfigured ? 0 : 1),
     maximumTavilySearches: enrichment * PRODUCTION_RESEARCH_LIMITS.tavilySearchesPerSeed,
     maximumOfficialWebsites: enrichment,
@@ -209,102 +223,186 @@ export function productionResearchCostCeiling(input: {
   };
 }
 
+function structuredSeedIdentity(candidate: ResearchCandidate) {
+  return candidate.sourceIdentities.geoapify_places?.trim() || null;
+}
+
 export async function runSeedFirstProductionResearch(input: {
   territory: ResearchTerritory;
   categories: ResearchCategory[];
   resultLimit: number;
   maxEnrichmentCandidates: number;
   tavilyConfigured: boolean;
-}, dependencies: PipelineDependencies = defaultDependencies): Promise<ProductionResearchSummary> {
+  timeBudgetMs?: number;
+  deadlineAtMs?: number;
+}, dependencyOverrides: Partial<PipelineDependencies> = {}): Promise<ProductionResearchSummary> {
   if (input.resultLimit < 1 || input.resultLimit > PRODUCTION_RESEARCH_LIMITS.maximumResultsPerCategory ||
       input.maxEnrichmentCandidates < 1 ||
       input.maxEnrichmentCandidates > PRODUCTION_RESEARCH_LIMITS.maximumEnrichmentCandidates) {
     throw new Error("PRODUCTION_RESEARCH_BOUNDS_INVALID");
   }
+
+  const dependencies = { ...defaultDependencies, ...dependencyOverrides };
+  const timeBudgetMs = Math.min(50_000, Math.max(1, input.timeBudgetMs ?? 45_000));
+  const deadlineAtMs = Math.min(input.deadlineAtMs ?? Number.POSITIVE_INFINITY,
+    dependencies.now() + timeBudgetMs);
+  const deadline = { deadlineAtMs, now: dependencies.now };
+  const hasRequestBudget = () =>
+    deadlineAtMs - dependencies.now() >= dependencies.minimumRequestBudgetMs;
   const warnings: string[] = [];
+  const markBudgetReached = () => {
+    if (!warnings.includes("RESEARCH_TIME_BUDGET_REACHED")) {
+      warnings.push("RESEARCH_TIME_BUDGET_REACHED");
+    }
+  };
+
   const rawSeeds: ResearchCandidate[] = [];
+  let invalidSeedCount = 0;
   let geoapifyCredits = 0;
   let resolvedTerritory = { ...input.territory };
   for (const category of input.categories) {
-    const result = await dependencies.geoapify({ territory: resolvedTerritory, category, limit: input.resultLimit });
+    if (!hasRequestBudget()) {
+      markBudgetReached();
+      break;
+    }
+    let result: ProviderResult;
+    try {
+      result = await dependencies.geoapify({
+        territory: resolvedTerritory,
+        category,
+        limit: input.resultLimit,
+        ...deadline,
+      });
+    } catch (error) {
+      if (!(error instanceof ResearchProviderError)) throw error;
+      if (error.reference === "GEOAPIFY_TERRITORY_NOT_RESOLVED") throw error;
+      warnings.push(error.reference);
+      continue;
+    }
     if (result.failureReference) {
       warnings.push(result.failureReference);
       continue;
     }
     geoapifyCredits += result.estimatedCredits;
-    if (result.resolvedTerritory) resolvedTerritory = { ...resolvedTerritory, ...result.resolvedTerritory };
-    rawSeeds.push(...result.candidates);
+    if (result.resolvedTerritory) {
+      resolvedTerritory = { ...resolvedTerritory, ...result.resolvedTerritory };
+    }
+    const validSeeds = result.candidates.filter((candidate) => {
+      const valid = structuredSeedIdentity(candidate) !== null;
+      if (!valid) invalidSeedCount += 1;
+      return valid;
+    });
+    rawSeeds.push(...validSeeds);
   }
+  if (invalidSeedCount > 0) warnings.push("GEOAPIFY_INVALID_SEED_IDENTITY");
+  if (!rawSeeds.length) {
+    throw new ResearchProviderError("GEOAPIFY_NO_STRUCTURED_SEEDS");
+  }
+
   const matched = rawSeeds.map((candidate) => withTerritoryEvidence(candidate, resolvedTerritory))
     .filter((item) => item.territoryMatch.matched);
   const preliminary = deduplicateCandidates(matched.map((item) => item.candidate)).candidates;
-  const territoryByIdentity = new Map(matched.map((item) => [
-    item.candidate.sourceIdentities.geoapify_places ?? item.candidate.normalizedBusinessName,
-    item.territoryMatch,
-  ]));
+  if (!preliminary.length) {
+    throw new ResearchProviderError("GEOAPIFY_NO_STRUCTURED_SEEDS");
+  }
+  const territoryByIdentity = new Map(matched.flatMap((item) => {
+    const identity = structuredSeedIdentity(item.candidate);
+    return identity ? [[identity, item.territoryMatch] as const] : [];
+  }));
   const selected = new Set(preliminary.slice(0, input.maxEnrichmentCandidates)
-    .map((candidate) => candidate.sourceIdentities.geoapify_places));
+    .flatMap((candidate) => {
+      const identity = structuredSeedIdentity(candidate);
+      return identity ? [identity] : [];
+    }));
+
   let discardedSourceDocumentCount = 0;
+  let enrichmentAttemptedCount = 0;
   let enrichmentCompletedCount = 0;
   let tavilyCredits = 0;
-  const enrichmentState = new Map<string | undefined, ProductionResearchCandidate["enrichmentStatus"]>();
+  const enrichmentState = new Map<string, ProductionResearchCandidate["enrichmentStatus"]>();
   const enriched: ResearchCandidate[] = [];
   for (const seed of preliminary) {
-    const identity = seed.sourceIdentities.geoapify_places;
+    const identity = structuredSeedIdentity(seed);
+    if (!identity) continue;
     if (!selected.has(identity) || !input.tavilyConfigured) {
       enrichmentState.set(identity, "not_selected");
       enriched.push(seed);
       continue;
     }
+    if (!hasRequestBudget()) {
+      markBudgetReached();
+      enrichmentState.set(identity, "not_selected");
+      enriched.push(seed);
+      continue;
+    }
+    enrichmentAttemptedCount += 1;
     try {
-      const result = await dependencies.tavily(seed);
+      const result = await dependencies.tavily(seed, deadline);
       discardedSourceDocumentCount += result.discardedSourceDocumentCount;
       tavilyCredits += result.estimatedCredits;
       enrichmentCompletedCount += 1;
       enrichmentState.set(identity, "completed");
       enriched.push(result.candidate);
     } catch (error) {
-      const reference = error instanceof Error ? error.message : "TAVILY_ENRICHMENT_FAILED";
+      const reference = error instanceof ResearchProviderError
+        ? error.reference
+        : error instanceof Error ? error.message : "TAVILY_ENRICHMENT_FAILED";
       warnings.push(reference);
       enrichmentState.set(identity, "failed");
       enriched.push({ ...seed, researchIssues: [...seed.researchIssues, reference] });
     }
   }
+
   const websitePlan = buildWebsiteResearchPlan(enriched, input.maxEnrichmentCandidates);
   let websitesResearched = 0;
   for (const item of websitePlan) {
+    if (!hasRequestBudget()) {
+      markBudgetReached();
+      break;
+    }
     try {
-      const pages = await dependencies.website(item.url);
+      const pages = await dependencies.website(item.url, deadline);
       websitesResearched += 1;
       for (const index of item.candidateIndexes) {
         for (const page of pages) {
           enriched[index] = mergeWebsiteFactsIntoCandidate(enriched[index], page.facts, page.url);
         }
       }
+      if (!hasRequestBudget()) markBudgetReached();
     } catch (error) {
-      const reference = error instanceof Error ? error.message : "WEBSITE_RESEARCH_FAILED";
+      const reference = error instanceof ResearchProviderError
+        ? error.reference
+        : error instanceof Error ? error.message : "WEBSITE_RESEARCH_FAILED";
       warnings.push(reference);
       for (const index of item.candidateIndexes) {
-        enriched[index] = { ...enriched[index], researchIssues: [...enriched[index].researchIssues, reference] };
-        const identity = enriched[index].sourceIdentities.geoapify_places;
-        if (enrichmentState.get(identity) === "completed") enrichmentState.set(identity, "partial");
+        enriched[index] = {
+          ...enriched[index],
+          researchIssues: [...enriched[index].researchIssues, reference],
+        };
+        const identity = structuredSeedIdentity(enriched[index]);
+        if (identity && enrichmentState.get(identity) === "completed") {
+          enrichmentState.set(identity, "partial");
+        }
       }
     }
   }
+
   if (discardedSourceDocumentCount > 0) warnings.push("TAVILY_SOURCE_DOCUMENTS_REJECTED");
-  const finalCandidates = deduplicateCandidates(enriched).candidates.map((candidate) => {
-    const identity = candidate.sourceIdentities.geoapify_places ?? candidate.normalizedBusinessName;
+  const finalCandidates = deduplicateCandidates(enriched).candidates.flatMap((candidate) => {
+    const identity = structuredSeedIdentity(candidate);
+    if (!identity) return [];
     const territoryMatch = territoryByIdentity.get(identity) ??
       withTerritoryEvidence(candidate, resolvedTerritory).territoryMatch;
-    return decorate(candidate, territoryMatch,
-      enrichmentState.get(candidate.sourceIdentities.geoapify_places) ?? "not_selected");
+    return [decorate(candidate, territoryMatch,
+      enrichmentState.get(identity) ?? "not_selected")];
   });
   return {
     candidates: finalCandidates,
     resolvedTerritory,
     structuredSeedCount: preliminary.length,
+    invalidSeedCount,
     discardedSourceDocumentCount,
-    enrichmentAttemptedCount: input.tavilyConfigured ? selected.size : 0,
+    enrichmentAttemptedCount,
     enrichmentCompletedCount,
     officialWebsitesResearched: websitesResearched,
     manualReviewReadyCount: finalCandidates.filter((candidate) => candidate.manualReviewReady).length,

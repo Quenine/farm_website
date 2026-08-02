@@ -21,7 +21,7 @@ const DISCOVERY_HOST_MARKERS = [
   "foursquare.", "mapquest.", "openstreetmap.", "wikipedia.", "facebook.",
   "instagram.", "tiktok.", "x.com", "twitter.", "youtube.", "linkedin.",
   "medium.", "substack.", "nairaland.", "pinterest.", "reddit.", "quora.",
-  "amazon.", "jumia.", "jiji.", "ubereats.", "glovo.", "doordash.",
+  "amazon.", "jumia.", "jiji.", "ubereats.", "glovo.", "doordash.", "booking.", "hotels.", "expedia.",
   "businesslist.", "finelib.", "directory.", "yellowpages.", "zoominfo.",
   "bloomberg.", "reuters.", "guardian.", "punchng.", "vanguardngr.",
 ];
@@ -180,12 +180,21 @@ export function mapTavilySearchResponse(
   });
 }
 
-async function tavilyRequest(path: "search" | "extract", body: Record<string, unknown>) {
+type ResearchDeadline = { deadlineAtMs?: number; now?: () => number };
+
+async function tavilyRequest(
+  path: "search" | "extract",
+  body: Record<string, unknown>,
+  deadline: ResearchDeadline = {},
+) {
   if (typeof window !== "undefined") throw new ResearchProviderError("TAVILY_SERVER_ONLY");
   const key = process.env.TAVILY_API_KEY?.trim();
   if (!key) throw new ResearchProviderError("TAVILY_NOT_CONFIGURED");
+  const remaining = deadline.deadlineAtMs == null
+    ? 20_000
+    : Math.max(1, deadline.deadlineAtMs - (deadline.now ?? Date.now)());
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
+  const timeout = setTimeout(() => controller.abort(), Math.min(20_000, remaining));
   try {
     let response: Response;
     try {
@@ -277,7 +286,17 @@ export function candidateTavilyAssociation(
   return exactName || allNameTokens && locationMatches || hostnameMatches;
 }
 
-function associatedTavilyCandidate(
+function hasMultipleBusinessIdentities(seed: ResearchCandidate, text: string) {
+  const pattern = /\b([A-Z][A-Za-z0-9&'.-]*(?:\s+[A-Z][A-Za-z0-9&'.-]*){0,5}\s+(?:Hotel|Restaurant|Kitchen|Supermarket|Foods?|Caterers?|Catering|Limited|Ltd))\b/g;
+  const identities = new Set(
+    [...text.matchAll(pattern)]
+      .map((match) => normalizeBusinessName(match[1]))
+      .filter((identity) => identity && identity !== seed.normalizedBusinessName),
+  );
+  return identities.size > 0;
+}
+
+export function associateCandidateWithTavilyDocument(
   seed: ResearchCandidate,
   document: { title: string; url: string; content: string | null },
   observedAt: string,
@@ -290,10 +309,16 @@ function associatedTavilyCandidate(
     source: "tavily_search", sourceUrl: document.url, observedAt, field, value,
     confidence: "medium", verificationStatus: "plausible",
   });
-  const phones = [...text.matchAll(/(?:\+?234|0)[789][01]\d{8}/g)]
+  const extractedPhones = [...text.matchAll(/(?:\+?234|0)[789][01]\d{8}/g)]
     .map((match) => normalizeNigerianPhone(match[0])).filter((value): value is string => Boolean(value));
-  const emails = [...text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)]
+  const extractedEmails = [...text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)]
     .map((match) => normalizeEmail(match[0])).filter((value): value is string => Boolean(value));
+  const distinctPhones = [...new Set(extractedPhones)];
+  const distinctEmails = [...new Set(extractedEmails)];
+  const canUseSnippetContacts = classification.kind === "likely_official" &&
+    distinctPhones.length <= 1 && !hasMultipleBusinessIdentities(seed, text);
+  const phones = canUseSnippetContacts ? distinctPhones : [];
+  const emails = canUseSnippetContacts ? distinctEmails : [];
   phones.forEach((value) => add("phone", value));
   emails.forEach((value) => add("email", value));
   let website = seed.website;
@@ -320,7 +345,7 @@ function associatedTavilyCandidate(
   } satisfies ResearchCandidate;
 }
 
-export async function researchCandidateWithTavily(seed: ResearchCandidate) {
+export async function researchCandidateWithTavily(seed: ResearchCandidate, deadline: ResearchDeadline = {}) {
   let candidate = seed;
   let discardedSourceDocumentCount = 0;
   let estimatedCredits = 0;
@@ -328,7 +353,7 @@ export async function researchCandidateWithTavily(seed: ResearchCandidate) {
     const payload = await tavilyRequest("search", {
       query, search_depth:"basic", max_results:10,
       include_answer:false, include_raw_content:false,
-    });
+    }, deadline);
     estimatedCredits += 1;
     const results = payload && typeof payload === "object" &&
       Array.isArray((payload as { results?: unknown }).results)
@@ -339,7 +364,7 @@ export async function researchCandidateWithTavily(seed: ResearchCandidate) {
       }
       const document = { title:result.title, url:result.url,
         content:typeof result.content === "string" ? result.content : null };
-      const next = associatedTavilyCandidate(candidate, document, new Date().toISOString());
+      const next = associateCandidateWithTavilyDocument(candidate, document, new Date().toISOString());
       if (next) candidate = next; else discardedSourceDocumentCount += 1;
     }
   }
