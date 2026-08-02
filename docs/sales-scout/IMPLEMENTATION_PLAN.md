@@ -427,3 +427,6 @@ The discovery migration requires a PostgreSQL rollback dry run with synthetic be
 
 ## Batch 5B implemented
 Guarded run orchestration, paginated staged review, server-side preview/capture, dismissal, and admin routes are implemented behind the disabled discovery flag.
+## Batch 6A — provider-neutral nationwide research evaluation
+
+Evaluate Geoapify, Tavily, and controlled official-website research against a configurable Nigerian territory/category matrix before changing production persistence. Fixture mode is mandatory for routine verification; live mode is explicitly confirmed, bounded, and writes only ignored local artifacts. Acceptance requires evidence-backed contacts, deterministic deduplication, no fabricated facts, no production writes, and documented pilot thresholds. A later batch may propose production integration only after reviewed live evaluation results.

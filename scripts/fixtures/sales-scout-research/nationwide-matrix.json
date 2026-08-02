@@ -1,0 +1,66 @@
+{
+  "territories": [
+    {
+      "country": "Nigeria",
+      "state": "Lagos",
+      "city": "Lagos",
+      "latitude": 6.5244,
+      "longitude": 3.3792,
+      "radiusKm": 20
+    },
+    {
+      "country": "Nigeria",
+      "state": "Oyo",
+      "city": "Ibadan",
+      "latitude": 7.3775,
+      "longitude": 3.947,
+      "radiusKm": 20
+    },
+    {
+      "country": "Nigeria",
+      "state": "FCT",
+      "city": "Abuja",
+      "latitude": 9.0765,
+      "longitude": 7.3986,
+      "radiusKm": 20
+    },
+    {
+      "country": "Nigeria",
+      "state": "Rivers",
+      "city": "Port Harcourt",
+      "latitude": 4.8156,
+      "longitude": 7.0498,
+      "radiusKm": 20
+    },
+    {
+      "country": "Nigeria",
+      "state": "Enugu",
+      "city": "Enugu",
+      "latitude": 6.4584,
+      "longitude": 7.5464,
+      "radiusKm": 20
+    },
+    {
+      "country": "Nigeria",
+      "state": "Kano",
+      "city": "Kano",
+      "latitude": 12.0022,
+      "longitude": 8.592,
+      "radiusKm": 20
+    },
+    {
+      "country": "Nigeria",
+      "state": "Gombe",
+      "city": "Gombe",
+      "latitude": 10.2897,
+      "longitude": 11.1673,
+      "radiusKm": 20
+    }
+  ],
+  "categories": [
+    "Restaurant",
+    "Hotel",
+    "Supermarket",
+    "Caterer"
+  ]
+}

@@ -45,3 +45,4 @@ next-env.d.ts
 # Local Google Cloud credentials
 /shields-farms-*.json
 /.secrets/
+tmp/sales-scout-research/

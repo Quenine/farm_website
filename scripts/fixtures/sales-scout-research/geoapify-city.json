@@ -1,0 +1,15 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "properties": {
+        "city": "Ibadan",
+        "state": "Oyo",
+        "country": "Nigeria",
+        "country_code": "ng",
+        "lon": 3.947,
+        "lat": 7.3775
+      }
+    }
+  ]
+}

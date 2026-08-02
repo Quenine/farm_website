@@ -271,3 +271,6 @@ Batch 5A correction retains provider category IDs and check_url verification URL
 
 ## Batch 5B owner discovery
 Owner-triggered DataForSEO runs stage canonical provider listings for review. Capture reuses the authoritative ingestion RPC; dismissal changes only staged review state. No outreach is automated.
+## Batch 6A research evaluation boundary
+
+Provider-neutral research lives under `src/lib/sales-scout/research/` and is intentionally separate from staged discovery and CRM persistence. Geoapify supplies conservative place discovery, Tavily supplies bounded web discovery, and controlled official-site research supplies verified public contact evidence. Evaluation outputs are ignored local artifacts only. Deterministic identity merging, evidence preservation, contact quality, and SSRF/robots controls must pass before any later production-provider proposal.

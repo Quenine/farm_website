@@ -1,0 +1,15 @@
+{
+  "query": "Restaurant in Enugu, Enugu, Nigeria official website",
+  "results": [
+    {
+      "title": "Coal City Kitchen | Official Website",
+      "url": "https://coalcitykitchen.example/",
+      "content": "Nigerian restaurant serving Enugu."
+    },
+    {
+      "title": "Public directory result",
+      "url": "https://directory.example/listing/coal-city",
+      "content": "Unverified listing snippet."
+    }
+  ]
+}

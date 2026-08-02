@@ -1,0 +1,38 @@
+{
+  "patterns": {
+    "Restaurant": "Kitchen & Grill",
+    "Hotel": "Hotel & Suites",
+    "Supermarket": "Neighbourhood Market",
+    "Caterer": "Events Catering"
+  },
+  "duplicateFixture": {
+    "businessName": "Unity Kitchen & Grill",
+    "city": "Lagos",
+    "state": "Lagos",
+    "sources": [
+      "geoapify_places",
+      "tavily_search"
+    ],
+    "sharedWebsite": "https://unity-kitchen.example/"
+  },
+  "conflictFixture": {
+    "businessName": "Harbour Hotel & Suites",
+    "city": "Port Harcourt",
+    "state": "Rivers",
+    "phones": ["+2348030003001", "+2348030003999"],
+    "websites": [
+      "https://harbour-hotel.example/",
+      "https://harbour-suites.example/"
+    ],
+    "issue": "Conflicting public contact evidence retained."
+  },
+  "missingContactFixture": {
+    "businessName": "Savannah Events Catering",
+    "city": "Gombe",
+    "state": "Gombe"
+  },
+  "invalidPrivateUrlFixture": {
+    "businessName": "Unsafe URL Market",
+    "website": "http://10.0.0.8/"
+  }
+}

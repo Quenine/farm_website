@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "properties": {
+        "place_id": "geo-fixture-1",
+        "name": "Riverbend Market",
+        "categories": [
+          "commercial.supermarket"
+        ],
+        "formatted": "12 Market Road, Ibadan, Oyo, Nigeria",
+        "city": "Ibadan",
+        "state": "Oyo",
+        "country": "Nigeria",
+        "country_code": "ng",
+        "lon": 3.95,
+        "lat": 7.38,
+        "website": "https://riverbend.example",
+        "contact": {
+          "phone": "+2348030001001"
+        }
+      }
+    },
+    {
+      "properties": {
+        "place_id": "geo-fixture-2",
+        "name": "Missing Contact Hotel",
+        "categories": [
+          "accommodation.hotel"
+        ],
+        "city": "Ibadan",
+        "state": "Oyo",
+        "country": "Nigeria",
+        "lon": 3.96,
+        "lat": 7.39
+      }
+    }
+  ]
+}
