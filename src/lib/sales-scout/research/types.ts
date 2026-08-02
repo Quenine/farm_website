@@ -1,24 +1,14 @@
 export const RESEARCH_CATEGORIES = [
-  "Restaurant",
-  "Caterer",
-  "Hotel",
-  "Supermarket",
-  "Food Vendor",
-  "Food Processor",
-  "Distributor",
-  "School",
-  "Hospital",
-  "Institution",
+  "Restaurant", "Caterer", "Hotel", "Supermarket", "Food Vendor",
+  "Food Processor", "Distributor", "School", "Hospital", "Institution",
 ] as const;
 
 export type ResearchCategory = (typeof RESEARCH_CATEGORIES)[number];
 export type ResearchSource =
-  | "geoapify_places"
-  | "tavily_search"
-  | "official_website"
-  | "manual_public_source";
+  | "geoapify_places" | "tavily_search" | "official_website" | "manual_public_source";
 export type EvidenceConfidence = "high" | "medium" | "low";
 export type VerificationStatus = "verified" | "plausible" | "unavailable";
+export type ProviderName = "GEOAPIFY" | "TAVILY";
 
 export type ResearchTerritory = {
   country: string;
@@ -44,6 +34,7 @@ export type ResearchCandidate = {
   businessName: string;
   normalizedBusinessName: string;
   requestedCategory: ResearchCategory;
+  requestedTerritory: ResearchTerritory;
   providerCategories: string[];
   country: string | null;
   state: string | null;
@@ -84,10 +75,22 @@ export type ProviderResult = {
 
 export class ResearchProviderError extends Error {
   readonly reference: string;
-
   constructor(reference: string, message = "Research provider operation failed.") {
     super(message);
     this.name = "ResearchProviderError";
     this.reference = reference;
   }
+}
+
+export function providerStatusReference(provider: ProviderName, status: number) {
+  if (status === 400) return `${provider}_BAD_REQUEST`;
+  if (status === 401) return `${provider}_UNAUTHORIZED`;
+  if (status === 403) return `${provider}_FORBIDDEN`;
+  if (status === 429) return `${provider}_RATE_LIMITED`;
+  if (status >= 500 && status <= 599) return `${provider}_SERVER_ERROR`;
+  return `${provider}_HTTP_ERROR`;
+}
+
+export function isRetryableProviderReference(reference: string) {
+  return /_(?:TIMEOUT|NETWORK_FAILURE|RATE_LIMITED|SERVER_ERROR)$/.test(reference);
 }

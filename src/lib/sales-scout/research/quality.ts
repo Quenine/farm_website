@@ -1,84 +1,100 @@
 import {
   canonicalizeWebsiteHostname,
   normalizeEmail,
+  normalizeLocationComparison,
   normalizeNigerianPhone,
 } from "../normalization.ts";
 import type { ResearchCandidate, ResearchEvidence } from "./types.ts";
 
-function hasVerifiedEvidence(candidate: ResearchCandidate, fields: string[]) {
-  return candidate.evidence.some(
-    (item) => fields.includes(item.field) && item.verificationStatus === "verified",
+function verified(candidate: ResearchCandidate, field: string, value?: string) {
+  return candidate.evidence.some((item) =>
+    item.field === field &&
+    item.verificationStatus === "verified" &&
+    (value === undefined || item.value === value),
   );
+}
+
+function verifiedNormalized(
+  candidate: ResearchCandidate,
+  field: string,
+  value: string | null,
+  normalize: (input: string) => string | null,
+) {
+  const normalized = value ? normalize(value) : null;
+  return Boolean(normalized && candidate.evidence.some((item) =>
+    item.field === field &&
+    item.verificationStatus === "verified" &&
+    normalize(item.value) === normalized,
+  ));
 }
 
 export function hasUsablePhone(candidate: ResearchCandidate) {
   return candidate.phoneNumbers.some((value) => normalizeNigerianPhone(value) !== null);
 }
-
 export function hasUsableEmail(candidate: ResearchCandidate) {
   return candidate.emailAddresses.some((value) => normalizeEmail(value) !== null);
 }
-
 export function hasUsableWhatsApp(candidate: ResearchCandidate) {
   return candidate.whatsAppNumbers.some((value) => normalizeNigerianPhone(value) !== null);
 }
-
+export function hasEvidenceBackedPhone(candidate: ResearchCandidate) {
+  return candidate.phoneNumbers.some((value) =>
+    verifiedNormalized(candidate, "phone", value, normalizeNigerianPhone));
+}
+export function hasEvidenceBackedEmail(candidate: ResearchCandidate) {
+  return candidate.emailAddresses.some((value) =>
+    verifiedNormalized(candidate, "email", value, normalizeEmail));
+}
+export function hasEvidenceBackedWhatsApp(candidate: ResearchCandidate) {
+  return candidate.whatsAppNumbers.some((value) =>
+    verifiedNormalized(candidate, "whatsapp", value, normalizeNigerianPhone));
+}
 export function hasOfficialWebsite(candidate: ResearchCandidate) {
-  return Boolean(candidate.website && canonicalizeWebsiteHostname(candidate.website));
+  const hostname = candidate.website ? canonicalizeWebsiteHostname(candidate.website) : null;
+  return Boolean(hostname && candidate.evidence.some((item) =>
+    item.field === "website" &&
+    item.verificationStatus === "verified" &&
+    canonicalizeWebsiteHostname(item.value) === hostname,
+  ));
 }
-
 export function hasPublicSocialProfile(candidate: ResearchCandidate) {
-  return [candidate.instagram, candidate.facebook, candidate.tiktok, candidate.x, candidate.youtube]
-    .some((profiles) => profiles.length > 0);
+  const profiles = [
+    ...candidate.instagram.map((value) => ["instagram", value] as const),
+    ...candidate.facebook.map((value) => ["facebook", value] as const),
+    ...candidate.tiktok.map((value) => ["tiktok", value] as const),
+    ...candidate.x.map((value) => ["x", value] as const),
+    ...candidate.youtube.map((value) => ["youtube", value] as const),
+  ];
+  return profiles.some(([field, value]) => verified(candidate, field, value));
 }
-
 export function hasAnyUsableContact(candidate: ResearchCandidate) {
-  return (
-    hasUsablePhone(candidate) ||
-    hasUsableEmail(candidate) ||
-    hasUsableWhatsApp(candidate) ||
-    hasOfficialWebsite(candidate) ||
-    hasPublicSocialProfile(candidate)
-  );
+  return hasEvidenceBackedPhone(candidate) || hasEvidenceBackedEmail(candidate) ||
+    hasEvidenceBackedWhatsApp(candidate) || hasOfficialWebsite(candidate) ||
+    hasPublicSocialProfile(candidate);
 }
-
 export function isResearchReady(candidate: ResearchCandidate) {
-  const evidenceFields = new Set(candidate.evidence.map((item) => item.field));
+  const countrySupported = candidate.country != null &&
+    ["ng", "nigeria"].includes(normalizeLocationComparison(candidate.country));
   return Boolean(
     candidate.businessName.trim() &&
-      candidate.state &&
-      candidate.city &&
-      evidenceFields.has("requestedCategory") &&
-      candidate.evidence.some((item) => item.sourceUrl),
+    verified(candidate, "requestedCategory", candidate.requestedCategory) &&
+    countrySupported && verified(candidate, "country", candidate.country ?? undefined) &&
+    candidate.state && verified(candidate, "state", candidate.state) &&
+    candidate.city && verified(candidate, "city", candidate.city) &&
+    candidate.evidence.some((item) => Boolean(item.sourceUrl)),
   );
 }
-
 export function isOutreachReady(candidate: ResearchCandidate) {
-  const verifiedRoutes: Array<[boolean, string[]]> = [
-    [hasUsablePhone(candidate), ["phone"]],
-    [hasUsableEmail(candidate), ["email"]],
-    [hasUsableWhatsApp(candidate), ["whatsapp"]],
-    [hasOfficialWebsite(candidate), ["website"]],
-    [hasPublicSocialProfile(candidate), ["instagram", "facebook", "tiktok", "x", "youtube"]],
-  ];
-  return verifiedRoutes.some(([usable, fields]) => usable && hasVerifiedEvidence(candidate, fields));
+  return hasAnyUsableContact(candidate);
 }
-
 export function contactCoverageScore(candidate: ResearchCandidate) {
   const checks = [
-    hasUsablePhone(candidate),
-    hasUsableEmail(candidate),
-    hasUsableWhatsApp(candidate),
-    hasOfficialWebsite(candidate),
+    hasEvidenceBackedPhone(candidate), hasEvidenceBackedEmail(candidate),
+    hasEvidenceBackedWhatsApp(candidate), hasOfficialWebsite(candidate),
     hasPublicSocialProfile(candidate),
   ];
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
-
-export function evidenceFor(
-  evidence: ResearchEvidence[],
-  field: string,
-  value: string,
-): ResearchEvidence[] {
+export function evidenceFor(evidence: ResearchEvidence[], field: string, value: string) {
   return evidence.filter((item) => item.field === field && item.value === value);
 }
