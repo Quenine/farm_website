@@ -1,45 +1,14 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-
-const files = [
-  "src/lib/sales-scout/discovery/server.ts",
-  "src/lib/sales-scout/discovery/dataforseo.ts",
-  "src/lib/sales-scout/discovery/helpers.ts",
-  "app/admin/(protected)/marketing/sales-scout/discover/actions.ts",
-  "app/admin/(protected)/marketing/sales-scout/discover/page.tsx",
-  "app/admin/(protected)/marketing/sales-scout/discover/[candidateId]/page.tsx",
-  "src/components/sales-scout/discovery-run-form.tsx",
-  "src/components/sales-scout/discovery-candidate-actions.tsx",
-];
-
-const source = files.map((file) => fs.readFileSync(file, "utf8")).join("\n");
-const orchestration = fs.readFileSync("src/lib/sales-scout/discovery/server.ts", "utf8");
-const discoveryActions = fs.readFileSync("app/admin/(protected)/marketing/sales-scout/discover/actions.ts", "utf8");
-assert.doesNotMatch(source, /eslint-disable[^\n]*no-explicit-any/);
-assert.doesNotMatch(source, /\bany\b/);
-assert.doesNotMatch(source, /catch\s*\([^)]*\)\s*\{\s*\}/);
-assert.doesNotMatch(source, /from\(["']marketing_prospects["']\)\s*\.insert/);
-assert.doesNotMatch(source, /NEXT_PUBLIC_[A-Z0-9_]*DISCOVERY/);
-assert.doesNotMatch(source, /NEXT_PUBLIC_[A-Z0-9_]*DATAFORSEO/);
-for (const match of orchestration.matchAll(/from\("marketing_sales_scout_discovery_candidates"\)\s*\.select\("([^"]+)"/g)) {
-  assert.ok(!match[1].split(",").includes("description"));
-}
-const providerGuardIndex = orchestration.indexOf("if(!isDataForSeoBusinessListingsConfigured())");
-assert.ok(providerGuardIndex >= 0 && providerGuardIndex < orchestration.indexOf("start_sales_scout_discovery_run"));
-assert.doesNotMatch(
-  discoveryActions,
-  /exports+(?:const|let|var|class)|exports+default(?!s+asyncs+function)/m,
-);
-for (const actionName of [
-  "runDiscoveryAction",
-  "dismissDiscoveryCandidateAction",
-  "captureDiscoveryCandidateAction",
-]) {
-  assert.match(discoveryActions, new RegExp(`export\\s+async\\s+function\\s+${actionName}\\s*\\(`));
-}
-assert.match(source, /requireSalesScoutDiscoveryEnabled/);
-assert.match(source, /useActionState/);
-assert.match(source, /useFormStatus/);
-assert.match(source, /DataForSEO charge/);
-assert.ok(fs.existsSync("tests/sales-scout-discovery.test.ts"));
+const files=["src/lib/sales-scout/discovery/server.ts","src/lib/sales-scout/research/production.ts","app/admin/(protected)/marketing/sales-scout/discover/actions.ts","app/admin/(protected)/marketing/sales-scout/discover/page.tsx","app/admin/(protected)/marketing/sales-scout/discover/[candidateId]/page.tsx","src/components/sales-scout/discovery-run-form.tsx","src/components/sales-scout/discovery-candidate-actions.tsx"];
+const source=files.map(file=>fs.readFileSync(file,"utf8")).join("\n");const server=fs.readFileSync(files[0],"utf8");const actions=fs.readFileSync(files[2],"utf8");
+assert.doesNotMatch(source,/eslint-disable[^\n]*no-explicit-any|\bany\b|NEXT_PUBLIC_(?:GEOAPIFY|TAVILY|DATAFORSEO)/);
+assert.doesNotMatch(server,/fetchDataForSeoBusinessListings|isDataForSeoBusinessListingsConfigured|start_sales_scout_discovery_run/);
+assert.match(server,/runSeedFirstProductionResearch/);assert.match(server,/start_sales_scout_research_run/);assert.match(server,/complete_sales_scout_research_run/);assert.match(server,/fail_sales_scout_research_run/);
+assert.match(source,/Geoapify/);assert.match(source,/Tavily/);assert.match(source,/DataForSEO: disabled legacy adapter/);assert.match(source,/sends no outreach|No outreach is sent/i);
+assert.match(source,/maximumTavilySearches|Max Tavily searches/);assert.match(source,/maxEnrichmentCandidates/);assert.match(source,/manual_review_ready|manualReviewReady/);assert.match(source,/outreach_ready|outreachReady/);assert.match(source,/Review this public contact before using it/);
+assert.doesNotMatch(source,/\.from\(["']marketing_prospects["']\)\s*\.insert/);
+assert.doesNotMatch(actions,/export\s+(?:const|let|var|class)\b|export\s+default(?!\s+async\s+function)/m);
+for(const name of["runDiscoveryAction","dismissDiscoveryCandidateAction","captureDiscoveryCandidateAction"])assert.match(actions,new RegExp(`export\\s+async\\s+function\\s+${name}\\s*\\(`));
+assert.match(source,/useActionState/);assert.match(source,/useFormStatus/);assert.ok(fs.existsSync("tests/sales-scout-production.test.ts"));
 console.log("Sales Scout discovery static audit passed.");

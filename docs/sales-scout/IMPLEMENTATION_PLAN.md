@@ -430,3 +430,7 @@ Guarded run orchestration, paginated staged review, server-side preview/capture,
 ## Batch 6A — provider-neutral nationwide research evaluation
 
 Evaluate Geoapify, Tavily, and controlled official-website research against a configurable Nigerian territory/category matrix before changing production persistence. Fixture mode is mandatory for routine verification; live mode is explicitly confirmed, bounded, and writes only ignored local artifacts. Acceptance requires evidence-backed contacts, deterministic deduplication, no fabricated facts, no production writes, and documented pilot thresholds. A later batch may propose production integration only after reviewed live evaluation results.
+
+## Batch 6B delivery and rollout
+
+Implementation is complete for review in these independently verifiable slices: (1) additive repeat-safe schema/RPC migration and SQL safety artifacts; (2) nationwide campaign validation/UI; (3) seed-first production orchestration and persistence; (4) candidate contact-confidence/detail/capture workflow; (5) deterministic manual outreach, follow-up, outcomes, and suppression; (6) offline tests/static audits; (7) owner runbook. Deployment remains a separate controlled operation: run preflight, rollback rehearsal, apply and verify twice in non-production, configure server-only Shields variables, deploy Shields only, and complete the bounded limit-5 smoke test. Roll back application code first if needed and preserve new evidence before any approved schema reversal.

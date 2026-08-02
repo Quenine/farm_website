@@ -183,3 +183,9 @@ These are operational counts, not claims of platform delivery or causality. Paid
 - Preserve source URL, evidence timestamp, score explanation, sent text, reply summary, and actor/timestamps for auditability.
 - External discovery adapters must respect provider terms, robots/access rules where applicable, rate limits, and data provenance. A provider being technically accessible does not authorize collection.
 - The official WhatsApp from `siteConfig.whatsappPhone` is presented as a voluntary response/handover channel, not used for automated unsolicited messaging.
+
+## Batch 6B production workflow
+
+The owner configures a Nigeria-only campaign by state/FCT and arbitrary city/town, then explicitly starts bounded structured discovery. Geoapify supplies business seeds; Tavily and official websites may enrich only those seeds. Candidates expose `plausible` and `verified` public contacts separately. `MANUAL_REVIEW_READY` requires a defensible structured seed, territory match, and any normalized public contact; `OUTREACH_READY` additionally requires a verified contact. The owner previews duplicates, captures or attaches the candidate, edits and approves a deterministic draft, opens a handoff, sends manually, explicitly records the send, and records replies, no response, opt-out, or cancellation. At most three attempts are permitted. Handoffs never send or record a send. Paid orders remain the only revenue truth.
+
+Structured discovery currently supports Restaurant, Hotel, and Supermarket. Other permitted campaign categories are saved with an explicit connector-pending warning and never fall back to broad Tavily prospect generation. Production activation requires the Batch 6B migration, server-only provider variables, Shields-only deployment, and the runbook smoke test.

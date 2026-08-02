@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const file="database/20260802000100_sales_scout_production_release.sql";const sql=fs.readFileSync(file,"utf8");
+assert.match(sql,/^begin;/m);assert.match(sql,/commit;\s*$/);assert.match(sql,/geoapify_tavily_research/);assert.match(sql,/dataforseo_business_listings/);
+for(const rpc of["start_sales_scout_research_run","complete_sales_scout_research_run","fail_sales_scout_research_run","save_sales_scout_campaign","save_sales_scout_outreach_draft","approve_sales_scout_outreach_draft","confirm_sales_scout_outreach_sent","record_sales_scout_outreach_outcome"])assert.match(sql,new RegExp(`create or replace function public\\.${rpc}\\(`));
+for(const field of["structured_seed_count","discarded_source_document_count","manual_review_ready_count","outreach_ready_count","territory_match_evidence","contact_evidence","research_evidence","manual_review_ready","outreach_ready"])assert.match(sql,new RegExp(`\\b${field}\\b`));
+assert.match(sql,/completion_payload_fingerprint/);assert.match(sql,/completion payload differs from completed run/);assert.match(sql,/seen_count=marketing_sales_scout_discovery_candidates\.seen_count\+1/);assert.match(sql,/marketing_sales_scout_discovery_run_candidates/);
+assert.match(sql,/revoke all on function[\s\S]*from public,anon,authenticated/);assert.match(sql,/grant execute on function[\s\S]*to service_role/);assert.doesNotMatch(sql,/grant execute[\s\S]{0,300}to (?:anon|authenticated|public)/);
+assert.match(sql,/p_actor_id is null/);assert.match(sql,/p_sequence_number not between 1 and 3/);assert.match(sql,/do_not_contact_at is not null/);assert.match(sql,/suppress_sales_scout_outreach_for_inactive_channel/);assert.match(sql,/jsonb_typeof\(p_payload->'candidates'\)/);assert.ok(fs.existsSync("database/preflight-sales-scout-production-release.sql"));assert.ok(fs.existsSync("database/verify-sales-scout-production-release.sql"));assert.ok(fs.existsSync("database/rollback-dry-run-sales-scout-production-release.sql"));
+console.log("Sales Scout production migration static verification passed.");

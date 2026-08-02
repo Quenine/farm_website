@@ -71,7 +71,7 @@ assert.match(qualitySource, /hasEvidenceBackedWhatsApp/);
 const outreachReadyFunction = qualitySource.match(
   /export function isOutreachReady[\s\S]*?\n\}/,
 )?.[0] ?? "";
-assert.match(outreachReadyFunction, /isResearchReady\(candidate\)/);
+assert.match(outreachReadyFunction, /isDiscovered\(candidate\)/);
 assert.match(outreachReadyFunction, /hasAnyUsableContact\(candidate\)/);
 
 const safeFetchFunction = websiteSource.match(

@@ -15,6 +15,7 @@ import {
 } from "./ingestion.ts";
 import type { DiscoveryCandidate } from "./discovery/types.ts";
 import { scoreSalesScoutProspect } from "./scoring.ts";
+import { normalizeNigerianState, salesScoutCampaignInputSchema } from "./territory.ts";
 import {
   campaignStatusSchema,
   doNotContactSchema,
@@ -57,6 +58,7 @@ export type SalesScoutCampaignDto = ScoutCampaignConfig & {
   discoveryLongitude: number | null;
   discoveryRadiusKm: number | null;
   discoveryDefaultLimit: number | null;
+  maxEnrichmentCandidates: number | null;
 };
 
 function campaignDto(
@@ -81,13 +83,14 @@ function campaignDto(
     discoveryLongitude: extension.discovery_longitude == null ? null : Number(extension.discovery_longitude),
     discoveryRadiusKm: extension.discovery_radius_km == null ? null : Number(extension.discovery_radius_km),
     discoveryDefaultLimit: extension.discovery_default_limit == null ? null : Number(extension.discovery_default_limit),
+    maxEnrichmentCandidates: extension.max_enrichment_candidates == null ? 6 : Number(extension.max_enrichment_candidates),
   };
 }
 
 async function loadCampaign(database: ReturnType<typeof createAdminSupabaseClient>, campaignId: string) {
   const [extensionResult, campaignResult] = await Promise.all([
     database.from("marketing_sales_scout_campaigns")
-      .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit")
+      .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit,max_enrichment_candidates")
       .eq("campaign_id", campaignId).maybeSingle(),
     database.from("marketing_campaigns")
       .select("id,name,slug").eq("id", campaignId).maybeSingle(),
@@ -104,7 +107,7 @@ export async function listSalesScoutCampaigns(): Promise<SalesScoutCampaignDto[]
   await authorizeSalesScout();
   const database = createAdminSupabaseClient();
   const extensions = await database.from("marketing_sales_scout_campaigns")
-    .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit")
+    .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit,max_enrichment_candidates")
     .eq("status", "active").limit(100);
   if (extensions.error) fail("SCOUT_CAMPAIGNS_LIST", extensions.error);
   const ids = (extensions.data ?? []).map((row) => row.campaign_id);
@@ -122,7 +125,7 @@ export async function listAllSalesScoutCampaigns(): Promise<SalesScoutCampaignDt
   await authorizeSalesScout();
   const database = createAdminSupabaseClient();
   const extensions = await database.from("marketing_sales_scout_campaigns")
-    .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit")
+    .select("campaign_id,status,city,state,country,target_categories,product_scope,delivery_summary,daily_review_target,discovery_latitude,discovery_longitude,discovery_radius_km,discovery_default_limit,max_enrichment_candidates")
     .order("created_at", { ascending: false }).limit(100);
   if (extensions.error) fail("SCOUT_CAMPAIGNS_ADMIN", extensions.error);
   const ids = (extensions.data ?? []).map((row) => row.campaign_id);
@@ -134,6 +137,24 @@ export async function listAllSalesScoutCampaigns(): Promise<SalesScoutCampaignDt
     .map((row) => campaignDto(row, byId.get(row.campaign_id)!));
 }
 
+
+export async function saveSalesScoutCampaign(raw: unknown) {
+  const actor = await authorizeSalesScout();
+  const parsed = salesScoutCampaignInputSchema.parse(raw);
+  const payload = {
+    ...parsed,
+    state: normalizeNigerianState(parsed.state),
+    productScope: parsed.productScope?.trim() || null,
+    deliverySummary: parsed.deliverySummary?.trim() || null,
+  };
+  const { data, error } = await createAdminSupabaseClient().rpc("save_sales_scout_campaign", {
+    p_campaign_id: parsed.campaignId ?? null,
+    p_payload: payload,
+    p_actor_id: actor.id,
+  });
+  if (error) fail("SCOUT_CAMPAIGN_SAVE_RPC", error);
+  return data as Record<string, unknown>;
+}
 export async function getSalesScoutCampaign(campaignId: string) {
   await authorizeSalesScout();
   return loadCampaign(createAdminSupabaseClient(), campaignId);
@@ -462,7 +483,7 @@ export async function loadSalesScoutProspectDetail(id: string) {
     loadCampaign(database, prospect.scout_campaign_id),
     database.from("marketing_prospect_channels").select("id,platform,handle_or_value,profile_url,is_primary,is_active,verified_at,source,source_id,evidence,created_at").eq("prospect_id", id).order("is_primary", { ascending: false }),
     database.from("marketing_prospect_activities").select("id,activity_type,summary,occurred_at,metadata,created_at").eq("prospect_id", id).order("occurred_at", { ascending: false }).limit(100),
-    database.from("marketing_prospect_outreaches").select("id", { count: "exact", head: true }).eq("prospect_id", id),
+    database.from("marketing_prospect_outreaches").select("id,prospect_id,channel_id,sequence_number,kind,status,draft_text,approved_text,sent_text,approved_at,sent_at,sender_account_label,due_at,reply_summary,reply_sentiment,commercial_signal,replied_at,cancel_reason,created_at,updated_at").eq("prospect_id", id).order("sequence_number", { ascending: true }),
   ]);
   if (channels.error) fail("SCOUT_DETAIL_CHANNELS", channels.error);
   if (activities.error) fail("SCOUT_DETAIL_ACTIVITIES", activities.error);
@@ -476,5 +497,5 @@ export async function loadSalesScoutProspectDetail(id: string) {
     demandBand: prospect.demand_band ?? "unknown", isInactiveOrClosed: Boolean(prospect.appears_inactive_or_closed),
     isConsumerOnly: Boolean(prospect.is_consumer_only), doNotContact: Boolean(prospect.do_not_contact_at),
     scoredAt: prospect.scored_at ?? new Date().toISOString() });
-  return { prospect, campaign, channels: channels.data ?? [], activities: activities.data ?? [], outreachCount: outreach.count ?? 0, qualification: score };
+  return { prospect, campaign, channels: channels.data ?? [], activities: activities.data ?? [], outreaches: outreach.data ?? [], outreachCount: outreach.data?.length ?? 0, qualification: score };
 }

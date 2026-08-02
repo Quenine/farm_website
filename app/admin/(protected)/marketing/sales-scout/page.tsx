@@ -6,6 +6,7 @@ import { requireAdmin } from "@/src/lib/admin-auth";
 import { isSalesScoutDiscoveryEnabled, isSalesScoutEnabled } from "@/src/lib/sales-scout/access";
 import { listAllSalesScoutCampaigns, loadSalesScoutQueue, loadSalesScoutSummary } from "@/src/lib/sales-scout/server";
 import { CampaignStatusControls } from "@/src/components/sales-scout/campaign-status-controls";
+import { SalesScoutCampaignForm } from "@/src/components/sales-scout/campaign-form";
 import { isCandidateEntryAvailable } from "@/src/lib/sales-scout/review";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Par
   return <>
     <AdminHeader title="Sales Scout" body="Owner-only prospect research and review workspace. No social message is sent automatically." />
     <MarketingNav />
+    <div className="mb-5 grid gap-3 lg:grid-cols-2"><details className="rounded-xl border bg-stone-50 p-4"><summary className="cursor-pointer text-lg font-bold">Create nationwide campaign</summary><div className="mt-4"><SalesScoutCampaignForm/></div></details>{selected?<details className="rounded-xl border bg-stone-50 p-4"><summary className="cursor-pointer text-lg font-bold">Edit selected campaign</summary><div className="mt-4"><SalesScoutCampaignForm campaign={selected}/></div></details>:null}</div>
     {selected&&isCandidateEntryAvailable(selected.status)?<div className="mb-5 flex gap-3"><Link href={`/admin/marketing/sales-scout/new?campaignId=${selected.campaignId}`} className="inline-flex h-11 items-center rounded-full bg-green-800 px-5 font-bold text-white">Add candidate</Link>{isSalesScoutDiscoveryEnabled()?<Link href={`/admin/marketing/sales-scout/discover?campaignId=${selected.campaignId}`} className="inline-flex h-11 items-center rounded-full border border-green-800 px-5 font-bold text-green-900">Discover businesses</Link>:null}</div>:null}
     {selected ? <section className={`mb-5 rounded-xl border p-5 ${selected.status==="active"?"bg-white":"border-amber-300 bg-amber-50"}`}>
       <div className="grid gap-4 lg:grid-cols-[1fr_auto]"><div><h2 className="text-xl font-bold">{selected.name}</h2><p className="text-sm text-stone-600">{selected.city}, {selected.country} - {selected.targetCategories.join(", ")}</p><p className="mt-1 text-sm">Daily review target: {selected.dailyReviewTarget}</p>

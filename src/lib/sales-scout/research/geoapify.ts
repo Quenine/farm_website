@@ -116,6 +116,6 @@ export async function researchWithGeoapify(query:ResearchQuery):Promise<Provider
     const candidates:ResearchCandidate[]=[],pageSize=Math.min(MAX_LIMIT,Math.max(1,query.limit));
     const pages=Math.min(MAX_PAGES,Math.ceil(query.limit/pageSize));
     for(let page=1;page<=pages;page+=1){const mapped=mapGeoapifyPlacesResponse(await geoFetch(buildGeoapifyPlacesUrl(query,longitude,latitude,page,key),controller.signal),query,new Date().toISOString());credits+=1;candidates.push(...mapped);if(mapped.length<pageSize||candidates.length>=query.limit)break;}
-    return{provider:"geoapify_places",candidates:candidates.slice(0,query.limit),rawResultCount:candidates.length,estimatedCredits:credits};
+    return{provider:"geoapify_places",candidates:candidates.slice(0,query.limit),rawResultCount:candidates.length,estimatedCredits:credits,resolvedTerritory:{latitude,longitude}};
   }finally{clearTimeout(timeout);}
 }

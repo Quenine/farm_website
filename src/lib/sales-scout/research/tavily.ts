@@ -1,4 +1,7 @@
 import {
+  canonicalizeWebsiteHostname,
+  normalizeEmail,
+  normalizeNigerianPhone,
   normalizeBusinessName,
   normalizeSocialIdentity,
   type SocialPlatform,
@@ -237,6 +240,111 @@ export async function researchWithTavily(query: ResearchQuery): Promise<Provider
   };
 }
 
+export function buildCandidateTavilyQueries(candidate: ResearchCandidate) {
+  const address = candidate.address?.split(",").slice(0, 2).join(", ") ?? "";
+  const place = [address, candidate.requestedTerritory.city, candidate.requestedTerritory.state, "Nigeria"]
+    .filter(Boolean).join(" ");
+  const quoted = `"${candidate.businessName.replaceAll('"', "")}"`;
+  return [
+    `${quoted} ${place} phone WhatsApp official website contact`,
+    `${quoted} ${place} Instagram Facebook email contact`,
+  ];
+}
+
+function significantNameTokens(name: string) {
+  return normalizeBusinessName(name).split(" ")
+    .filter((token) => token.length >= 3 && !NAME_STOP_WORDS.has(token));
+}
+
+export function candidateTavilyAssociation(
+  candidate: ResearchCandidate,
+  document: { title: string; url: string; content: string | null },
+) {
+  const haystack = normalizeBusinessName(`${document.title} ${document.content ?? ""}`);
+  const exactName = haystack.includes(candidate.normalizedBusinessName);
+  const nameTokens = significantNameTokens(candidate.businessName);
+  const allNameTokens = nameTokens.length > 0 && nameTokens.every((token) => haystack.includes(token));
+  const localityTokens = [candidate.address, candidate.city, candidate.requestedTerritory.city]
+    .filter((value): value is string => Boolean(value))
+    .flatMap((value) => normalizeBusinessName(value).split(" "))
+    .filter((token) => token.length >= 4);
+  const locationMatches = localityTokens.some((token) => haystack.includes(token));
+  let hostnameMatches = false;
+  try {
+    hostnameMatches = Boolean(candidate.website &&
+      canonicalizeWebsiteHostname(candidate.website) === canonicalizeWebsiteHostname(document.url));
+  } catch { hostnameMatches = false; }
+  return exactName || allNameTokens && locationMatches || hostnameMatches;
+}
+
+function associatedTavilyCandidate(
+  seed: ResearchCandidate,
+  document: { title: string; url: string; content: string | null },
+  observedAt: string,
+) {
+  if (!candidateTavilyAssociation(seed, document)) return null;
+  const text = `${document.title} ${document.content ?? ""}`;
+  const classification = classifyTavilyResultUrl(seed.businessName, document.url);
+  const evidence: ResearchEvidence[] = [];
+  const add = (field: string, value: string) => evidence.push({
+    source: "tavily_search", sourceUrl: document.url, observedAt, field, value,
+    confidence: "medium", verificationStatus: "plausible",
+  });
+  const phones = [...text.matchAll(/(?:\+?234|0)[789][01]\d{8}/g)]
+    .map((match) => normalizeNigerianPhone(match[0])).filter((value): value is string => Boolean(value));
+  const emails = [...text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)]
+    .map((match) => normalizeEmail(match[0])).filter((value): value is string => Boolean(value));
+  phones.forEach((value) => add("phone", value));
+  emails.forEach((value) => add("email", value));
+  let website = seed.website;
+  const social = { instagram:[...seed.instagram], facebook:[...seed.facebook], tiktok:[...seed.tiktok], x:[...seed.x], youtube:[...seed.youtube] };
+  if (classification.kind === "social_profile") {
+    social[classification.platform].push(document.url);
+    add(classification.platform, document.url);
+  } else if (classification.kind === "likely_official") {
+    website ??= document.url;
+    add("website", document.url);
+  }
+  return {
+    ...seed,
+    website,
+    phoneNumbers:[...new Set([...seed.phoneNumbers,...phones])],
+    emailAddresses:[...new Set([...seed.emailAddresses,...emails])],
+    ...social,
+    evidence:[...seed.evidence,...evidence],
+    discoverySources:seed.discoverySources.includes("tavily_search")?seed.discoverySources:[...seed.discoverySources,"tavily_search" as const],
+    researchIssues:classification.kind === "discovery_only"
+      ? [...seed.researchIssues,"Associated Tavily source retained as evidence only."]
+      : seed.researchIssues,
+    lastObservedAt:observedAt,
+  } satisfies ResearchCandidate;
+}
+
+export async function researchCandidateWithTavily(seed: ResearchCandidate) {
+  let candidate = seed;
+  let discardedSourceDocumentCount = 0;
+  let estimatedCredits = 0;
+  for (const query of buildCandidateTavilyQueries(seed).slice(0, 2)) {
+    const payload = await tavilyRequest("search", {
+      query, search_depth:"basic", max_results:10,
+      include_answer:false, include_raw_content:false,
+    });
+    estimatedCredits += 1;
+    const results = payload && typeof payload === "object" &&
+      Array.isArray((payload as { results?: unknown }).results)
+      ? (payload as { results:TavilySearchResult[] }).results : [];
+    for (const result of results) {
+      if (typeof result.title !== "string" || typeof result.url !== "string") {
+        discardedSourceDocumentCount += 1; continue;
+      }
+      const document = { title:result.title, url:result.url,
+        content:typeof result.content === "string" ? result.content : null };
+      const next = associatedTavilyCandidate(candidate, document, new Date().toISOString());
+      if (next) candidate = next; else discardedSourceDocumentCount += 1;
+    }
+  }
+  return { candidate, discardedSourceDocumentCount, estimatedCredits };
+}
 export async function extractWithTavily(urls: string[]) {
   if (urls.length < 1 || urls.length > MAX_EXTRACT_URLS) {
     throw new ResearchProviderError("TAVILY_EXTRACT_URL_LIMIT");

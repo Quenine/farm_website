@@ -66,3 +66,9 @@ Outputs are ignored files beneath `tmp/sales-scout-research/<run-id>/`: `candida
 ## Remaining gate
 
 No real Geoapify, Tavily, or public-website request has run. The first bounded live evaluation still requires owner approval, credentials, explicit parameters, and acceptance of the printed cost ceiling. Production discovery, persistence, UI, CRM, qualification, orders, attribution, and outreach remain unchanged.
+
+## Production interpretation after the first Lagos pilot
+
+The bounded pilot produced six real Geoapify seeds and six unsuitable broad Tavily documents. Those figures demonstrate that structured seeds were useful and broad document search was not a safe prospect source; they do not measure nationwide coverage. Batch 6B removes broad Tavily documents from prospect generation. Tavily now runs at most two deterministic searches against each selected Geoapify seed and may only enrich that seed after exact-name/address/host association. Rejected documents contribute diagnostics only.
+
+The earlier readiness gate hid provider-listed phone values because they were plausible, not independently verified. Production now exposes them as manual-review-ready with an explicit review warning while preserving a stricter outreach-ready tier for official-site or owner-verified contacts. This is an evidence classification change, not a claim that plausible contacts are verified. A live production evaluation remains pending migration, variables, deployment, and the owner runbook.

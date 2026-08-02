@@ -16,8 +16,10 @@ import {
   transitionSalesScoutReviewStatus,
   setSalesScoutDoNotContact,
   updateSalesScoutCampaignStatus,
+  saveSalesScoutCampaign,
 } from "@/src/lib/sales-scout/server";
 import { campaignStatusSchema, doNotContactSchema, reviewTransitionSchema } from "@/src/lib/sales-scout/review";
+import { approveOutreachDraft, confirmOutreachSent, recordOutreachOutcome, saveOutreachDraft } from "@/src/lib/sales-scout/outreach-server";
 
 export type SalesScoutActionState = {
   ok: boolean;
@@ -138,3 +140,19 @@ export async function updateCampaignStatusAction(formData: FormData): Promise<Sa
     return { ok: true, message: "Campaign status updated.", data };
   } catch (error) { return failure(error); }
 }
+
+export async function saveCampaignAction(formData: FormData): Promise<SalesScoutActionState> {
+  try {
+    await guardAction();
+    const payload = JSON.parse(z.string().max(20_000).parse(formData.get("payload"))) as unknown;
+    const data = await saveSalesScoutCampaign(payload);
+    revalidatePath("/admin/marketing/sales-scout");
+    revalidatePath("/admin/marketing/sales-scout/discover");
+    return { ok:true,message:"Campaign saved. Discovery was not started.",data };
+  } catch(error){return failure(error);}
+}
+
+export async function saveOutreachDraftAction(formData:FormData):Promise<SalesScoutActionState>{try{await guardAction();const data=await saveOutreachDraft(Object.fromEntries(formData));revalidatePath(`/admin/marketing/sales-scout/${formData.get("prospectId")}`);return{ok:true,message:"Editable draft saved.",data:data as object};}catch(error){return failure(error);}}
+export async function approveOutreachAction(formData:FormData):Promise<SalesScoutActionState>{try{await guardAction();const data=await approveOutreachDraft(Object.fromEntries(formData));revalidatePath("/admin/marketing/sales-scout");return{ok:true,message:"Draft approved for manual handoff.",data:data as object};}catch(error){return failure(error);}}
+export async function markOutreachSentAction(formData:FormData):Promise<SalesScoutActionState>{try{await guardAction();const data=await confirmOutreachSent(Object.fromEntries(formData));revalidatePath("/admin/marketing/sales-scout");return{ok:true,message:"Manual send recorded and follow-up scheduled.",data:data as object};}catch(error){return failure(error);}}
+export async function recordOutreachOutcomeAction(formData:FormData):Promise<SalesScoutActionState>{try{await guardAction();const data=await recordOutreachOutcome(Object.fromEntries(formData));revalidatePath("/admin/marketing/sales-scout");return{ok:true,message:"Outreach outcome recorded.",data:data as object};}catch(error){return failure(error);}}

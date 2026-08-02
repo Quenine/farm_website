@@ -71,6 +71,7 @@ export type ProviderResult = {
   rawResultCount: number;
   estimatedCredits: number;
   failureReference?: string;
+  resolvedTerritory?: Pick<ResearchTerritory, "latitude" | "longitude">;
 };
 
 export class ResearchProviderError extends Error {

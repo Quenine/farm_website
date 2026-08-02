@@ -274,3 +274,11 @@ Owner-triggered DataForSEO runs stage canonical provider listings for review. Ca
 ## Batch 6A research evaluation boundary
 
 Provider-neutral research lives under `src/lib/sales-scout/research/` and is intentionally separate from staged discovery and CRM persistence. Geoapify supplies conservative place discovery, Tavily supplies bounded web discovery, and controlled official-site research supplies verified public contact evidence. Evaluation outputs are ignored local artifacts only. Deterministic identity merging, evidence preservation, contact quality, and SSRF/robots controls must pass before any later production-provider proposal.
+
+## Batch 6B production extension
+
+`research/production.ts` is the provider-neutral seed-first orchestrator. It bounds Geoapify calls, candidate-specific Tavily searches, unique official sites, and HTML pages; preserves partial seeds; and decorates every candidate with territory, contact-confidence, and readiness evidence. `territory.ts` owns Nigerian state/FCT normalization and Haversine matching. `discovery/server.ts` is the protected application boundary and uses only provider-neutral research RPCs for run persistence. DataForSEO files and historic rows remain dormant and readable.
+
+Migration `20260802000100_sales_scout_production_release.sql` extends existing campaign/run/candidate tables instead of adding a second CRM. JSONB arrays retain multi-route contact and evidence records while compatibility phone/website columns remain. Provider constraints enumerate only legacy DataForSEO and the new research method. Campaign, completion, capture-evidence, and outreach writes use actor-required, service-role-only RPCs. Existing RLS remains enabled with no client policy.
+
+Outreach reuses prospect channels, outreaches, activities, commercial stage, follow-up, and do-not-contact fields. Deterministic draft generation is pure; handoff URL creation is pure; every mutation is owner-authorized server code backed by transactional SQL. No provider key enters client code and no handoff invokes an external send API.

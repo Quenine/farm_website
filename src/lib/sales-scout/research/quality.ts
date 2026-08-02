@@ -67,10 +67,31 @@ export function hasPublicSocialProfile(candidate: ResearchCandidate) {
   ];
   return profiles.some(([field, value]) => verified(candidate, field, value));
 }
+export function hasAnyNormalizedPublicContact(candidate: ResearchCandidate) {
+  return hasUsablePhone(candidate) || hasUsableEmail(candidate) ||
+    hasUsableWhatsApp(candidate) || Boolean(candidate.website) ||
+    candidate.instagram.length > 0 || candidate.facebook.length > 0 ||
+    candidate.tiktok.length > 0 || candidate.x.length > 0 ||
+    candidate.youtube.length > 0;
+}
 export function hasAnyUsableContact(candidate: ResearchCandidate) {
   return hasEvidenceBackedPhone(candidate) || hasEvidenceBackedEmail(candidate) ||
     hasEvidenceBackedWhatsApp(candidate) || hasOfficialWebsite(candidate) ||
     hasPublicSocialProfile(candidate);
+}
+export function isDiscovered(candidate: ResearchCandidate) {
+  const categoryVerified = verified(candidate, "requestedCategory", candidate.requestedCategory);
+  const territoryMatched = candidate.evidence.some((item) =>
+    item.field === "territoryMatch" && item.value === "true" &&
+    item.verificationStatus === "verified");
+  const legacyVerifiedTerritory = Boolean(candidate.country && candidate.state && candidate.city &&
+    verified(candidate, "country", candidate.country) && verified(candidate, "state", candidate.state) &&
+    verified(candidate, "city", candidate.city));
+  return Boolean(candidate.businessName.trim() && categoryVerified &&
+    (territoryMatched && candidate.sourceIdentities.geoapify_places || legacyVerifiedTerritory));
+}
+export function isManualReviewReady(candidate: ResearchCandidate) {
+  return isDiscovered(candidate) && hasAnyNormalizedPublicContact(candidate);
 }
 export function isResearchReady(candidate: ResearchCandidate) {
   const countrySupported = candidate.country != null &&
@@ -85,7 +106,7 @@ export function isResearchReady(candidate: ResearchCandidate) {
   );
 }
 export function isOutreachReady(candidate: ResearchCandidate) {
-  return isResearchReady(candidate) && hasAnyUsableContact(candidate);
+  return isDiscovered(candidate) && hasAnyUsableContact(candidate);
 }
 export function contactCoverageScore(candidate: ResearchCandidate) {
   const checks = [

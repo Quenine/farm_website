@@ -26,3 +26,7 @@ The Batch 6A foundation existed at commit `fef8711`.
 No dependency, database, migration, production service, UI, provider request format, environment value, CRM, qualification, order, attribution, or outreach behavior changed. No Geoapify, Tavily, public website, DataForSEO, Supabase, PostgreSQL, Playwright, deployment, messaging, or production-write operation ran.
 
 The first bounded live evaluation remains pending explicit owner approval, credentials, parameters, and review of the printed retry-inclusive cost ceiling.
+
+## Batch 6B production release
+
+The seed-first nationwide campaign, contact-confidence, candidate capture, and human-controlled outreach implementation is documented in `BATCH-6B.md`. Migration `20260802000100` remains unapplied; PostgreSQL verification, repeat application, provider requests, deployment, and smoke testing remain pending. No automatic external messaging was introduced.
