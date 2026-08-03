@@ -15,3 +15,5 @@ Batch 6B implements the first production-oriented nationwide discovery and human
 - No provider, website, database, messaging, deployment, or environment operation was performed during this hardening pass. Paid orders remain the only revenue truth.
 
 - Batch 6B-H2 corrected the production verifier capture fixture with `scoredAt`, synchronized outreach draft/review state to persisted workflow transitions, made approved text explicitly copyable, and retained website timeouts through bounded body reads. Geoapify cost ceilings now conservatively include territory resolution per category when coordinates are absent. These remain static/offline changes pending the required non-production migration and PostgreSQL verifier execution.
+
+- Corrected the production verifier to use lowercase public for PostgreSQL pseudo-role privilege checks and added a regression guard against uppercase PUBLIC.

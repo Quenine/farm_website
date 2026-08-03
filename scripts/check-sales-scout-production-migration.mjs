@@ -68,6 +68,9 @@ for (const field of ["'score'", "'ruleVersion'", "'factors'", "'scoredAt'"]) {
   assert.ok(captureFixture.includes(field), `capture fixture missing ${field}`);
 }
 assert.match(verifier,/has_function_privilege\('service_role'/);
+assert.match(verifier,/array\['public','anon','authenticated'\]/g);
+assert.doesNotMatch(verifier,/array\['PUBLIC','anon','authenticated'\]/g);
+assert.doesNotMatch(verifier,/has_(?:table|function)_privilege\('PUBLIC'/);
 assert.match(verifier,/rollback;\s*$/);
 assert.ok(fs.existsSync("database/rollback-dry-run-sales-scout-production-release.sql"));
 console.log("Sales Scout production migration static verification passed.");

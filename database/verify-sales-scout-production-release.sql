@@ -22,7 +22,7 @@ begin
     if exists(
       select 1 from pg_policies where schemaname='public' and tablename=v_table
     ) then raise exception 'unexpected policy on %',v_table; end if;
-    foreach v_role in array array['PUBLIC','anon','authenticated'] loop
+    foreach v_role in array array['public','anon','authenticated'] loop
       foreach v_privilege in array array['SELECT','INSERT','UPDATE','DELETE'] loop
         if has_table_privilege(v_role,'public.'||v_table,v_privilege) then
           raise exception '% has % on %',v_role,v_privilege,v_table;
@@ -50,7 +50,7 @@ begin
     if to_regprocedure(v_signature) is null then
       raise exception 'required RPC missing: %',v_signature;
     end if;
-    foreach v_role in array array['PUBLIC','anon','authenticated'] loop
+    foreach v_role in array array['public','anon','authenticated'] loop
       if has_function_privilege(v_role,v_signature,'EXECUTE') then
         raise exception '% can execute %',v_role,v_signature;
       end if;
