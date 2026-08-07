@@ -8,6 +8,9 @@ const productionFiles=[
   "src/lib/sales-scout/research/tavily.ts",
   "src/lib/sales-scout/research/website.ts",
   "src/lib/sales-scout/research/quality.ts",
+  "src/lib/sales-scout/research/public-web.ts",
+  "src/lib/sales-scout/research/serpapi.ts",
+  "src/lib/sales-scout/research/opportunity.ts",
   "src/lib/sales-scout/discovery/server.ts",
   "src/lib/sales-scout/territory.ts",
   "src/lib/sales-scout/outreach.ts",
@@ -38,13 +41,24 @@ assert.match(source,/plausible/);
 assert.match(source,/verified/);
 assert.match(source,/isManualReviewReady/);
 assert.match(source,/isOutreachReady/);
-assert.doesNotMatch(source,/NEXT_PUBLIC_(?:GEOAPIFY|TAVILY|DATAFORSEO)|puppeteer|selenium|captcha|social.*password/i);
+assert.doesNotMatch(source,/NEXT_PUBLIC_(?:GEOAPIFY|TAVILY|SERPAPI|DATAFORSEO)|puppeteer|selenium|captcha|social.*password/i);
 assert.doesNotMatch(source,/sendMessage|messages\.send|directMessage|automatic.*send/i);
 
 assert.match(server,/SALES_SCOUT_TAVILY_ENRICHMENT_ENABLED==="true"/);
 assert.match(server,/isTavilyEnrichmentEnabled\(\)&&Boolean\(process\.env\.TAVILY_API_KEY/);
 assert.doesNotMatch(server,/function isTavilyConfigured\(\)\{return Boolean\(process\.env\.TAVILY_API_KEY/);
-assert.match(source,/Tavily enrichment disabled pending provider authorization/);
+assert.match(source,/Tavily: production-disabled/);
+assert.match(server,/SALES_SCOUT_PUBLIC_WEB_RESEARCH_ENABLED==="true"/);
+assert.match(server,/Boolean\(process\.env\.SERPAPI_API_KEY/);
+assert.match(productionSource,/maximumPublicWebSearchCalls: enrichment \* MAX_PUBLIC_WEB_SEARCHES_PER_CANDIDATE/);
+assert.match(source,/MAX_PUBLIC_WEB_SEARCHES_PER_CANDIDATE = 4/);
+assert.match(source,/wa\.me/);
+assert.match(source,/canBecomeOutreachReady/);
+assert.match(source,/GEOAPIFY_ZERO_FEATURES/);
+assert.match(source,/GEOAPIFY_FEATURES_MAPPED_ZERO_NAMED_CANDIDATES/);
+assert.match(source,/GEOAPIFY_CANDIDATES_MISSING_STABLE_IDENTITIES/);
+assert.match(source,/GEOAPIFY_CANDIDATES_REJECTED_TERRITORY/);
+assert.match(source,/GEOAPIFY_CANDIDATES_EMPTY_AFTER_DEDUP_FILTER/);
 
 assert.match(geoapify,/const MAX_PAGES=5/);
 assert.match(geoapify,/normalizeNigerianState\(state\)!==wantedState/);
@@ -106,9 +120,11 @@ assert.doesNotMatch(source,/\.from\(["']marketing_(?:prospects|prospect_outreach
 assert.ok(fs.existsSync(".env.shields.example"));
 const env=fs.readFileSync(".env.shields.example","utf8");
 assert.match(env,/GEOAPIFY_API_KEY=/);
+assert.match(env,/SALES_SCOUT_PUBLIC_WEB_RESEARCH_ENABLED="false"/);
+assert.match(env,/SERPAPI_API_KEY=/);
 assert.match(env,/SALES_SCOUT_TAVILY_ENRICHMENT_ENABLED="false"/);
 assert.match(env,/TAVILY_API_KEY=/);
-assert.doesNotMatch(env,/NEXT_PUBLIC_(?:GEOAPIFY|TAVILY)/);
+assert.doesNotMatch(env,/NEXT_PUBLIC_(?:GEOAPIFY|TAVILY|SERPAPI)/);
 const changed=execFileSync("git",["status","--porcelain"],{encoding:"utf8"});
 assert.doesNotMatch(changed,/(?:^|\n).. (?:package(?:-lock)?\.json|\.env\.example|.*(?:storefront|inventory|checkout|payment|orders).*|.*noble.*)/i);
 console.log("Sales Scout production/outreach static audit passed.");

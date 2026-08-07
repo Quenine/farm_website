@@ -1,4 +1,4 @@
-import { normalizeBusinessName, normalizeLocationComparison } from "../normalization.ts";
+import { normalizeBusinessName, normalizeLocationComparison, normalizeEmail, normalizeNigerianPhone } from "../normalization.ts";
 import { normalizeNigerianState } from "../territory.ts";
 import type {
   ProviderResult, ResearchCandidate, ResearchCategory, ResearchEvidence,
@@ -14,6 +14,7 @@ const CATEGORY_MAP: Partial<Record<ResearchCategory,string>> = {
 };
 const MAX_LIMIT=20;
 const MAX_PAGES=5;
+const unique=<T>(values:T[])=>[...new Set(values)];
 
 export function geoapifyCategory(category:ResearchCategory){return CATEGORY_MAP[category]??null;}
 export function buildGeoapifyTerritoryUrl(territory:ResearchTerritory,key="configured"){
@@ -39,6 +40,13 @@ export function buildGeoapifyPlacesUrl(query:ResearchQuery,longitude:number,lati
   url.searchParams.set("apiKey",key);
   return url;
 }
+export function buildGeoapifyPlaceDetailsUrl(placeId:string,key="configured"){
+  const url=new URL("https://api.geoapify.com/v2/place-details");
+  url.searchParams.set("id",placeId);
+  url.searchParams.set("features","details");
+  url.searchParams.set("apiKey",key);
+  return url;
+}
 type GeoProperties={
   place_id?:unknown;name?:unknown;categories?:unknown;formatted?:unknown;
   city?:unknown;locality?:unknown;state?:unknown;country?:unknown;country_code?:unknown;
@@ -46,9 +54,39 @@ type GeoProperties={
 };
 type GeoFeature={properties?:GeoProperties};
 
+type GeoDetailsProperties=GeoProperties&{
+  feature_type?:unknown;website_other?:unknown;description?:unknown;
+  contact?:{phone?:unknown;phone_other?:unknown;email?:unknown;email_other?:unknown};
+};
+
 function features(payload:unknown):GeoFeature[]{
   return payload&&typeof payload==="object"&&Array.isArray((payload as {features?:unknown}).features)
     ?(payload as {features:GeoFeature[]}).features:[];
+}
+export function mergeGeoapifyPlaceDetails(
+  candidate:ResearchCandidate,payload:unknown,observedAt:string,
+):ResearchCandidate{
+  const details=features(payload).map((feature)=>feature.properties as GeoDetailsProperties|undefined)
+    .find((item)=>item&&text(item.feature_type)==="details");
+  if(!details)return{...candidate,researchIssues:unique([...candidate.researchIssues,"GEOAPIFY_PLACE_DETAILS_EMPTY"])};
+  const sourceUrl=`https://www.geoapify.com/place-details/?id=${encodeURIComponent(candidate.sourceIdentities.geoapify_places??"")}`;
+  const strings=(value:unknown)=>Array.isArray(value)?value.filter((item):item is string=>typeof item==="string"):
+    typeof value==="string"?[value]:[];
+  const phones=unique([...strings(details.contact?.phone),...strings(details.contact?.phone_other)])
+    .map(normalizeNigerianPhone).filter((value):value is string=>Boolean(value));
+  const emails=unique([...strings(details.contact?.email),...strings(details.contact?.email_other)])
+    .map(normalizeEmail).filter((value):value is string=>Boolean(value));
+  const websites=unique([...strings(details.website),...strings(details.website_other)]);
+  const facts:ResearchEvidence[]=[];
+  for(const value of phones)facts.push({source:"geoapify_place_details",sourceUrl,observedAt,field:"phone",value,confidence:"medium",verificationStatus:"plausible"});
+  for(const value of emails)facts.push({source:"geoapify_place_details",sourceUrl,observedAt,field:"email",value,confidence:"medium",verificationStatus:"plausible"});
+  if(websites[0])facts.push({source:"geoapify_place_details",sourceUrl,observedAt,field:"website",value:websites[0],confidence:"medium",verificationStatus:"plausible"});
+  const description=text(details.description);
+  if(description)facts.push({source:"geoapify_place_details",sourceUrl,observedAt,field:"publicDescription",value:description,confidence:"medium",verificationStatus:"plausible"});
+  return{...candidate,website:candidate.website??websites[0]??null,
+    phoneNumbers:unique([...candidate.phoneNumbers,...phones]),emailAddresses:unique([...candidate.emailAddresses,...emails]),
+    publicDescription:candidate.publicDescription??description,evidence:[...candidate.evidence,...facts],
+    discoverySources:unique([...candidate.discoverySources,"geoapify_place_details"]),lastObservedAt:observedAt};
 }
 function text(value:unknown){return typeof value==="string"&&value.trim()?value.trim():null;}
 function evidence(sourceUrl:string,observedAt:string,field:string,value:string,verificationStatus:"verified"|"plausible"="verified"):ResearchEvidence{
@@ -106,6 +144,18 @@ async function geoFetch(url:URL,signal:AbortSignal){
   if(!response.ok)throw new ResearchProviderError(providerStatusReference("GEOAPIFY",response.status));
   try{return await response.json() as unknown;}catch{throw new ResearchProviderError("GEOAPIFY_INVALID_JSON");}
 }
+export async function researchGeoapifyPlaceDetails(
+  candidate:ResearchCandidate,deadline:{deadlineAtMs:number;now:()=>number},
+):Promise<ResearchCandidate>{
+  if(typeof window!=="undefined")throw new ResearchProviderError("GEOAPIFY_SERVER_ONLY");
+  const key=process.env.GEOAPIFY_API_KEY?.trim();if(!key)throw new ResearchProviderError("GEOAPIFY_NOT_CONFIGURED");
+  const placeId=candidate.sourceIdentities.geoapify_places?.trim();
+  if(!placeId)throw new ResearchProviderError("GEOAPIFY_PLACE_DETAILS_ID_MISSING");
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),Math.min(12_000,Math.max(1,deadline.deadlineAtMs-deadline.now())));
+  try{return mergeGeoapifyPlaceDetails(candidate,await geoFetch(buildGeoapifyPlaceDetailsUrl(placeId,key),controller.signal),new Date(deadline.now()).toISOString());}
+  finally{clearTimeout(timeout);}
+}
 export async function researchWithGeoapify(
   query:ResearchQuery & {deadlineAtMs?:number;now?:()=>number},
 ):Promise<ProviderResult>{
@@ -118,9 +168,9 @@ export async function researchWithGeoapify(
   try{
     let longitude=query.territory.longitude,latitude=query.territory.latitude,credits=0;
     if(longitude==null||latitude==null){const location=resolveGeoapifyTerritory(await geoFetch(buildGeoapifyTerritoryUrl(query.territory,key),controller.signal),query.territory);longitude=location.longitude;latitude=location.latitude;credits+=1;}
-    const candidates:ResearchCandidate[]=[],pageSize=Math.min(MAX_LIMIT,Math.max(1,query.limit));
+    const candidates:ResearchCandidate[]=[],pageSize=Math.min(MAX_LIMIT,Math.max(1,query.limit));let rawResultCount=0;
     const pages=Math.min(MAX_PAGES,Math.ceil(query.limit/pageSize));
-    for(let page=1;page<=pages;page+=1){const mapped=mapGeoapifyPlacesResponse(await geoFetch(buildGeoapifyPlacesUrl(query,longitude,latitude,page,key),controller.signal),query,new Date().toISOString());credits+=1;candidates.push(...mapped);if(mapped.length<pageSize||candidates.length>=query.limit)break;}
-    return{provider:"geoapify_places",candidates:candidates.slice(0,query.limit),rawResultCount:candidates.length,estimatedCredits:credits,resolvedTerritory:{latitude,longitude}};
+    for(let page=1;page<=pages;page+=1){const payload=await geoFetch(buildGeoapifyPlacesUrl(query,longitude,latitude,page,key),controller.signal);const rawPageCount=features(payload).length;rawResultCount+=rawPageCount;const mapped=mapGeoapifyPlacesResponse(payload,query,new Date().toISOString());credits+=1;candidates.push(...mapped);if(rawPageCount<pageSize||candidates.length>=query.limit)break;}
+    return{provider:"geoapify_places",candidates:candidates.slice(0,query.limit),rawResultCount,estimatedCredits:credits,resolvedTerritory:{latitude,longitude}};
   }finally{clearTimeout(timeout);}
 }

@@ -5,3 +5,6 @@ export * from "./website.ts";
 export * from "./merge.ts";
 export * from "./quality.ts";
 export * from "./evaluation.ts";
+export * from "./public-web.ts";
+export * from "./serpapi.ts";
+export * from "./opportunity.ts";

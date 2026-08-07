@@ -12,7 +12,7 @@ function RunButton() {
       disabled={pending}
       className="mt-3 rounded-full bg-green-800 px-5 py-3 font-bold text-white disabled:opacity-40"
     >
-      {pending ? "Running paid discovery..." : "Confirm and run bounded discovery"}
+      {pending ? "Running bounded research..." : "Confirm and run Nigeria Revenue Mode"}
     </button>
   );
 }
@@ -31,7 +31,7 @@ export function DiscoveryRunForm({
       <input type="hidden" name="campaignId" value={campaignId} />
       <label className="mt-3 flex gap-2">
         <input required type="checkbox" name="confirmed" value="yes" disabled={disabled} />
-        <span>I confirm this may consume Geoapify and optional Tavily credits. It sends no outreach.</span>
+        <span>I confirm this may consume bounded Geoapify and enabled public-web search credits. It sends no outreach.</span>
       </label>
       <fieldset disabled={disabled}>
         <RunButton />

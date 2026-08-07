@@ -1,0 +1,16 @@
+{
+  "businessName": "Casper & Gambini's",
+  "category": "Restaurant",
+  "city": "Ikeja",
+  "state": "Lagos",
+  "address": "Ikeja, Lagos, Nigeria",
+  "placeId": "geo-casper-gambinis-ikeja",
+  "organicResults": [
+    {
+      "position": 1,
+      "title": "Casper & Gambini's Ikeja | Restaurant",
+      "link": "https://www.instagram.com/casperandgambinisng/",
+      "snippet": "Casper & Gambini's restaurant in Ikeja, Lagos."
+    }
+  ]
+}

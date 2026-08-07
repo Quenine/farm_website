@@ -120,10 +120,10 @@ export function evidenceFor(evidence: ResearchEvidence[], field: string, value: 
   return evidence.filter((item) => item.field === field && item.value === value);
 }
 export type CandidateContactFilter =
-  "has_phone" | "has_whatsapp" | "has_email" | "has_web_social";
+  "has_phone" | "has_whatsapp" | "has_email" | "has_instagram" | "has_facebook" | "has_web_social";
 
 export function isCandidateContactFilter(value: string | undefined): value is CandidateContactFilter {
-  return ["has_phone", "has_whatsapp", "has_email", "has_web_social"].includes(value ?? "");
+  return ["has_phone", "has_whatsapp", "has_email", "has_instagram", "has_facebook", "has_web_social"].includes(value ?? "");
 }
 
 export function paginateContactEvidenceRows<T extends {

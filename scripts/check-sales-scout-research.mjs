@@ -33,12 +33,12 @@ const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 for (const file of evaluatedFiles) {
   const text = fs.readFileSync(file, "utf8");
   if (text.includes('"use client"') || text.includes("'use client'")) {
-    assert.doesNotMatch(text, /GEOAPIFY_API_KEY|TAVILY_API_KEY/);
+    assert.doesNotMatch(text, /GEOAPIFY_API_KEY|TAVILY_API_KEY|SERPAPI_API_KEY/);
   }
 }
 assert.doesNotMatch(
   source,
-  /console\.(?:log|error|warn)\([^\n]*(?:GEOAPIFY_API_KEY|TAVILY_API_KEY)/,
+  /console\.(?:log|error|warn)\([^\n]*(?:GEOAPIFY_API_KEY|TAVILY_API_KEY|SERPAPI_API_KEY)/,
 );
 assert.doesNotMatch(source, /writeFile[^\n]*(?:raw_content|rawResponse|providerBody)/i);
 assert.doesNotMatch(source, /supabase|createAdminSupabaseClient|\.from\(["']marketing_/i);

@@ -9,7 +9,7 @@ This is an owner-operated Shields deployment procedure. It does not authorize au
 5. Execute `database/verify-sales-scout-production-release.sql`. It exercises campaign, research, compatibility, confidence, outreach, suppression, privilege, and follow-up behavior inside a transaction that rolls back.
 6. Apply the same migration a second time to prove repeat safety. Static inspection is not equivalent to executing it twice.
 7. Execute the verifier again and retain both migration/verifier transcripts.
-8. Configure Shields only: `SALES_SCOUT_ENABLED=true`, `SALES_SCOUT_DISCOVERY_ENABLED=true`, `GEOAPIFY_API_KEY`, and `SALES_SCOUT_TAVILY_ENRICHMENT_ENABLED=false`. Leave `TAVILY_API_KEY` unset. All variables are server-only; never prefix them with `NEXT_PUBLIC_`.
+8. Configure Shields only: `SALES_SCOUT_ENABLED=true`, `SALES_SCOUT_DISCOVERY_ENABLED=true`, `GEOAPIFY_API_KEY`, `SALES_SCOUT_PUBLIC_WEB_RESEARCH_ENABLED=true`, `SERPAPI_API_KEY`, and `SALES_SCOUT_TAVILY_ENRICHMENT_ENABLED=false`. Leave `TAVILY_API_KEY` unset. All provider variables are server-only; never prefix them with `NEXT_PUBLIC_`.
 9. Confirm DataForSEO variables remain removed or unset. Its legacy rows and adapter remain compatible but are not the production orchestrator.
 10. Deploy the reviewed Shields commit only. Do not modify or deploy Noble configuration.
 11. Begin with one active campaign, one structured category, result limit 5, and enrichment disabled. The initial path is Geoapify structured seeds plus bounded research of likely official websites supplied by Geoapify.

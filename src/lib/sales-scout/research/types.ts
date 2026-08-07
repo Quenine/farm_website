@@ -5,10 +5,11 @@ export const RESEARCH_CATEGORIES = [
 
 export type ResearchCategory = (typeof RESEARCH_CATEGORIES)[number];
 export type ResearchSource =
-  | "geoapify_places" | "tavily_search" | "official_website" | "manual_public_source";
+  | "geoapify_places" | "geoapify_place_details" | "tavily_search"
+  | "public_web_search" | "official_website" | "manual_public_source";
 export type EvidenceConfidence = "high" | "medium" | "low";
-export type VerificationStatus = "verified" | "plausible" | "unavailable";
-export type ProviderName = "GEOAPIFY" | "TAVILY";
+export type VerificationStatus = "verified" | "plausible" | "rejected" | "unavailable";
+export type ProviderName = "GEOAPIFY" | "TAVILY" | "SERPAPI";
 
 export type ResearchTerritory = {
   country: string;

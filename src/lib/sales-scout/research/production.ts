@@ -14,8 +14,12 @@ import {
   isManualReviewReady,
   isOutreachReady,
 } from "./quality.ts";
-import { researchWithGeoapify } from "./geoapify.ts";
+import { researchGeoapifyPlaceDetails, researchWithGeoapify } from "./geoapify.ts";
 import { researchCandidateWithTavily } from "./tavily.ts";
+import { researchWithSerpApi } from "./serpapi.ts";
+import { MAX_PUBLIC_WEB_SEARCHES_PER_CANDIDATE, researchCandidateWithPublicWeb,
+  type PublicWebSearchProvider } from "./public-web.ts";
+import { assessNigeriaOpportunity, type OpportunityAssessment } from "./opportunity.ts";
 import { ResearchProviderError } from "./types.ts";
 import type {
   ProviderResult,
@@ -38,6 +42,8 @@ export const PRODUCTION_RESEARCH_LIMITS = {
   tavilySearchesPerSeed: 2,
   maximumOfficialWebsites: 20,
   maximumPagesPerWebsite: 5,
+  maximumGeoapifyPlaceDetailsPerCandidate: 1,
+  maximumPublicWebSearchesPerCandidate: MAX_PUBLIC_WEB_SEARCHES_PER_CANDIDATE,
 } as const;
 
 export type ContactConfidence = "verified" | "plausible";
@@ -62,11 +68,13 @@ export type ProductionResearchCandidate = {
   manualReviewReady: boolean;
   outreachReady: boolean;
   enrichmentStatus: "not_selected" | "completed" | "partial" | "failed";
+  opportunity: OpportunityAssessment;
 };
 
 export type ProductionResearchSummary = {
   candidates: ProductionResearchCandidate[];
   resolvedTerritory: ResearchTerritory;
+  rawResultCount: number;
   structuredSeedCount: number;
   invalidSeedCount: number;
   discardedSourceDocumentCount: number;
@@ -75,7 +83,9 @@ export type ProductionResearchSummary = {
   officialWebsitesResearched: number;
   manualReviewReadyCount: number;
   outreachReadyCount: number;
-  providerCredits: { geoapify: number; tavily: number };
+  geoapifyPlaceDetailsCalls: number;
+  publicWebSearchCalls: number;
+  providerCredits: { geoapify: number; tavily: number; serpapi: number };
   warnings: string[];
 };
 
@@ -94,6 +104,8 @@ export type PipelineDependencies = {
     discardedSourceDocumentCount: number;
     estimatedCredits: number;
   }>;
+  geoapifyDetails: (candidate: ResearchCandidate, deadline: ResearchDeadline) => Promise<ResearchCandidate>;
+  publicWebSearch: PublicWebSearchProvider;
   website: (url: string, deadline: ResearchDeadline) => ReturnType<typeof researchOfficialWebsite>;
   now: () => number;
   minimumRequestBudgetMs: number;
@@ -102,6 +114,8 @@ export type PipelineDependencies = {
 const defaultDependencies: PipelineDependencies = {
   geoapify: researchWithGeoapify,
   tavily: researchCandidateWithTavily,
+  geoapifyDetails: researchGeoapifyPlaceDetails,
+  publicWebSearch: researchWithSerpApi,
   website: researchOfficialWebsite,
   now: Date.now,
   minimumRequestBudgetMs: 1_000,
@@ -190,7 +204,7 @@ function withTerritoryEvidence(candidate: ResearchCandidate, territory: Research
 function decorate(candidate: ResearchCandidate, territoryMatch: TerritoryMatchEvidence,
   enrichmentStatus: ProductionResearchCandidate["enrichmentStatus"]): ProductionResearchCandidate {
   const contacts = contactsForCandidate(candidate);
-  return {
+  const base:Omit<ProductionResearchCandidate,"opportunity"> = {
     candidate,
     territoryMatch,
     contacts,
@@ -201,6 +215,7 @@ function decorate(candidate: ResearchCandidate, territoryMatch: TerritoryMatchEv
     outreachReady: isOutreachReady(candidate) && hasAnyUsableContact(candidate),
     enrichmentStatus,
   };
+  return { ...base, opportunity: assessNigeriaOpportunity({ candidate, contacts, territoryMatch }) };
 }
 
 export function productionResearchCostCeiling(input: {
@@ -218,6 +233,8 @@ export function productionResearchCostCeiling(input: {
       (input.coordinatesConfigured ? 0 : 1)
     ),
     maximumTavilySearches: enrichment * PRODUCTION_RESEARCH_LIMITS.tavilySearchesPerSeed,
+    maximumGeoapifyPlaceDetailsCalls: enrichment,
+    maximumPublicWebSearchCalls: enrichment * MAX_PUBLIC_WEB_SEARCHES_PER_CANDIDATE,
     maximumOfficialWebsites: enrichment,
     maximumOfficialWebsitePages: enrichment * PRODUCTION_RESEARCH_LIMITS.maximumPagesPerWebsite,
     maximumStagedCandidates: Math.min(input.resultLimit * categories,
@@ -235,6 +252,8 @@ export async function runSeedFirstProductionResearch(input: {
   resultLimit: number;
   maxEnrichmentCandidates: number;
   tavilyConfigured: boolean;
+  publicWebConfigured?: boolean;
+  geoapifyPlaceDetailsConfigured?: boolean;
   timeBudgetMs?: number;
   deadlineAtMs?: number;
 }, dependencyOverrides: Partial<PipelineDependencies> = {}): Promise<ProductionResearchSummary> {
@@ -259,6 +278,7 @@ export async function runSeedFirstProductionResearch(input: {
   };
 
   const rawSeeds: ResearchCandidate[] = [];
+  let rawFeatureCount = 0;
   let invalidSeedCount = 0;
   let geoapifyCredits = 0;
   let resolvedTerritory = { ...input.territory };
@@ -286,6 +306,7 @@ export async function runSeedFirstProductionResearch(input: {
       continue;
     }
     geoapifyCredits += result.estimatedCredits;
+    rawFeatureCount += result.rawResultCount;
     if (result.resolvedTerritory) {
       resolvedTerritory = { ...resolvedTerritory, ...result.resolvedTerritory };
     }
@@ -298,14 +319,17 @@ export async function runSeedFirstProductionResearch(input: {
   }
   if (invalidSeedCount > 0) warnings.push("GEOAPIFY_INVALID_SEED_IDENTITY");
   if (!rawSeeds.length) {
-    throw new ResearchProviderError("GEOAPIFY_NO_STRUCTURED_SEEDS");
+    if (rawFeatureCount === 0) throw new ResearchProviderError("GEOAPIFY_ZERO_FEATURES");
+    if (invalidSeedCount > 0) throw new ResearchProviderError("GEOAPIFY_CANDIDATES_MISSING_STABLE_IDENTITIES");
+    throw new ResearchProviderError("GEOAPIFY_FEATURES_MAPPED_ZERO_NAMED_CANDIDATES");
   }
 
   const matched = rawSeeds.map((candidate) => withTerritoryEvidence(candidate, resolvedTerritory))
     .filter((item) => item.territoryMatch.matched);
+  if (!matched.length) throw new ResearchProviderError("GEOAPIFY_CANDIDATES_REJECTED_TERRITORY");
   const preliminary = deduplicateCandidates(matched.map((item) => item.candidate)).candidates;
   if (!preliminary.length) {
-    throw new ResearchProviderError("GEOAPIFY_NO_STRUCTURED_SEEDS");
+    throw new ResearchProviderError("GEOAPIFY_CANDIDATES_EMPTY_AFTER_DEDUP_FILTER");
   }
   const territoryByIdentity = new Map(matched.flatMap((item) => {
     const identity = structuredSeedIdentity(item.candidate);
@@ -321,12 +345,14 @@ export async function runSeedFirstProductionResearch(input: {
   let enrichmentAttemptedCount = 0;
   let enrichmentCompletedCount = 0;
   let tavilyCredits = 0;
+  let geoapifyPlaceDetailsCalls = 0;
+  let publicWebSearchCalls = 0;
   const enrichmentState = new Map<string, ProductionResearchCandidate["enrichmentStatus"]>();
   const enriched: ResearchCandidate[] = [];
   for (const seed of preliminary) {
     const identity = structuredSeedIdentity(seed);
     if (!identity) continue;
-    if (!selected.has(identity) || !input.tavilyConfigured) {
+    if (!selected.has(identity)) {
       enrichmentState.set(identity, "not_selected");
       enriched.push(seed);
       continue;
@@ -338,20 +364,45 @@ export async function runSeedFirstProductionResearch(input: {
       continue;
     }
     enrichmentAttemptedCount += 1;
+    let current = seed;
+    let completedAny = false;
+    if (input.geoapifyPlaceDetailsConfigured) {
+      try {
+        geoapifyPlaceDetailsCalls += 1;
+        geoapifyCredits += 1;
+        current = await dependencies.geoapifyDetails(current, deadline);
+        completedAny = true;
+      } catch (error) {
+        const reference = error instanceof ResearchProviderError
+          ? error.reference : "GEOAPIFY_PLACE_DETAILS_FAILED";
+        warnings.push(reference);
+        current = { ...current, researchIssues: [...current.researchIssues, reference] };
+      }
+    }
     try {
-      const result = await dependencies.tavily(seed, deadline);
-      discardedSourceDocumentCount += result.discardedSourceDocumentCount;
-      tavilyCredits += result.estimatedCredits;
-      enrichmentCompletedCount += 1;
-      enrichmentState.set(identity, "completed");
-      enriched.push(result.candidate);
+      if (input.publicWebConfigured && hasRequestBudget()) {
+        const result = await researchCandidateWithPublicWeb(current, dependencies.publicWebSearch, deadline);
+        current = result.candidate;
+        publicWebSearchCalls += result.actualCalls;
+        warnings.push(...result.failureReferences);
+        completedAny = completedAny || result.actualCalls > 0;
+      } else if (input.tavilyConfigured && hasRequestBudget()) {
+        const result = await dependencies.tavily(current, deadline);
+        current = result.candidate;
+        discardedSourceDocumentCount += result.discardedSourceDocumentCount;
+        tavilyCredits += result.estimatedCredits;
+        completedAny = true;
+      }
+      if (completedAny) enrichmentCompletedCount += 1;
+      enrichmentState.set(identity, completedAny ? "completed" : "not_selected");
+      enriched.push(current);
     } catch (error) {
       const reference = error instanceof ResearchProviderError
         ? error.reference
-        : error instanceof Error ? error.message : "TAVILY_ENRICHMENT_FAILED";
+        : error instanceof Error ? error.message : "PUBLIC_RESEARCH_FAILED";
       warnings.push(reference);
-      enrichmentState.set(identity, "failed");
-      enriched.push({ ...seed, researchIssues: [...seed.researchIssues, reference] });
+      enrichmentState.set(identity, completedAny ? "partial" : "failed");
+      enriched.push({ ...current, researchIssues: [...current.researchIssues, reference] });
     }
   }
 
@@ -401,6 +452,7 @@ export async function runSeedFirstProductionResearch(input: {
   return {
     candidates: finalCandidates,
     resolvedTerritory,
+    rawResultCount: rawFeatureCount,
     structuredSeedCount: preliminary.length,
     invalidSeedCount,
     discardedSourceDocumentCount,
@@ -409,7 +461,9 @@ export async function runSeedFirstProductionResearch(input: {
     officialWebsitesResearched: websitesResearched,
     manualReviewReadyCount: finalCandidates.filter((candidate) => candidate.manualReviewReady).length,
     outreachReadyCount: finalCandidates.filter((candidate) => candidate.outreachReady).length,
-    providerCredits: { geoapify: geoapifyCredits, tavily: tavilyCredits },
+    providerCredits: { geoapify: geoapifyCredits, tavily: tavilyCredits, serpapi: publicWebSearchCalls },
+    geoapifyPlaceDetailsCalls,
+    publicWebSearchCalls,
     warnings: [...new Set(warnings)],
   };
 }

@@ -7,6 +7,7 @@ import { requireSalesScoutDiscoveryEnabled } from "@/src/lib/sales-scout/access"
 import type { DiscoveryActionState } from "@/src/lib/sales-scout/discovery/action-state";
 import {
   captureStagedSalesScoutCandidate,
+  confirmSalesScoutCandidateContact,
   dismissSalesScoutDiscoveryCandidate,
   runSalesScoutDiscovery,
   SalesScoutDiscoveryError,
@@ -18,6 +19,25 @@ const uuid = z.uuid();
 async function guard() {
   await requireAdmin();
   requireSalesScoutDiscoveryEnabled();
+}
+
+export async function confirmDiscoveryContactAction(
+  _state: DiscoveryActionState,
+  formData: FormData,
+): Promise<DiscoveryActionState> {
+  try {
+    await guard();
+    const value = z.object({
+      candidateId: uuid,
+      route: z.enum(["phone","whatsapp","email","website","instagram","facebook","tiktok","x","youtube"]),
+      normalizedIdentity: z.string().trim().min(1).max(500),
+    }).parse(Object.fromEntries(formData));
+    const result = await confirmSalesScoutCandidateContact(value);
+    refresh(value.candidateId);
+    return { ok: true, message: result.idempotent ? "Contact was already confirmed." : "Public contact confirmed for owner review.", data: { candidateId:value.candidateId } };
+  } catch (error) {
+    return safeFailure(error, "DISCOVERY_CONTACT_CONFIRM_ACTION");
+  }
 }
 
 function refresh(candidateId?: string) {

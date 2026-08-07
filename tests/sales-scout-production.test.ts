@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import {
   associateCandidateWithTavilyDocument,
   buildCandidateTavilyQueries,
@@ -14,7 +15,16 @@ import {
 } from "../src/lib/sales-scout/research/quality.ts";
 import {
   resolveGeoapifyTerritory,
+  mergeGeoapifyPlaceDetails,
 } from "../src/lib/sales-scout/research/geoapify.ts";
+import {
+  matchPublicWebResult,
+  mergePublicWebResult,
+  researchCandidateWithPublicWeb,
+} from "../src/lib/sales-scout/research/public-web.ts";
+import { mapSerpApiResponse } from "../src/lib/sales-scout/research/serpapi.ts";
+import { assessNigeriaOpportunity, canBecomeOutreachReady, reflectOwnerConfirmedContact } from "../src/lib/sales-scout/research/opportunity.ts";
+import { isManualReviewReady } from "../src/lib/sales-scout/research/quality.ts";
 import { researchOfficialWebsite } from "../src/lib/sales-scout/research/website.ts";
 import {
   ResearchProviderError,
@@ -357,6 +367,8 @@ test("production limits align at one hundred results and five Geoapify pages", (
   }), {
     maximumGeoapifyCalls: 12,
     maximumTavilySearches: 12,
+    maximumGeoapifyPlaceDetailsCalls: 6,
+    maximumPublicWebSearchCalls: 24,
     maximumOfficialWebsites: 6,
     maximumOfficialWebsitePages: 30,
     maximumStagedCandidates: 200,
@@ -368,4 +380,117 @@ test("production limits align at one hundred results and five Geoapify pages", (
     maxEnrichmentCandidates: 6,
     tavilyConfigured: false,
   }));
+});
+
+test("Nigeria-first readiness accepts phone, Instagram, Facebook, or website without requiring a website", () => {
+  const variants = [
+    { phoneNumbers:["07032821293"], field:"phone", value:"07032821293" },
+    { instagram:["https://instagram.com/examplekitchen"], field:"instagram", value:"https://instagram.com/examplekitchen" },
+    { facebook:["https://facebook.com/examplekitchen"], field:"facebook", value:"https://facebook.com/examplekitchen" },
+    { website:"https://examplekitchen.ng", field:"website", value:"https://examplekitchen.ng" },
+  ];
+  for (const variant of variants) {
+    const candidate = { ...seed(), website:null, phoneNumbers:[], instagram:[], facebook:[],
+      ...variant, evidence:[...seed().evidence.filter((item)=>item.field!=="phone"),
+        evidence(variant.field, variant.value, "plausible")] } as ResearchCandidate;
+    assert.equal(isManualReviewReady(candidate), true, variant.field);
+    assert.equal(contactsForCandidate(candidate).length, 1, variant.field);
+  }
+});
+
+test("phone and Instagram remain separate evidence-backed contact routes", () => {
+  const instagram="https://instagram.com/examplekitchen";
+  const candidate={...seed(),instagram:[instagram],evidence:[...seed().evidence,evidence("instagram",instagram,"plausible")]};
+  assert.deepEqual(contactsForCandidate(candidate).map((contact)=>contact.route).sort(),["instagram","phone"]);
+  assert.deepEqual(candidate.whatsAppNumbers,[]);
+});
+
+test("Geoapify Place Details merges alternate contacts but never infers WhatsApp", () => {
+  const enriched = mergeGeoapifyPlaceDetails({ ...seed(), phoneNumbers:[], emailAddresses:[] }, {
+    features:[{properties:{feature_type:"details",website:"https://details.example/",contact:{
+      phone:"08030001000",phone_other:["08030001001"],email:"hello@details.example",
+    }}}],
+  }, observed);
+  assert.deepEqual(enriched.phoneNumbers,["+2348030001000","+2348030001001"]);
+  assert.deepEqual(enriched.emailAddresses,["hello@details.example"]);
+  assert.deepEqual(enriched.whatsAppNumbers,[]);
+});
+
+test("explicit wa.me evidence creates WhatsApp while an ordinary phone does not", () => {
+  const withoutContacts={...seed(),phoneNumbers:[],evidence:seed().evidence.filter((item)=>item.field!=="phone")};
+  const ordinary=mergePublicWebResult(withoutContacts,{
+    position:1,title:"Example Kitchen Limited Ikeja Restaurant",link:"https://examplekitchen.ng/contact",
+    snippet:"Call 08030001000 in Ikeja for restaurant bookings.",
+  },observed).candidate;
+  assert.deepEqual(ordinary.phoneNumbers,["+2348030001000"]);
+  assert.deepEqual(ordinary.whatsAppNumbers,[]);
+  const explicit=mergePublicWebResult(withoutContacts,{
+    position:1,title:"Example Kitchen Limited Ikeja Restaurant",link:"https://wa.me/2348030001000",
+    snippet:"Example Kitchen Limited restaurant in Ikeja, Lagos.",
+  },observed).candidate;
+  assert.deepEqual(explicit.whatsAppNumbers,["+2348030001000"]);
+});
+
+test("entity matching rejects same-name wrong-city social and accepts corroborated local social", () => {
+  const candidate={...seed(),phoneNumbers:[],evidence:seed().evidence.filter((item)=>item.field!=="phone")};
+  const wrong={position:1,title:"Example Kitchen Limited Victoria Island",link:"https://instagram.com/examplekitchen",
+    snippet:"Restaurant in Victoria Island, Lagos"};
+  assert.equal(matchPublicWebResult(candidate,wrong).status,"rejected");
+  assert.deepEqual(mergePublicWebResult(candidate,wrong,observed).candidate.instagram,[]);
+  const local={...wrong,title:"Example Kitchen Limited Ikeja Restaurant",snippet:"Restaurant in Ikeja, Lagos"};
+  assert.equal(matchPublicWebResult(candidate,local).status,"verified");
+  assert.deepEqual(mergePublicWebResult(candidate,local,observed).candidate.instagram,[local.link]);
+});
+
+test("bounded public-web research stops at useful evidence and enforces four calls", async () => {
+  const candidate={...seed(),phoneNumbers:[],evidence:seed().evidence.filter((item)=>item.field!=="phone")};
+  let calls=0;
+  const exhausted=await researchCandidateWithPublicWeb(candidate,async({query})=>{
+    calls+=1;return{provider:"serpapi",query,results:[],callReference:`call-${calls}`};
+  },{deadlineAtMs:Date.parse(observed)+60_000,now:()=>Date.parse(observed)});
+  assert.equal(calls,4);assert.equal(exhausted.actualCalls,4);
+  calls=0;
+  const found=await researchCandidateWithPublicWeb(candidate,async({query})=>{
+    calls+=1;return{provider:"serpapi",query,callReference:"found",results:[{
+      position:1,title:"Example Kitchen Limited Ikeja Restaurant",link:"https://facebook.com/examplekitchen",
+      snippet:"Restaurant in Ikeja, Lagos",
+    }]};
+  },{deadlineAtMs:Date.parse(observed)+60_000,now:()=>Date.parse(observed)});
+  assert.equal(calls,1);assert.equal(found.candidate.facebook.length,1);
+});
+
+test("public-search provider failure retains the structured candidate", async () => {
+  const candidate={...seed(),phoneNumbers:[],evidence:seed().evidence.filter((item)=>item.field!=="phone")};
+  const result=await runSeedFirstProductionResearch({territory:candidate.requestedTerritory,categories:["Restaurant"],resultLimit:5,maxEnrichmentCandidates:1,tavilyConfigured:false,publicWebConfigured:true,geoapifyPlaceDetailsConfigured:false},{
+    geoapify:async()=>({provider:"geoapify_places",candidates:[candidate],rawResultCount:1,estimatedCredits:1}),
+    publicWebSearch:async()=>{throw new ResearchProviderError("SERPAPI_SERVER_ERROR");},website:async()=>[],
+  });
+  assert.equal(result.candidates.length,1);
+  assert.ok(result.candidates[0].candidate.researchIssues.includes("SERPAPI_SERVER_ERROR"));
+});
+
+test("opportunity factors are deterministic, website absence is not penalized, and DNC blocks outreach", () => {
+  const candidate=seed();const territory=evaluateTerritoryMatch({providerCountry:"Nigeria",providerState:"Lagos",providerCity:"Ikeja",latitude:6.6018,longitude:3.3515,campaign:{...candidate.requestedTerritory,radiusKm:candidate.requestedTerritory.radiusKm??15}});
+  const without=assessNigeriaOpportunity({candidate,contacts:contactsForCandidate(candidate),territoryMatch:territory});
+  const withWebsite={...candidate,website:"https://examplekitchen.ng",evidence:[...candidate.evidence,evidence("website","https://examplekitchen.ng","plausible")]};
+  const withSite=assessNigeriaOpportunity({candidate:withWebsite,contacts:contactsForCandidate(withWebsite),territoryMatch:territory});
+  assert.deepEqual(assessNigeriaOpportunity({candidate,contacts:contactsForCandidate(candidate),territoryMatch:territory}),without);
+  assert.equal(without.score,withSite.score);
+  assert.equal(canBecomeOutreachReady({baseReady:true,doNotContact:true}),false);
+  assert.equal(assessNigeriaOpportunity({candidate,contacts:contactsForCandidate(candidate),territoryMatch:territory,doNotContact:true}).score,0);
+  const confirmed=reflectOwnerConfirmedContact(without);assert.ok(confirmed.score>=without.score);
+  assert.match(confirmed.recommendedNextAction,/capture and qualify/);
+});
+
+test("Casper and Gambini's Ikeja regression surfaces Instagram and remains review-ready", async () => {
+  const fixture=JSON.parse(await readFile("scripts/fixtures/sales-scout-research/casper-gambinis-ikeja.json","utf8")) as {businessName:string;city:string;state:string;address:string;placeId:string;organicResults:Array<{position:number;title:string;link:string;snippet:string}>};
+  const candidate={...seed(),sourceIdentities:{geoapify_places:fixture.placeId},businessName:fixture.businessName,normalizedBusinessName:"casper gambini s",city:fixture.city,state:fixture.state,address:fixture.address,phoneNumbers:[],website:null,evidence:seed().evidence.filter((item)=>item.field!=="phone").map((item)=>item.field==="businessName"?{...item,value:fixture.businessName}:item)};
+  const mapped=mapSerpApiResponse({search_metadata:{id:"fixture-search"},organic_results:fixture.organicResults});
+  const result=await runSeedFirstProductionResearch({territory:candidate.requestedTerritory,categories:["Restaurant"],resultLimit:5,maxEnrichmentCandidates:1,tavilyConfigured:false,publicWebConfigured:true,geoapifyPlaceDetailsConfigured:false},{
+    geoapify:async()=>({provider:"geoapify_places",candidates:[candidate],rawResultCount:1,estimatedCredits:1}),
+    publicWebSearch:async({query})=>({provider:"serpapi",query,callReference:mapped.callReference,results:mapped.results}),website:async()=>[],
+  });
+  assert.equal(result.candidates.length,1);assert.equal(result.candidates[0].candidate.website,null);
+  assert.equal(result.candidates[0].candidate.instagram.length,1);assert.equal(result.candidates[0].manualReviewReady,true);
+  assert.ok(result.candidates[0].opportunity.score>0);assert.ok(result.candidates[0].opportunity.factors.length>0);
 });
