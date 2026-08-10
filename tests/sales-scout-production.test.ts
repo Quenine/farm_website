@@ -7,8 +7,10 @@ import {
 } from "../src/lib/sales-scout/research/tavily.ts";
 import {
   contactsForCandidate,
+  isDirectContactRoute,
   productionResearchCostCeiling,
   runSeedFirstProductionResearch,
+  type PublicContact,
 } from "../src/lib/sales-scout/research/production.ts";
 import {
   paginateContactEvidenceRows,
@@ -19,13 +21,14 @@ import {
 } from "../src/lib/sales-scout/research/geoapify.ts";
 import {
   matchPublicWebResult,
+  classifyPublicWebResultUrl,
   mergePublicWebResult,
   researchCandidateWithPublicWeb,
 } from "../src/lib/sales-scout/research/public-web.ts";
 import { mapSerpApiResponse } from "../src/lib/sales-scout/research/serpapi.ts";
 import { assessNigeriaOpportunity, canBecomeOutreachReady, reflectOwnerConfirmedContact } from "../src/lib/sales-scout/research/opportunity.ts";
-import { isManualReviewReady } from "../src/lib/sales-scout/research/quality.ts";
-import { researchOfficialWebsite } from "../src/lib/sales-scout/research/website.ts";
+import { isManualReviewReady, isOutreachReady } from "../src/lib/sales-scout/research/quality.ts";
+import { buildWebsiteResearchPlan, researchOfficialWebsite } from "../src/lib/sales-scout/research/website.ts";
 import {
   ResearchProviderError,
   type ResearchCandidate,
@@ -382,12 +385,11 @@ test("production limits align at one hundred results and five Geoapify pages", (
   }));
 });
 
-test("Nigeria-first readiness accepts phone, Instagram, Facebook, or website without requiring a website", () => {
+test("Nigeria-first readiness accepts phone, Instagram, or Facebook without requiring a website", () => {
   const variants = [
     { phoneNumbers:["07032821293"], field:"phone", value:"07032821293" },
     { instagram:["https://instagram.com/examplekitchen"], field:"instagram", value:"https://instagram.com/examplekitchen" },
     { facebook:["https://facebook.com/examplekitchen"], field:"facebook", value:"https://facebook.com/examplekitchen" },
-    { website:"https://examplekitchen.ng", field:"website", value:"https://examplekitchen.ng" },
   ];
   for (const variant of variants) {
     const candidate = { ...seed(), website:null, phoneNumbers:[], instagram:[], facebook:[],
@@ -396,6 +398,18 @@ test("Nigeria-first readiness accepts phone, Instagram, Facebook, or website wit
     assert.equal(isManualReviewReady(candidate), true, variant.field);
     assert.equal(contactsForCandidate(candidate).length, 1, variant.field);
   }
+});
+
+test("a verified website is research evidence, not a contact or outreach route", () => {
+  const website="https://examplekitchen.ng/";
+  const candidate={...seed(),website,phoneNumbers:[],evidence:[
+    ...seed().evidence.filter((item)=>item.field!=="phone"),
+    evidence("website",website),
+  ]};
+  assert.equal(contactsForCandidate(candidate).length,0);
+  assert.equal(isManualReviewReady(candidate),false);
+  assert.equal(isOutreachReady(candidate),false);
+  assert.equal(isDirectContactRoute("website"),false);
 });
 
 test("phone and Instagram remain separate evidence-backed contact routes", () => {
@@ -442,7 +456,57 @@ test("entity matching rejects same-name wrong-city social and accepts corroborat
   assert.deepEqual(mergePublicWebResult(candidate,local,observed).candidate.instagram,[local.link]);
 });
 
-test("bounded public-web research stops at useful evidence and enforces four calls", async () => {
+test("directory URLs remain entity evidence and never become websites or verified contacts", () => {
+  const candidate={...seed(),phoneNumbers:[],website:null,
+    evidence:seed().evidence.filter((item)=>item.field!=="phone")};
+  const directory={
+    position:1,
+    title:"Example Kitchen Limited Ikeja Restaurant",
+    link:"https://listings.example/lagos/example-kitchen",
+    snippet:"Example Kitchen Limited restaurant in Ikeja, Lagos. Call 08030001000.",
+  };
+  assert.equal(matchPublicWebResult(candidate,directory).status,"verified");
+  assert.equal(classifyPublicWebResultUrl(candidate,directory),"third_party_reference");
+  const merged=mergePublicWebResult(candidate,directory,observed);
+  assert.equal(merged.candidate.website,null);
+  assert.ok(merged.candidate.evidence.some((item)=>
+    item.field==="referenceUrl"&&item.value===directory.link));
+  assert.equal(merged.candidate.evidence.find((item)=>
+    item.field==="phone"&&item.value==="+2348030001000")?.verificationStatus,"plausible");
+  assert.deepEqual(contactsForCandidate(merged.candidate).map((contact)=>contact.route),["phone"]);
+  assert.equal(contactsForCandidate(merged.candidate)[0]?.confidence,"plausible");
+  assert.equal(isOutreachReady(merged.candidate),false);
+  const territory=evaluateTerritoryMatch({providerCountry:"Nigeria",providerState:"Lagos",
+    providerCity:"Ikeja",latitude:6.6018,longitude:3.3515,
+    campaign:{...candidate.requestedTerritory,radiusKm:candidate.requestedTerritory.radiusKm??15}});
+  const assessment=assessNigeriaOpportunity({candidate:merged.candidate,
+    contacts:contactsForCandidate(merged.candidate),territoryMatch:territory});
+  assert.equal(assessment.score<75,true);
+});
+
+test("corroborated official domains remain website candidates for safe research", () => {
+  const website="https://examplekitchen.ng/";
+  const candidate={...seed(),phoneNumbers:[],website,evidence:[
+    ...seed().evidence.filter((item)=>item.field!=="phone"),
+    evidence("website",website,"plausible"),
+  ]};
+  const official={
+    position:1,
+    title:"Example Kitchen Limited Ikeja Restaurant",
+    link:"https://examplekitchen.ng/contact",
+    snippet:"Example Kitchen Limited restaurant in Ikeja, Lagos.",
+  };
+  assert.equal(classifyPublicWebResultUrl(candidate,official),"official");
+  const merged=mergePublicWebResult(candidate,official,observed).candidate;
+  assert.equal(merged.website,website);
+  assert.ok(merged.evidence.some((item)=>
+    item.field==="website"&&item.source==="public_web_search"&&
+    item.verificationStatus==="verified"));
+  assert.equal(buildWebsiteResearchPlan([merged],1).length,1);
+  assert.equal(contactsForCandidate(merged).some((contact)=>contact.route==="website"),false);
+});
+
+test("bounded public-web research continues after reference-only evidence and enforces four calls", async () => {
   const candidate={...seed(),phoneNumbers:[],evidence:seed().evidence.filter((item)=>item.field!=="phone")};
   let calls=0;
   const exhausted=await researchCandidateWithPublicWeb(candidate,async({query})=>{
@@ -451,12 +515,27 @@ test("bounded public-web research stops at useful evidence and enforces four cal
   assert.equal(calls,4);assert.equal(exhausted.actualCalls,4);
   calls=0;
   const found=await researchCandidateWithPublicWeb(candidate,async({query})=>{
-    calls+=1;return{provider:"serpapi",query,callReference:"found",results:[{
-      position:1,title:"Example Kitchen Limited Ikeja Restaurant",link:"https://facebook.com/examplekitchen",
-      snippet:"Restaurant in Ikeja, Lagos",
+    calls+=1;
+    const results=calls===1?[{
+      position:1,title:"Example Kitchen Limited Ikeja Restaurant",
+      link:"https://directory.example/listing/example-kitchen",
+      snippet:"Example Kitchen Limited restaurant in Ikeja, Lagos.",
+    }]:[{
+      position:1,title:"Example Kitchen Limited",link:"https://facebook.com/examplekitchen",
+      snippet:"Example Kitchen Limited in Ikeja",
+    }];
+    return{provider:"serpapi",query,callReference:`found-${calls}`,results};
+  },{deadlineAtMs:Date.parse(observed)+60_000,now:()=>Date.parse(observed)});
+  assert.equal(calls,2);assert.equal(found.candidate.facebook.length,1);
+  assert.ok(found.candidate.evidence.some((item)=>item.field==="referenceUrl"));
+  calls=0;
+  const direct=await researchCandidateWithPublicWeb(candidate,async({query})=>{
+    calls+=1;return{provider:"serpapi",query,callReference:"direct",results:[{
+      position:1,title:"Example Kitchen Limited",link:"https://instagram.com/examplekitchen",
+      snippet:"Example Kitchen Limited in Ikeja",
     }]};
   },{deadlineAtMs:Date.parse(observed)+60_000,now:()=>Date.parse(observed)});
-  assert.equal(calls,1);assert.equal(found.candidate.facebook.length,1);
+  assert.equal(calls,1);assert.equal(direct.candidate.instagram.length,1);
 });
 
 test("public-search provider failure retains the structured candidate", async () => {
@@ -476,13 +555,28 @@ test("opportunity factors are deterministic, website absence is not penalized, a
   const withSite=assessNigeriaOpportunity({candidate:withWebsite,contacts:contactsForCandidate(withWebsite),territoryMatch:territory});
   assert.deepEqual(assessNigeriaOpportunity({candidate,contacts:contactsForCandidate(candidate),territoryMatch:territory}),without);
   assert.equal(without.score,withSite.score);
+  assert.equal(without.score<75,true);
+  assert.equal(without.scoreVersion,"ng-revenue-v2");
+  assert.match(without.recommendedNextAction,/phone/);
+  assert.doesNotMatch(without.recommendedNextAction,/website outreach/i);
+  const legacyWebsiteContact:PublicContact={route:"website",displayValue:"https://examplekitchen.ng",
+    normalizedIdentity:"examplekitchen.ng",profileUrl:"https://examplekitchen.ng",sourceType:"public_web_search",
+    sourceUrl:"https://directory.example/example-kitchen",observedAt:observed,confidence:"verified"};
+  const withLegacyWebsiteRoute=assessNigeriaOpportunity({candidate,contacts:[
+    legacyWebsiteContact,...contactsForCandidate(candidate),
+  ],territoryMatch:territory});
+  assert.match(withLegacyWebsiteRoute.recommendedNextAction,/phone/);
+  assert.doesNotMatch(withLegacyWebsiteRoute.recommendedNextAction,/website outreach/i);
   assert.equal(canBecomeOutreachReady({baseReady:true,doNotContact:true}),false);
+  assert.equal(canBecomeOutreachReady({baseReady:true,currentCustomer:true}),false);
   assert.equal(assessNigeriaOpportunity({candidate,contacts:contactsForCandidate(candidate),territoryMatch:territory,doNotContact:true}).score,0);
-  const confirmed=reflectOwnerConfirmedContact(without);assert.ok(confirmed.score>=without.score);
+  assert.match(assessNigeriaOpportunity({candidate,contacts:contactsForCandidate(candidate),territoryMatch:territory,currentCustomer:true}).recommendedNextAction,/existing customer relationship/);
+  const confirmed=reflectOwnerConfirmedContact(without,"phone");assert.ok(confirmed.score>=without.score);
   assert.match(confirmed.recommendedNextAction,/capture and qualify/);
+  assert.match(confirmed.recommendedNextAction,/phone outreach draft/);
 });
 
-test("Casper and Gambini's Ikeja regression surfaces Instagram and remains review-ready", async () => {
+test("Casper and Gambini's directory regression preserves real routes without website trust", async () => {
   const fixture=JSON.parse(await readFile("scripts/fixtures/sales-scout-research/casper-gambinis-ikeja.json","utf8")) as {businessName:string;city:string;state:string;address:string;placeId:string;organicResults:Array<{position:number;title:string;link:string;snippet:string}>};
   const candidate={...seed(),sourceIdentities:{geoapify_places:fixture.placeId},businessName:fixture.businessName,normalizedBusinessName:"casper gambini s",city:fixture.city,state:fixture.state,address:fixture.address,phoneNumbers:[],website:null,evidence:seed().evidence.filter((item)=>item.field!=="phone").map((item)=>item.field==="businessName"?{...item,value:fixture.businessName}:item)};
   const mapped=mapSerpApiResponse({search_metadata:{id:"fixture-search"},organic_results:fixture.organicResults});
@@ -490,7 +584,18 @@ test("Casper and Gambini's Ikeja regression surfaces Instagram and remains revie
     geoapify:async()=>({provider:"geoapify_places",candidates:[candidate],rawResultCount:1,estimatedCredits:1}),
     publicWebSearch:async({query})=>({provider:"serpapi",query,callReference:mapped.callReference,results:mapped.results}),website:async()=>[],
   });
-  assert.equal(result.candidates.length,1);assert.equal(result.candidates[0].candidate.website,null);
-  assert.equal(result.candidates[0].candidate.instagram.length,1);assert.equal(result.candidates[0].manualReviewReady,true);
-  assert.ok(result.candidates[0].opportunity.score>0);assert.ok(result.candidates[0].opportunity.factors.length>0);
+  const casper=result.candidates[0];
+  assert.equal(result.candidates.length,1);assert.equal(casper.candidate.website,null);
+  assert.equal(casper.candidate.instagram.length,1);assert.equal(casper.candidate.facebook.length,1);
+  assert.deepEqual(casper.candidate.phoneNumbers,["+2348170011228"]);
+  assert.ok(casper.candidate.evidence.some((item)=>
+    item.field==="referenceUrl"&&item.value.includes("afodaa.com/")));
+  assert.equal(casper.contacts.some((contact)=>contact.route==="website"),false);
+  assert.equal(casper.contacts.every((contact)=>contact.confidence==="plausible"),true);
+  assert.equal(casper.manualReviewReady,true);assert.equal(casper.outreachReady,false);
+  assert.equal(casper.opportunity.score<75,true);
+  assert.match(casper.opportunity.recommendedNextAction,/verify the phone evidence/);
+  assert.doesNotMatch(casper.opportunity.recommendedNextAction,/website outreach/i);
+  const confirmed=reflectOwnerConfirmedContact(casper.opportunity,"phone");
+  assert.match(confirmed.recommendedNextAction,/phone outreach draft/);
 });

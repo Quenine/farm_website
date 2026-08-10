@@ -29,7 +29,7 @@ export async function confirmDiscoveryContactAction(
     await guard();
     const value = z.object({
       candidateId: uuid,
-      route: z.enum(["phone","whatsapp","email","website","instagram","facebook","tiktok","x","youtube"]),
+      route: z.enum(["phone","whatsapp","email","instagram","facebook","tiktok","x","youtube"]),
       normalizedIdentity: z.string().trim().min(1).max(500),
     }).parse(Object.fromEntries(formData));
     const result = await confirmSalesScoutCandidateContact(value);

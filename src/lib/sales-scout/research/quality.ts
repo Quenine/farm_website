@@ -69,15 +69,13 @@ export function hasPublicSocialProfile(candidate: ResearchCandidate) {
 }
 export function hasAnyNormalizedPublicContact(candidate: ResearchCandidate) {
   return hasUsablePhone(candidate) || hasUsableEmail(candidate) ||
-    hasUsableWhatsApp(candidate) || Boolean(candidate.website) ||
-    candidate.instagram.length > 0 || candidate.facebook.length > 0 ||
+    hasUsableWhatsApp(candidate) || candidate.instagram.length > 0 || candidate.facebook.length > 0 ||
     candidate.tiktok.length > 0 || candidate.x.length > 0 ||
     candidate.youtube.length > 0;
 }
 export function hasAnyUsableContact(candidate: ResearchCandidate) {
   return hasEvidenceBackedPhone(candidate) || hasEvidenceBackedEmail(candidate) ||
-    hasEvidenceBackedWhatsApp(candidate) || hasOfficialWebsite(candidate) ||
-    hasPublicSocialProfile(candidate);
+    hasEvidenceBackedWhatsApp(candidate) || hasPublicSocialProfile(candidate);
 }
 export function isDiscovered(candidate: ResearchCandidate) {
   const categoryVerified = verified(candidate, "requestedCategory", candidate.requestedCategory);
@@ -111,8 +109,7 @@ export function isOutreachReady(candidate: ResearchCandidate) {
 export function contactCoverageScore(candidate: ResearchCandidate) {
   const checks = [
     hasEvidenceBackedPhone(candidate), hasEvidenceBackedEmail(candidate),
-    hasEvidenceBackedWhatsApp(candidate), hasOfficialWebsite(candidate),
-    hasPublicSocialProfile(candidate),
+    hasEvidenceBackedWhatsApp(candidate), hasPublicSocialProfile(candidate),
   ];
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
@@ -135,7 +132,7 @@ export function paginateContactEvidenceRows<T extends {
   pageSize: number,
 ) {
   const allowed = filter === "has_web_social"
-    ? new Set(["website", "instagram", "facebook", "tiktok", "x", "youtube"])
+    ? new Set(["instagram", "facebook", "tiktok", "x", "youtube"])
     : new Set([filter.replace("has_", "")]);
   const filtered = rows.filter((row) =>
     row.contact_evidence.some((contact) => allowed.has(contact.route)));

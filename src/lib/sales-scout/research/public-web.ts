@@ -36,6 +36,13 @@ export type EntityMatch = {
   reasons: string[];
 };
 
+export type PublicWebUrlClassification =
+  | "official"
+  | "plausible_official"
+  | "third_party_reference"
+  | "social"
+  | "rejected";
+
 const unique = <T>(values: T[]) => [...new Set(values)];
 const quoted = (value: string) => `"${value.replaceAll('"', " ").trim()}"`;
 
@@ -63,6 +70,49 @@ function knownPhoneMatch(candidate: ResearchCandidate, text: string) {
 function knownDomainMatch(candidate: ResearchCandidate, link: string) {
   const known = candidate.website ? canonicalizeWebsiteHostname(candidate.website) : null;
   return Boolean(known && known === canonicalizeWebsiteHostname(link));
+}
+
+const BUSINESS_NAME_STOP_WORDS = new Set([
+  "and", "the", "of", "nigeria", "ng", "limited", "ltd", "plc", "restaurant",
+  "hotel", "supermarket", "caterer", "catering", "vendor", "food", "foods",
+]);
+
+function hasTrustedWebsiteEvidence(candidate: ResearchCandidate, hostname: string) {
+  return candidate.evidence.some((item) =>
+    item.field === "website" &&
+    ["geoapify_places", "geoapify_place_details", "official_website", "manual_public_source"]
+      .includes(item.source) &&
+    canonicalizeWebsiteHostname(item.value) === hostname,
+  );
+}
+
+function hostnameHasBusinessNameAffinity(candidate: ResearchCandidate, hostname: string) {
+  const label = hostname.split(":")[0].replace(/^www\./, "").split(".")[0] ?? "";
+  const compactLabel = normalizeBusinessName(label).replaceAll(" ", "");
+  const tokens = normalizeBusinessName(candidate.businessName).split(" ")
+    .filter((token) => token.length >= 3 && !BUSINESS_NAME_STOP_WORDS.has(token));
+  if (!compactLabel || !tokens.length) return false;
+  const matchedLength = tokens.filter((token) => compactLabel.includes(token))
+    .reduce((total, token) => total + token.length, 0);
+  const allTokensMatch = tokens.every((token) => compactLabel.includes(token));
+  return allTokensMatch && matchedLength / compactLabel.length >= 0.55;
+}
+
+export function classifyPublicWebResultUrl(
+  candidate: ResearchCandidate,
+  result: PublicWebSearchResult,
+  match = matchPublicWebResult(candidate, result),
+): PublicWebUrlClassification {
+  if (match.status === "rejected") return "rejected";
+  if (normalizeSocialIdentity(result.link)) return "social";
+  const hostname = canonicalizeWebsiteHostname(result.link);
+  if (!hostname) return "third_party_reference";
+  if (knownDomainMatch(candidate, result.link) && hasTrustedWebsiteEvidence(candidate, hostname)) {
+    return "official";
+  }
+  return hostnameHasBusinessNameAffinity(candidate, hostname)
+    ? "plausible_official"
+    : "third_party_reference";
 }
 
 export function matchPublicWebResult(
@@ -130,18 +180,40 @@ function evidence(
   };
 }
 
+function evidenceWithStatus(
+  result: PublicWebSearchResult,
+  observedAt: string,
+  field: string,
+  value: string,
+  status: EntityMatch["status"],
+): ResearchEvidence {
+  return evidence(result, observedAt, field, value, { status, reasons: [] });
+}
+
 export function mergePublicWebResult(
   candidate: ResearchCandidate,
   result: PublicWebSearchResult,
   observedAt: string,
 ) {
   const match = matchPublicWebResult(candidate, result);
+  const classification = classifyPublicWebResultUrl(candidate, result, match);
   const matchEvidence = evidence(result, observedAt, "entityMatch",
     `${match.status}: ${match.reasons.join("; ")}`, match);
+  const classificationEvidence = evidenceWithStatus(
+    result,
+    observedAt,
+    "publicWebUrlClassification",
+    `${classification}:${result.link}`,
+    match.status,
+  );
   if (match.status === "rejected") {
     return {
-      candidate: { ...candidate, evidence: [...candidate.evidence, matchEvidence] },
+      candidate: {
+        ...candidate,
+        evidence: [...candidate.evidence, matchEvidence, classificationEvidence],
+      },
       match,
+      classification,
     };
   }
 
@@ -153,17 +225,37 @@ export function mergePublicWebResult(
   const phones = extractPhones(`${result.title} ${result.snippet}`);
   const emails = extractEmails(`${result.title} ${result.snippet}`);
   const whatsApp = explicitWhatsAppNumbers(combined);
-  const socialLink = social.length > 0;
-  const website = !socialLink && !/\b(?:wa\.me|whatsapp\.com|google\.|serpapi\.)/i.test(result.link)
-    ? canonicalizeWebsiteHostname(result.link) ? result.link : null : null;
-  const addedEvidence: ResearchEvidence[] = [matchEvidence];
-  for (const phone of phones) addedEvidence.push(evidence(result, observedAt, "phone", phone, match));
-  for (const email of emails) addedEvidence.push(evidence(result, observedAt, "email", email, match));
+  const website = ["official", "plausible_official"].includes(classification)
+    ? result.link : null;
+  const contactStatus = classification === "official" || classification === "social"
+    ? match.status
+    : "plausible" as const;
+  const addedEvidence: ResearchEvidence[] = [matchEvidence, classificationEvidence];
+  if (classification === "third_party_reference") {
+    addedEvidence.push(evidenceWithStatus(
+      result, observedAt, "referenceUrl", result.link, match.status,
+    ));
+  }
+  for (const phone of phones) {
+    addedEvidence.push(evidenceWithStatus(result, observedAt, "phone", phone, contactStatus));
+  }
+  for (const email of emails) {
+    addedEvidence.push(evidenceWithStatus(result, observedAt, "email", email, contactStatus));
+  }
   for (const phone of whatsApp) addedEvidence.push(evidence(result, observedAt, "whatsapp", phone, match));
   for (const item of social) addedEvidence.push(evidence(result, observedAt, item.platform, item.url, match));
-  if (website) addedEvidence.push(evidence(result, observedAt, "website", website, match));
+  if (website) {
+    addedEvidence.push(evidenceWithStatus(
+      result,
+      observedAt,
+      "website",
+      website,
+      classification === "official" ? "verified" : "plausible",
+    ));
+  }
   return {
     match,
+    classification,
     candidate: {
       ...candidate,
       website: candidate.website ?? website,
@@ -179,10 +271,14 @@ export function mergePublicWebResult(
   };
 }
 
-function hasUsefulRoute(candidate: ResearchCandidate) {
-  return Boolean(candidate.phoneNumbers.length || candidate.emailAddresses.length ||
-    candidate.whatsAppNumbers.length || candidate.website || candidate.instagram.length ||
-    candidate.facebook.length);
+function hasDirectContactRoute(candidate: ResearchCandidate) {
+  return Boolean(
+    candidate.phoneNumbers.some((value) => normalizeNigerianPhone(value)) ||
+    candidate.emailAddresses.some((value) => normalizeEmail(value)) ||
+    candidate.whatsAppNumbers.some((value) => normalizeNigerianPhone(value)) ||
+    candidate.instagram.length || candidate.facebook.length || candidate.tiktok.length ||
+    candidate.x.length || candidate.youtube.length,
+  );
 }
 
 export async function researchCandidateWithPublicWeb(
@@ -194,7 +290,9 @@ export async function researchCandidateWithPublicWeb(
   let actualCalls = 0;
   const callEvidence: ResearchEvidence[] = [];
   const failureReferences:string[]=[];
-  if (hasUsefulRoute(candidate)) return { candidate, actualCalls, callEvidence, failureReferences };
+  if (hasDirectContactRoute(candidate)) {
+    return { candidate, actualCalls, callEvidence, failureReferences };
+  }
   for (const query of buildPublicWebResearchQueries(seed)) {
     if (actualCalls >= MAX_PUBLIC_WEB_SEARCHES_PER_CANDIDATE || deadline.now() >= deadline.deadlineAtMs) break;
     actualCalls += 1;
@@ -214,7 +312,7 @@ export async function researchCandidateWithPublicWeb(
     for (const result of response.results) {
       candidate = mergePublicWebResult(candidate, result, observedAt).candidate;
     }
-    if (hasUsefulRoute(candidate)) break;
+    if (hasDirectContactRoute(candidate)) break;
   }
   return { candidate: { ...candidate, evidence: [...candidate.evidence, ...callEvidence] }, actualCalls, callEvidence, failureReferences };
 }

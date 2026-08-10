@@ -8,9 +8,21 @@
   "organicResults": [
     {
       "position": 1,
-      "title": "Casper & Gambini's Ikeja | Restaurant",
+      "title": "Casper & Gambini's Ikeja City Mall",
+      "link": "https://afodaa.com/lagos/restaurants/casper-gambini-s-ikeja-city-mall",
+      "snippet": "Casper & Gambini's in Ikeja, Lagos. Call +2348170011228."
+    },
+    {
+      "position": 2,
+      "title": "Casper & Gambini's",
       "link": "https://www.instagram.com/casperandgambinisng/",
-      "snippet": "Casper & Gambini's restaurant in Ikeja, Lagos."
+      "snippet": "Casper & Gambini's in Ikeja."
+    },
+    {
+      "position": 3,
+      "title": "Casper & Gambini's",
+      "link": "https://www.facebook.com/casperandgambinisng/",
+      "snippet": "Casper & Gambini's in Ikeja."
     }
   ]
 }

@@ -493,8 +493,18 @@ export type WebsiteResearchPlanItem = {
 
 function hasOfficialWebsiteProviderField(candidate: ResearchCandidate) {
   return candidate.website != null && candidate.evidence.some((item) =>
-    item.source === "geoapify_places" &&
+    ["geoapify_places", "geoapify_place_details"].includes(item.source) &&
     item.field === "website" &&
+    canonicalizeWebsiteHostname(item.value) ===
+      canonicalizeWebsiteHostname(candidate.website ?? "")
+  );
+}
+
+function hasPublicWebOfficialWebsiteEvidence(candidate: ResearchCandidate) {
+  return candidate.website != null && candidate.evidence.some((item) =>
+    item.source === "public_web_search" &&
+    item.field === "website" &&
+    item.verificationStatus !== "rejected" &&
     canonicalizeWebsiteHostname(item.value) ===
       canonicalizeWebsiteHostname(candidate.website ?? "")
   );
@@ -517,7 +527,8 @@ export function buildWebsiteResearchPlan(
   const plan = new Map<string, WebsiteResearchPlanItem>();
   candidates.forEach((candidate, index) => {
     const eligible = hasOfficialWebsiteProviderField(candidate) ||
-      hasTavilyLikelyOfficialWebsiteEvidence(candidate);
+      hasTavilyLikelyOfficialWebsiteEvidence(candidate) ||
+      hasPublicWebOfficialWebsiteEvidence(candidate);
     if (!eligible || !candidate.website || !isPlausibleOfficialWebsite(candidate.website)) return;
     const hostname = canonicalizeWebsiteHostname(candidate.website);
     if (!hostname) return;

@@ -48,6 +48,7 @@ export const PRODUCTION_RESEARCH_LIMITS = {
 
 export type ContactConfidence = "verified" | "plausible";
 export type ContactRoute = "phone" | "whatsapp" | "email" | "website" | SocialPlatform;
+export type DirectContactRoute = Exclude<ContactRoute, "website">;
 export type PublicContact = {
   route: ContactRoute;
   displayValue: string;
@@ -58,6 +59,11 @@ export type PublicContact = {
   observedAt: string;
   confidence: ContactConfidence;
 };
+
+export function isDirectContactRoute(route: string): route is DirectContactRoute {
+  return ["whatsapp", "phone", "instagram", "facebook", "email", "tiktok", "x", "youtube"]
+    .includes(route);
+}
 
 export type ProductionResearchCandidate = {
   candidate: ResearchCandidate;
@@ -149,7 +155,6 @@ export function contactsForCandidate(candidate: ResearchCandidate): PublicContac
     ...candidate.phoneNumbers.map((value) => ["phone", value] as const),
     ...candidate.whatsAppNumbers.map((value) => ["whatsapp", value] as const),
     ...candidate.emailAddresses.map((value) => ["email", value] as const),
-    ...(candidate.website ? [["website", candidate.website] as const] : []),
     ...candidate.instagram.map((value) => ["instagram", value] as const),
     ...candidate.facebook.map((value) => ["facebook", value] as const),
     ...candidate.tiktok.map((value) => ["tiktok", value] as const),
@@ -165,7 +170,7 @@ export function contactsForCandidate(candidate: ResearchCandidate): PublicContac
       route,
       displayValue: value,
       normalizedIdentity: found.identity,
-      profileUrl: ["website", "instagram", "facebook", "tiktok", "x", "youtube"].includes(route)
+      profileUrl: ["instagram", "facebook", "tiktok", "x", "youtube"].includes(route)
         ? value : null,
       sourceType: found.source.source,
       sourceUrl: found.source.sourceUrl,
