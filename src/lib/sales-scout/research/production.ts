@@ -58,6 +58,14 @@ export type PublicContact = {
   sourceUrl: string;
   observedAt: string;
   confidence: ContactConfidence;
+  ownerConfirmedAt?: string;
+  ownerConfirmedBy?: string;
+};
+
+export type PersistedResearchMemory = {
+  contacts: PublicContact[];
+  evidence: ResearchEvidence[];
+  researchIssues: string[];
 };
 
 export function isDirectContactRoute(route: string): route is DirectContactRoute {
@@ -185,6 +193,109 @@ export function contactsForCandidate(candidate: ResearchCandidate): PublicContac
   return [...contacts.values()];
 }
 
+const contactNormalizers: Record<DirectContactRoute, (value: string) => string | null> = {
+  phone: normalizeNigerianPhone,
+  whatsapp: normalizeNigerianPhone,
+  email: normalizeEmail,
+  instagram: (value) => normalizeSocialIdentity(value, "instagram")?.identity ?? null,
+  facebook: (value) => normalizeSocialIdentity(value, "facebook")?.identity ?? null,
+  tiktok: (value) => normalizeSocialIdentity(value, "tiktok")?.identity ?? null,
+  x: (value) => normalizeSocialIdentity(value, "x")?.identity ?? null,
+  youtube: (value) => normalizeSocialIdentity(value, "youtube")?.identity ?? null,
+};
+
+function contactIdentity(route: string, value: string) {
+  return isDirectContactRoute(route) ? contactNormalizers[route](value) : null;
+}
+
+function observedTime(value: string) {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function strongerContact(first: PublicContact, second: PublicContact) {
+  const firstOwnerConfirmed = Boolean(first.ownerConfirmedAt);
+  const secondOwnerConfirmed = Boolean(second.ownerConfirmedAt);
+  if (firstOwnerConfirmed !== secondOwnerConfirmed) return firstOwnerConfirmed ? first : second;
+  if (first.confidence !== second.confidence) return first.confidence === "verified" ? first : second;
+  return observedTime(first.observedAt) >= observedTime(second.observedAt) ? first : second;
+}
+
+function supportedPersistedContact(contact: PublicContact, rejected: Set<string>): PublicContact | null {
+  const identity = contactIdentity(contact.route, contact.displayValue);
+  if (!identity || rejected.has(`${contact.route}:${identity}`)) return null;
+  if (!contact.sourceUrl?.trim() || !contact.observedAt?.trim()) return null;
+  return { ...contact, normalizedIdentity: identity };
+}
+
+function evidenceIdentity(item: ResearchEvidence) {
+  const normalized = contactIdentity(item.field, item.value);
+  return normalized ? `${item.field}:${normalized}` : `${item.field}:${item.value.trim()}`;
+}
+
+function mergeEvidence(current: ResearchEvidence[], previous: ResearchEvidence[]) {
+  const retained = [...current, ...previous].filter((item) =>
+    item.verificationStatus !== "rejected" && Boolean(item.sourceUrl?.trim()) && Boolean(item.value?.trim()));
+  const evidence = new Map<string, ResearchEvidence>();
+  for (const item of retained) {
+    const key = `${evidenceIdentity(item)}:${item.source}:${item.sourceUrl}:${item.verificationStatus}`;
+    const existing = evidence.get(key);
+    if (!existing || observedTime(item.observedAt) > observedTime(existing.observedAt)) evidence.set(key, item);
+  }
+  return [...evidence.values()];
+}
+
+function candidateWithContactValues(candidate: ResearchCandidate, contacts: PublicContact[]) {
+  const values = (route: DirectContactRoute) => contacts.filter((contact) => contact.route === route)
+    .map((contact) => contact.displayValue);
+  return {
+    ...candidate,
+    phoneNumbers: values("phone"),
+    whatsAppNumbers: values("whatsapp"),
+    emailAddresses: values("email"),
+    instagram: values("instagram"),
+    facebook: values("facebook"),
+    tiktok: values("tiktok"),
+    x: values("x"),
+    youtube: values("youtube"),
+  };
+}
+
+/** Carries forward safe, direct public-contact evidence for a stable provider identity. */
+export function mergePersistedResearchMemory(
+  candidate: ResearchCandidate,
+  memory: PersistedResearchMemory,
+) {
+  const rejected = new Set([...candidate.evidence, ...memory.evidence]
+    .filter((item) => item.verificationStatus === "rejected")
+    .map(evidenceIdentity));
+  const currentContacts = contactsForCandidate(candidate);
+  const contacts = new Map<string, PublicContact>();
+  for (const contact of [...currentContacts, ...memory.contacts]) {
+    const safe = supportedPersistedContact(contact, rejected);
+    if (!safe) continue;
+    const key = `${safe.route}:${safe.normalizedIdentity}`;
+    const existing = contacts.get(key);
+    contacts.set(key, existing ? strongerContact(existing, safe) : safe);
+  }
+  const mergedContacts = [...contacts.values()];
+  const promotedEvidence = mergedContacts.filter((contact) => contact.confidence === "verified")
+    .map((contact): ResearchEvidence => ({
+      source: contact.ownerConfirmedAt ? "manual_public_source" : "public_web_search",
+      sourceUrl: contact.sourceUrl,
+      observedAt: contact.ownerConfirmedAt ?? contact.observedAt,
+      field: contact.route,
+      value: contact.displayValue,
+      confidence: "high",
+      verificationStatus: "verified",
+    }));
+  const merged = candidateWithContactValues(candidate, mergedContacts);
+  return {
+    ...merged,
+    evidence: mergeEvidence([...merged.evidence, ...promotedEvidence], memory.evidence),
+    researchIssues: [...new Set([...memory.researchIssues, ...candidate.researchIssues])],
+  };
+}
 function withTerritoryEvidence(candidate: ResearchCandidate, territory: ResearchTerritory) {
   const territoryMatch = evaluateTerritoryMatch({
     providerCountry: candidate.country,
@@ -221,6 +332,14 @@ function decorate(candidate: ResearchCandidate, territoryMatch: TerritoryMatchEv
     enrichmentStatus,
   };
   return { ...base, opportunity: assessNigeriaOpportunity({ candidate, contacts, territoryMatch }) };
+}
+
+export function mergePersistedProductionResearch(
+  item: ProductionResearchCandidate,
+  memory: PersistedResearchMemory,
+) {
+  return decorate(mergePersistedResearchMemory(item.candidate, memory), item.territoryMatch,
+    item.enrichmentStatus);
 }
 
 export function productionResearchCostCeiling(input: {

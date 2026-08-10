@@ -6,7 +6,7 @@ import { requireSalesScoutDiscoveryEnabled } from "../access";
 import { captureSalesScoutCandidate, getSalesScoutCampaign, previewSalesScoutCandidate, type SalesScoutCampaignDto } from "../server";
 import { normalizeLocationComparison } from "../normalization";
 import { isStructuredGeoapifyCategory, unsupportedStructuredCategories } from "../territory";
-import { isDirectContactRoute, runSeedFirstProductionResearch, productionResearchCostCeiling, type PublicContact } from "../research/production";
+import { isDirectContactRoute, mergePersistedProductionResearch, runSeedFirstProductionResearch, productionResearchCostCeiling, type PersistedResearchMemory, type PublicContact } from "../research/production";
 import { assessNigeriaOpportunity, canBecomeOutreachReady, reflectOwnerConfirmedContact, type OpportunityAssessment } from "../research/opportunity";
 import { isCandidateContactFilter, paginateContactEvidenceRows } from "../research/quality";
 import type { ResearchCategory } from "../research/types";
@@ -75,10 +75,21 @@ export async function runSalesScoutDiscovery(input:{campaignId:string}):Promise<
     });
     if(!researchCandidates.length)throw new SalesScoutDiscoveryError("GEOAPIFY_INVALID_SEED_IDENTITY");
     const ids=researchCandidates.map(({providerSourceId})=>providerSourceId);
+    const persisted=ids.length?await database.from("marketing_sales_scout_discovery_candidates").select("provider_source_id,contact_evidence,research_evidence,research_issues").eq("scout_campaign_id",campaign.campaignId).in("provider_source_id",ids).limit(500):{data:[],error:null};
+    if(persisted.error)dbFail("RESEARCH_EVIDENCE_MEMORY_LOOKUP",persisted.error);
+    const memoryBySourceId=new Map((persisted.data??[]).map((row)=>[String(row.provider_source_id),{
+      contacts:Array.isArray(row.contact_evidence)?row.contact_evidence as PublicContact[]:[],
+      evidence:Array.isArray(row.research_evidence)?row.research_evidence as PersistedResearchMemory["evidence"]:[],
+      researchIssues:Array.isArray(row.research_issues)?row.research_issues.filter((value):value is string=>typeof value==="string"):[],
+    } satisfies PersistedResearchMemory]));
+    const cumulativeResearchCandidates=researchCandidates.map(({item,providerSourceId})=>{
+      const memory=memoryBySourceId.get(providerSourceId);
+      return {item:memory?mergePersistedProductionResearch(item,memory):item,providerSourceId};
+    });
     const exact=ids.length?await database.from("marketing_prospects").select("id,discovery_source_id,do_not_contact_at,scout_status,stage").eq("discovery_source","geoapify_tavily_research").in("discovery_source_id",ids).limit(500):{data:[],error:null};
     if(exact.error)dbFail("RESEARCH_EXACT_LOOKUP",exact.error); const exactById=new Map((exact.data??[]).map((row)=>[String(row.discovery_source_id),row]));
     let mappingIssueCount=0;
-    const candidates=researchCandidates.map(({item,providerSourceId})=>{
+    const candidates=cumulativeResearchCandidates.map(({item,providerSourceId})=>{
       const candidate=item.candidate; const contacts=contactGroups(item.contacts); mappingIssueCount+=candidate.researchIssues.length;
       const crm=exactById.get(providerSourceId);const doNotContact=Boolean(crm?.do_not_contact_at)||crm?.scout_status==="do_not_contact";const currentCustomer=crm?.scout_status==="converted"||crm?.stage==="recurring_customer";const opportunity=assessNigeriaOpportunity({candidate,contacts:item.contacts,territoryMatch:item.territoryMatch,duplicate:Boolean(crm),doNotContact,currentCustomer});
       return{providerSourceId,businessName:candidate.businessName,providerCategory:candidate.providerCategories[0]??null,mappedCampaignCategory:candidate.requestedCategory,providerCategoryIds:candidate.providerCategories,additionalCategories:candidate.providerCategories.slice(1),mappingIssues:candidate.researchIssues,providerSourceUrl:sourceUrl(item),description:candidate.publicDescription,fullAddress:candidate.address,city:candidate.city,state:candidate.state,countryCode:"NG",latitude:candidate.latitude,longitude:candidate.longitude,phone:contacts.phoneRoutes[0]?.displayValue??null,website:candidate.website,observedAt:candidate.lastObservedAt,normalizedBusinessName:candidate.normalizedBusinessName,normalizedCity:candidate.city?normalizeLocationComparison(candidate.city):null,exactMatchingProspectId:crm?String(crm.id):null,softMatchWarningCount:0,territoryMatchEvidence:item.territoryMatch,distanceKm:item.territoryMatch.distanceKm,contacts:item.contacts,...contacts,researchEvidence:candidate.evidence,confidenceSummary:{highest:item.highestContactConfidence,verified:item.contacts.filter((contact)=>contact.confidence==="verified").length,plausible:item.contacts.filter((contact)=>contact.confidence==="plausible").length,opportunity},enrichmentStatus:item.enrichmentStatus,researchIssues:candidate.researchIssues,manualReviewReady:item.manualReviewReady,outreachReady:canBecomeOutreachReady({baseReady:item.outreachReady,doNotContact,currentCustomer})};

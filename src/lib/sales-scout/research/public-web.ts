@@ -271,14 +271,11 @@ export function mergePublicWebResult(
   };
 }
 
-function hasDirectContactRoute(candidate: ResearchCandidate) {
-  return Boolean(
-    candidate.phoneNumbers.some((value) => normalizeNigerianPhone(value)) ||
-    candidate.emailAddresses.some((value) => normalizeEmail(value)) ||
-    candidate.whatsAppNumbers.some((value) => normalizeNigerianPhone(value)) ||
-    candidate.instagram.length || candidate.facebook.length || candidate.tiktok.length ||
-    candidate.x.length || candidate.youtube.length,
-  );
+export function hasSufficientPublicContactEvidence(candidate: ResearchCandidate) {
+  const directEvidence = candidate.evidence.filter((item) =>
+    ["phone", "whatsapp", "email", "instagram", "facebook", "tiktok", "x", "youtube"]
+      .includes(item.field));
+  return directEvidence.some((item) => item.verificationStatus === "verified");
 }
 
 export async function researchCandidateWithPublicWeb(
@@ -290,7 +287,7 @@ export async function researchCandidateWithPublicWeb(
   let actualCalls = 0;
   const callEvidence: ResearchEvidence[] = [];
   const failureReferences:string[]=[];
-  if (hasDirectContactRoute(candidate)) {
+  if (hasSufficientPublicContactEvidence(candidate)) {
     return { candidate, actualCalls, callEvidence, failureReferences };
   }
   for (const query of buildPublicWebResearchQueries(seed)) {
@@ -312,7 +309,7 @@ export async function researchCandidateWithPublicWeb(
     for (const result of response.results) {
       candidate = mergePublicWebResult(candidate, result, observedAt).candidate;
     }
-    if (hasDirectContactRoute(candidate)) break;
+    if (hasSufficientPublicContactEvidence(candidate)) break;
   }
   return { candidate: { ...candidate, evidence: [...candidate.evidence, ...callEvidence] }, actualCalls, callEvidence, failureReferences };
 }

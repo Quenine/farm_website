@@ -8,6 +8,7 @@ import {
 import {
   contactsForCandidate,
   isDirectContactRoute,
+  mergePersistedResearchMemory,
   productionResearchCostCeiling,
   runSeedFirstProductionResearch,
   type PublicContact,
@@ -521,8 +522,8 @@ test("bounded public-web research continues after reference-only evidence and en
       link:"https://directory.example/listing/example-kitchen",
       snippet:"Example Kitchen Limited restaurant in Ikeja, Lagos.",
     }]:[{
-      position:1,title:"Example Kitchen Limited",link:"https://facebook.com/examplekitchen",
-      snippet:"Example Kitchen Limited in Ikeja",
+      position:1,title:"Example Kitchen Limited Restaurant",link:"https://facebook.com/examplekitchen",
+      snippet:"Example Kitchen Limited restaurant in Ikeja",
     }];
     return{provider:"serpapi",query,callReference:`found-${calls}`,results};
   },{deadlineAtMs:Date.parse(observed)+60_000,now:()=>Date.parse(observed)});
@@ -531,8 +532,8 @@ test("bounded public-web research continues after reference-only evidence and en
   calls=0;
   const direct=await researchCandidateWithPublicWeb(candidate,async({query})=>{
     calls+=1;return{provider:"serpapi",query,callReference:"direct",results:[{
-      position:1,title:"Example Kitchen Limited",link:"https://instagram.com/examplekitchen",
-      snippet:"Example Kitchen Limited in Ikeja",
+      position:1,title:"Example Kitchen Limited Restaurant",link:"https://instagram.com/examplekitchen",
+      snippet:"Example Kitchen Limited restaurant in Ikeja",
     }]};
   },{deadlineAtMs:Date.parse(observed)+60_000,now:()=>Date.parse(observed)});
   assert.equal(calls,1);assert.equal(direct.candidate.instagram.length,1);
@@ -598,4 +599,51 @@ test("Casper and Gambini's directory regression preserves real routes without we
   assert.doesNotMatch(casper.opportunity.recommendedNextAction,/website outreach/i);
   const confirmed=reflectOwnerConfirmedContact(casper.opportunity,"phone");
   assert.match(confirmed.recommendedNextAction,/phone outreach draft/);
+});
+
+
+test("persisted direct evidence survives failed rediscovery without weakening trust", () => {
+  const priorContacts: PublicContact[] = [
+    { route:"phone",displayValue:"07032821293",normalizedIdentity:"+2347032821293",profileUrl:null,sourceType:"geoapify_places",sourceUrl:"https://geoapify.example/seed-1",observedAt:observed,confidence:"plausible" },
+    { route:"instagram",displayValue:"https://instagram.com/examplekitchen",normalizedIdentity:"examplekitchen",profileUrl:"https://instagram.com/examplekitchen",sourceType:"public_web_search",sourceUrl:"https://instagram.com/examplekitchen",observedAt:observed,confidence:"plausible" },
+    { route:"facebook",displayValue:"https://facebook.com/examplekitchen",normalizedIdentity:"examplekitchen",profileUrl:"https://facebook.com/examplekitchen",sourceType:"public_web_search",sourceUrl:"https://facebook.com/examplekitchen",observedAt:observed,confidence:"plausible" },
+  ];
+  const priorEvidence: ResearchEvidence[] = [
+    evidence("phone","07032821293","plausible"),
+    evidence("instagram","https://instagram.com/examplekitchen","plausible"),
+    evidence("facebook","https://facebook.com/examplekitchen","plausible"),
+  ];
+  const rerun={...seed(),instagram:[],facebook:[],researchIssues:["SERPAPI_TIMEOUT"]};
+  const preserved=mergePersistedResearchMemory(rerun,{contacts:priorContacts,evidence:priorEvidence,researchIssues:[]});
+  assert.deepEqual(contactsForCandidate(preserved).map((contact)=>contact.route).sort(),["facebook","instagram","phone"]);
+  assert.ok(preserved.researchIssues.includes("SERPAPI_TIMEOUT"));
+
+  const ownerConfirmed={...priorContacts[0],confidence:"verified" as const,ownerConfirmedAt:"2026-08-03T10:00:00.000Z",ownerConfirmedBy:"owner-1"};
+  const stronger=mergePersistedResearchMemory(rerun,{contacts:[ownerConfirmed],evidence:priorEvidence,researchIssues:[]});
+  assert.equal(contactsForCandidate(stronger)[0]?.confidence,"verified");
+  assert.equal(stronger.evidence.some((item)=>item.field==="phone"&&item.verificationStatus==="verified"),true);
+
+  const rejected=mergePersistedResearchMemory(rerun,{contacts:[priorContacts[1],{
+    route:"website",displayValue:"https://directory.example/example-kitchen",normalizedIdentity:"directory.example",profileUrl:"https://directory.example/example-kitchen",sourceType:"public_web_search",sourceUrl:"https://directory.example/example-kitchen",observedAt:observed,confidence:"verified",
+  }],evidence:[{...priorEvidence[1],verificationStatus:"rejected"}],researchIssues:[]});
+  assert.deepEqual(rejected.instagram,[]);
+  assert.equal(rejected.website,rerun.website);
+});
+
+test("public-web research corroborates a lone plausible phone but skips verified contact", async () => {
+  let calls=0;
+  const corroborated=await researchCandidateWithPublicWeb(seed(),async({query})=>{
+    calls+=1;
+    return {provider:"serpapi",query,callReference:"corroborated",results:[{
+      position:1,title:"Example Kitchen Limited Ikeja Restaurant",link:"https://instagram.com/examplekitchen",
+      snippet:"Example Kitchen Limited restaurant in Ikeja, Lagos.",
+    }]};
+  },{deadlineAtMs:Date.parse(observed)+60_000,now:()=>Date.parse(observed)});
+  assert.equal(calls,1);
+  assert.equal(corroborated.candidate.instagram.length,1);
+  const verified={...seed(),evidence:seed().evidence.map((item)=>item.field==="phone"?{...item,verificationStatus:"verified" as const,confidence:"high" as const}:item)};
+  calls=0;
+  const skipped=await researchCandidateWithPublicWeb(verified,async()=>{calls+=1;throw Error("should not search");},{deadlineAtMs:Date.parse(observed)+60_000,now:()=>Date.parse(observed)});
+  assert.equal(calls,0);
+  assert.equal(skipped.actualCalls,0);
 });
